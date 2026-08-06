@@ -1,0 +1,6 @@
+{
+  "name": "SAVIA-OS",
+  "description": "SAVIA-OS Web Desktop Operating System by Alberto Arce",
+  "requestFramePermissions": ["camera", "microphone"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
