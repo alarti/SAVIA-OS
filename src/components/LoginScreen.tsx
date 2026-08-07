@@ -8,6 +8,23 @@ export default function LoginScreen({ onLogin, onPowerOff }: { onLogin: (user: U
   const [usernameInput, setUsernameInput] = useState<string>('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState(false);
+  const [failedAttempts, setFailedAttempts] = useState(0);
+  const [lockoutRemaining, setLockoutRemaining] = useState(0);
+
+  // Lockout countdown timer
+  useEffect(() => {
+    if (lockoutRemaining <= 0) return;
+    const interval = setInterval(() => {
+      setLockoutRemaining(prev => {
+        if (prev <= 1) {
+          setFailedAttempts(0);
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [lockoutRemaining]);
 
   // System Reboot State
   const [isRebooting, setIsRebooting] = useState(false);
@@ -30,6 +47,11 @@ export default function LoginScreen({ onLogin, onPowerOff }: { onLogin: (user: U
 
   const handleLogin = (e: React.FormEvent) => {
     e.preventDefault();
+    if (lockoutRemaining > 0) {
+      soundEngine.playError();
+      return;
+    }
+
     const cleanUser = usernameInput.trim();
     if (!cleanUser) {
       soundEngine.playError();
@@ -47,10 +69,18 @@ export default function LoginScreen({ onLogin, onPowerOff }: { onLogin: (user: U
 
     if (cleanUser.toLowerCase() === 'guest' || verifyUserPassword(userToVerify, password)) {
       soundEngine.playButtonClick();
+      setFailedAttempts(0);
       onLogin(resolvedUserData);
     } else {
       soundEngine.playError();
       setError(true);
+      const newAttempts = failedAttempts + 1;
+      setFailedAttempts(newAttempts);
+
+      if (newAttempts >= 5) {
+        setLockoutRemaining(10); // 10s lockout after 5 failed tries
+      }
+
       setTimeout(() => setError(false), 2000);
     }
   };
@@ -242,7 +272,14 @@ export default function LoginScreen({ onLogin, onPowerOff }: { onLogin: (user: U
             </div>
           )}
 
-          {error && <span className="text-red-400 text-xs font-semibold">{!usernameInput.trim() ? 'Ingrese un nombre de usuario.' : 'Usuario o contraseña incorrectos.'}</span>}
+          {lockoutRemaining > 0 ? (
+            <div className="w-full bg-red-500/20 border border-red-500/40 rounded-xl p-2.5 text-center flex items-center justify-center gap-2 text-xs font-bold text-red-300">
+              <ShieldAlert className="w-4 h-4 text-red-400 shrink-0" />
+              <span>Bloqueo de seguridad: espere {lockoutRemaining}s (Anti-Fuerza Bruta)</span>
+            </div>
+          ) : (
+            error && <span className="text-red-400 text-xs font-semibold">{!usernameInput.trim() ? 'Ingrese un nombre de usuario.' : `Usuario o contraseña incorrectos (${failedAttempts}/5 intentos).`}</span>
+          )}
 
           {/* Main Login Button */}
           <button

@@ -22,11 +22,17 @@ export default function BrowserApp({ user }: { user?: UserData }) {
   const activeTab = tabs.find(t => t.id === activeTabId) || tabs[0];
 
   const handleNavigate = (urlToLoad: string) => {
-    let finalUrl = urlToLoad;
+    let finalUrl = urlToLoad.trim();
+
+    // Security check: Block malicious pseudo-protocols (XSS Protection)
+    const lower = finalUrl.toLowerCase();
+    if (lower.startsWith('javascript:') || lower.startsWith('data:') || lower.startsWith('vbscript:')) {
+      alert('Seguridad Savia OS: Esquema de URL bloqueado por razones de seguridad.');
+      return;
+    }
 
     // Controlled navigation for guest mode
     if (user?.isGuest) {
-      const lower = urlToLoad.toLowerCase();
       if (lower.includes('torrent') || lower.includes('download') || lower.includes('.exe') || lower.includes('.sh')) {
         alert('Modo Invitado: La navegación a sitios de descargas o ejecutables está bloqueada por política de seguridad.');
         return;

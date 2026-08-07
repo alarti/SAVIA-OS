@@ -544,101 +544,6 @@ export default function DesktopEnvironment({ user, onExit }: { user: UserData, o
       className="w-full h-[100dvh] bg-[#0A0B10] overflow-hidden flex flex-col font-sans relative select-none" 
       onClick={() => { setIsStartMenuOpen(false); setIsSaviaMenuOpen(false); setIsControlCenterOpen(false); setIsVolumeMenuOpen(false); }}
     >
-      {/* Top SAVIA-OS Menu Bar */}
-      <header className="h-7 bg-[#1E1E22]/80 backdrop-blur-md border-b border-white/10 flex items-center justify-between px-3 text-xs text-gray-200 z-50 shrink-0 select-none" onClick={e => e.stopPropagation()}>
-        <div className="flex items-center gap-3 relative">
-          <button 
-            onClick={() => { setIsSaviaMenuOpen(!isSaviaMenuOpen); setIsControlCenterOpen(false); }}
-            className="flex items-center gap-1.5 font-bold hover:text-white px-1.5 py-0.5 rounded transition-colors"
-          >
-            <Zap className="w-3.5 h-3.5 text-blue-400 fill-blue-400" />
-            <span className="font-extrabold tracking-wide text-white">SAVIA-OS</span>
-          </button>
-
-          {/* SAVIA Dropdown Menu */}
-          {isSaviaMenuOpen && (
-            <div className="absolute top-7 left-0 w-56 bg-[#1C1C1F]/95 backdrop-blur-2xl border border-white/15 rounded-xl p-1.5 shadow-2xl z-50 text-xs flex flex-col gap-0.5 animate-in fade-in slide-in-from-top-1 duration-150">
-              <button 
-                onClick={() => openApp('about', 'Acerca de SAVIA-OS (Alberto Arce)')} 
-                className="flex items-center gap-2 px-3 py-1.5 hover:bg-blue-600 hover:text-white rounded-lg text-left text-gray-200"
-              >
-                <Info className="w-3.5 h-3.5 text-blue-400" />
-                <span>Acerca de SAVIA-OS</span>
-              </button>
-
-              <button 
-                onClick={() => openApp('controlpanel', 'Panel de Control SAVIA-OS')} 
-                className="flex items-center gap-2 px-3 py-1.5 hover:bg-blue-600 hover:text-white rounded-lg text-left text-gray-200"
-              >
-                <Settings className="w-3.5 h-3.5 text-emerald-400" />
-                <span>Panel de Control SAVIA-OS...</span>
-              </button>
-
-              <button 
-                onClick={() => openApp('appstore', 'Software Center')} 
-                className="flex items-center gap-2 px-3 py-1.5 hover:bg-blue-600 hover:text-white rounded-lg text-left text-gray-200"
-              >
-                <Box className="w-3.5 h-3.5 text-amber-400" />
-                <span>Software Center App Store...</span>
-              </button>
-
-              <div className="h-px bg-white/10 my-1" />
-
-              <a 
-                href="https://www.linkedin.com/in/albertoarce" 
-                target="_blank" 
-                rel="noopener noreferrer" 
-                className="flex items-center gap-2 px-3 py-1.5 hover:bg-[#0A66C2] hover:text-white rounded-lg text-left text-gray-200"
-              >
-                <Globe className="w-3.5 h-3.5 text-blue-400" />
-                <span>LinkedIn Alberto Arce</span>
-              </a>
-
-              <div className="h-px bg-white/10 my-1" />
-
-              <button 
-                onClick={onExit} 
-                className="flex items-center gap-2 px-3 py-1.5 hover:bg-red-600 hover:text-white rounded-lg text-left text-red-400"
-              >
-                <Power className="w-3.5 h-3.5" />
-                <span>Cerrar Sesión</span>
-              </button>
-            </div>
-          )}
-
-          <span className="hidden sm:inline hover:text-white cursor-pointer" onClick={() => openApp('controlpanel', 'Panel de Control SAVIA-OS')}>Ajustes</span>
-          <span className="hidden sm:inline hover:text-white cursor-pointer" onClick={() => openApp('about', 'Acerca de SAVIA-OS (Alberto Arce)')}>Alberto Arce</span>
-          <span className="hidden md:inline text-emerald-400 flex items-center gap-1 font-mono text-[11px]"><ShieldCheck className="w-3 h-3" /> Shield Active</span>
-        </div>
-
-        {/* Top Right Tray */}
-        <div className="flex items-center gap-3">
-          <div className="flex items-center gap-2 text-gray-300">
-            <Wifi className="w-3.5 h-3.5 text-blue-400" />
-            <Battery className="w-3.5 h-3.5 text-emerald-400" />
-          </div>
-
-          <button 
-            onClick={() => { setIsControlCenterOpen(!isControlCenterOpen); setIsSaviaMenuOpen(false); }}
-            className="p-1 hover:bg-white/10 rounded transition-colors text-gray-300 hover:text-white relative"
-            title="Panel de Control SAVIA-OS (Control Center)"
-          >
-            <Sliders className="w-3.5 h-3.5 text-amber-400" />
-          </button>
-
-          {/* Control Center Popup */}
-          {isControlCenterOpen && (
-            <div className="absolute top-8 right-3 z-50">
-              <ControlCenter onOpenApp={openApp} onClose={() => setIsControlCenterOpen(false)} />
-            </div>
-          )}
-
-          <div className="text-[11px] font-mono text-gray-300">
-            {new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-          </div>
-        </div>
-      </header>
-
       {/* Desktop Background / Area */}
       <div 
         className="flex-1 relative bg-cover bg-center overflow-hidden"
@@ -1214,14 +1119,21 @@ export default function DesktopEnvironment({ user, onExit }: { user: UserData, o
         <div className="h-6 w-px bg-white/10 mx-2"></div>
 
         {/* Taskbar Audio & Tray */}
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 relative">
           <button
-            onClick={() => { setIsControlCenterOpen(!isControlCenterOpen); setIsStartMenuOpen(false); }}
+            onClick={() => { setIsControlCenterOpen(!isControlCenterOpen); setIsStartMenuOpen(false); setIsVolumeMenuOpen(false); }}
             className="p-1.5 hover:bg-white/10 rounded-lg transition-colors text-gray-300 relative"
             title="Panel de Control SAVIA-OS"
           >
             <Sliders className="w-4 h-4 text-amber-400" />
           </button>
+
+          {/* Control Center Popup */}
+          {isControlCenterOpen && (
+            <div className="absolute bottom-12 right-0 z-50 animate-in fade-in slide-in-from-bottom-2 duration-150">
+              <ControlCenter onOpenApp={openApp} onClose={() => setIsControlCenterOpen(false)} />
+            </div>
+          )}
 
           <button
             onClick={() => { setIsVolumeMenuOpen(!isVolumeMenuOpen); setIsStartMenuOpen(false); }}
