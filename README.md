@@ -19,6 +19,7 @@
 - **Customizable Wallpapers & Themes**: Theme Customizer panel with preset high-resolution wallpapers, custom image URLs, color gradients, and glassmorphism styling.
 - **Virtual File System (VFS)**: Complete File Explorer with navigation, document viewing, code editing, image painting, and context menus.
 - **Audio Core Synthesizer**: Web Audio API audio server with startup chimes, notification tones, and interactive synthesizer keyboard.
+<img width="1311" height="867" alt="image" src="https://github.com/user-attachments/assets/0b930b79-cdbf-4a20-bdfb-20aa9b4a9c7a" />
 
 ---
 
