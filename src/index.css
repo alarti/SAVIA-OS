@@ -1,1 +1,25 @@
 @import "tailwindcss";
+
+@media print {
+  body * {
+    visibility: hidden !important;
+  }
+  #printable-area, #printable-area * {
+    visibility: visible !important;
+  }
+  #printable-area {
+    display: block !important;
+    position: absolute !important;
+    left: 0 !important;
+    top: 0 !important;
+    width: 100% !important;
+    margin: 0 !important;
+    padding: 24px !important;
+    background: white !important;
+    color: black !important;
+  }
+  .page-break-after-always {
+    page-break-after: always !important;
+    break-after: page !important;
+  }
+}

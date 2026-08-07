@@ -1,5 +1,6 @@
 import React, { useState, useRef } from 'react';
-import { Globe, ArrowLeft, ArrowRight, RotateCw, Home, Search, Star, MoreVertical, Shield, Plus, X, Lock } from 'lucide-react';
+import { Globe, ArrowLeft, ArrowRight, RotateCw, Home, Search, Star, MoreVertical, Shield, Plus, X, Lock, ShieldAlert } from 'lucide-react';
+import type { UserData } from '../utils/auth';
 
 type Tab = {
   id: string;
@@ -8,7 +9,7 @@ type Tab = {
   title: string;
 };
 
-export default function BrowserApp() {
+export default function BrowserApp({ user }: { user?: UserData }) {
   const [tabs, setTabs] = useState<Tab[]>([{ id: '1', url: '/api/proxy?url=' + encodeURIComponent('https://www.wikipedia.org'), displayUrl: 'https://www.wikipedia.org', title: 'Wikipedia' }]);
   const [activeTabId, setActiveTabId] = useState<string>('1');
   const [inputUrl, setInputUrl] = useState('https://www.wikipedia.org');
@@ -22,6 +23,16 @@ export default function BrowserApp() {
 
   const handleNavigate = (urlToLoad: string) => {
     let finalUrl = urlToLoad;
+
+    // Controlled navigation for guest mode
+    if (user?.isGuest) {
+      const lower = urlToLoad.toLowerCase();
+      if (lower.includes('torrent') || lower.includes('download') || lower.includes('.exe') || lower.includes('.sh')) {
+        alert('Modo Invitado: La navegación a sitios de descargas o ejecutables está bloqueada por política de seguridad.');
+        return;
+      }
+    }
+
     if (!finalUrl.startsWith('http://') && !finalUrl.startsWith('https://')) {
       if (finalUrl.includes('.') && !finalUrl.includes(' ')) {
         finalUrl = 'https://' + finalUrl;
@@ -37,6 +48,7 @@ export default function BrowserApp() {
     setTabs(tabs.map(t => t.id === activeTabId ? { ...t, url: proxiedUrl, displayUrl: finalUrl, title: finalUrl } : t));
     setInputUrl(finalUrl);
   };
+
 
   const addNewTab = () => {
     const newId = Math.random().toString();
@@ -117,15 +129,24 @@ export default function BrowserApp() {
 
         {/* Omnibox */}
         <div className="flex-1 max-w-4xl flex items-center bg-[#F1F3F4] rounded-full px-4 h-8 border border-transparent focus-within:border-blue-300 focus-within:bg-white focus-within:shadow-sm transition-all">
-          <Lock className="w-3.5 h-3.5 text-gray-500 mr-2 shrink-0" />
+          {user?.isGuest ? (
+            <ShieldAlert className="w-3.5 h-3.5 text-amber-600 mr-2 shrink-0" title="Modo Navegación Controlada (Invitado)" />
+          ) : (
+            <Lock className="w-3.5 h-3.5 text-gray-500 mr-2 shrink-0" />
+          )}
           <input 
             type="text" 
             value={inputUrl}
             onChange={e => setInputUrl(e.target.value)}
             onKeyDown={e => e.key === 'Enter' && handleNavigate(inputUrl)}
             className="flex-1 bg-transparent text-sm text-gray-800 focus:outline-none min-w-0"
-            placeholder="Search Google or type a URL"
+            placeholder={user?.isGuest ? "Buscar o escribir URL (Modo Controlado Invitado)..." : "Search Google or type a URL"}
           />
+          {user?.isGuest && (
+            <span className="text-[10px] bg-amber-500/20 text-amber-800 px-2 py-0.5 rounded-full font-bold mr-1 shrink-0">
+              Invitado
+            </span>
+          )}
           <button onClick={toggleBookmark} className="w-6 h-6 flex items-center justify-center rounded-full hover:bg-gray-200 transition-colors ml-1 shrink-0">
             <Star className={`w-4 h-4 ${bookmarks.find(b => b.url === activeTab.displayUrl) ? 'fill-blue-500 text-blue-500' : 'text-gray-500'}`} />
           </button>

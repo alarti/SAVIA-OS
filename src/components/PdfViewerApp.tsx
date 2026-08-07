@@ -19,11 +19,27 @@ export default function PdfViewerApp() {
           </span>
           
           <div className="flex items-center gap-1">
-            <button className="w-6 h-6 flex items-center justify-center rounded hover:bg-white/10 transition-colors" title="Download">
-              <Download className="w-3.5 h-3.5 text-gray-300" />
+            <button
+              onClick={() => {
+                const a = document.createElement('a');
+                a.href = pdfUrl;
+                a.download = pdfUrl.split('/').pop() || 'document.pdf';
+                a.target = '_blank';
+                a.click();
+              }}
+              className="w-6 h-6 flex items-center justify-center rounded hover:bg-white/10 transition-colors text-gray-300 hover:text-white"
+              title="Descargar PDF"
+            >
+              <Download className="w-3.5 h-3.5" />
             </button>
-            <button className="w-6 h-6 flex items-center justify-center rounded hover:bg-white/10 transition-colors" title="Print">
-              <Printer className="w-3.5 h-3.5 text-gray-300" />
+            <button
+              onClick={() => {
+                window.open(pdfUrl, '_blank');
+              }}
+              className="w-6 h-6 flex items-center justify-center rounded hover:bg-white/10 transition-colors text-gray-300 hover:text-white"
+              title="Imprimir / Abrir PDF"
+            >
+              <Printer className="w-3.5 h-3.5" />
             </button>
           </div>
         </div>

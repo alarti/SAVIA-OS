@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { Download, Trash2, CheckCircle, Search, Terminal, Activity, FileText, Globe, Cpu, Gamepad2, Palette, Music, Volume2, ShieldCheck, Box, Info, Settings } from 'lucide-react';
+import { Download, Trash2, CheckCircle, Search, Terminal, Activity, FileText, Globe, Cpu, Gamepad2, Palette, Music, Volume2, ShieldCheck, Box, Info, Settings, ShieldAlert, Monitor } from 'lucide-react';
 import { AVAILABLE_PACKAGES, PackageInfo, getInstalledPackageIds, installPackage, uninstallPackage } from '../utils/packageRegistry';
 import { soundEngine } from '../utils/soundEngine';
+import type { UserData } from '../utils/auth';
 
 const ICON_MAP: Record<string, React.ElementType> = {
   Terminal,
@@ -15,10 +16,11 @@ const ICON_MAP: Record<string, React.ElementType> = {
   Volume2,
   Info,
   Settings,
+  Monitor,
   Zap: Activity
 };
 
-export default function AppStore({ onOpenApp }: { onOpenApp?: (type: string, title: string) => void }) {
+export default function AppStore({ user, onOpenApp }: { user?: UserData; onOpenApp?: (type: string, title: string) => void }) {
   const [installedIds, setInstalledIds] = useState<string[]>(getInstalledPackageIds());
   const [searchTerm, setSearchTerm] = useState('');
   const [category, setCategory] = useState<string>('all');
@@ -37,6 +39,7 @@ export default function AppStore({ onOpenApp }: { onOpenApp?: (type: string, tit
   }, []);
 
   const handleInstall = (pkg: PackageInfo) => {
+    if (user?.isGuest) return;
     soundEngine.playButtonClick();
     setInstallingId(pkg.id);
     setTimeout(() => {
@@ -46,9 +49,11 @@ export default function AppStore({ onOpenApp }: { onOpenApp?: (type: string, tit
   };
 
   const handleUninstall = (pkg: PackageInfo) => {
+    if (user?.isGuest) return;
     soundEngine.playButtonClick();
     uninstallPackage(pkg.id);
   };
+
 
   const filtered = AVAILABLE_PACKAGES.filter(pkg => {
     const matchesSearch = pkg.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
@@ -108,6 +113,14 @@ export default function AppStore({ onOpenApp }: { onOpenApp?: (type: string, tit
 
         {/* Package Grid */}
         <div className="flex-1 overflow-y-auto p-4 md:p-6 bg-[#18181B]">
+          {user?.isGuest && (
+            <div className="mb-4 bg-amber-500/10 border border-amber-500/30 rounded-xl p-3 flex items-center gap-3 text-amber-200 text-xs">
+              <ShieldAlert className="w-5 h-5 text-amber-400 shrink-0" />
+              <span>
+                <strong>Sesión de Invitado:</strong> La instalación y desinstalación de software está deshabilitada en la cuenta de invitado.
+              </span>
+            </div>
+          )}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
             {filtered.map(pkg => {
               const IconComp = ICON_MAP[pkg.icon] || Box;

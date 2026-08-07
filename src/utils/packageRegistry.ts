@@ -151,6 +151,42 @@ export const AVAILABLE_PACKAGES: PackageInfo[] = [
     installedByDefault: false
   },
   {
+    id: 'saviadoc',
+    name: 'SaviaDoc (Procesador de Textos)',
+    version: '2.4.0',
+    category: 'utilities',
+    description: 'Procesador de texto avanzado para documentos .docx con formatos, imágenes, tablas y auto-guardado.',
+    size: '220 KB',
+    author: 'SAVIA-OS Suite',
+    icon: 'FileText',
+    type: 'gui',
+    installedByDefault: true
+  },
+  {
+    id: 'saviaxls',
+    name: 'SaviaXls (Hoja de Cálculo)',
+    version: '2.4.0',
+    category: 'utilities',
+    description: 'Hoja de cálculo interactiva para fórmulas matemáticas, tablas de datos y exportación CSV/XLSX.',
+    size: '180 KB',
+    author: 'SAVIA-OS Suite',
+    icon: 'Activity',
+    type: 'gui',
+    installedByDefault: true
+  },
+  {
+    id: 'saviappt',
+    name: 'SaviaPpt (Presentaciones)',
+    version: '2.4.0',
+    category: 'utilities',
+    description: 'Herramienta de diapositivas y presentaciones multimedia en pantalla completa.',
+    size: '200 KB',
+    author: 'SAVIA-OS Suite',
+    icon: 'Monitor',
+    type: 'gui',
+    installedByDefault: true
+  },
+  {
     id: 'synth',
     name: 'Sound Server Studio & Synthesizer',
     version: '1.0.0',

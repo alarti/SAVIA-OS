@@ -2,12 +2,9 @@ import React, { useState } from 'react';
 import KernelMonitor from './components/KernelMonitor';
 import DesktopEnvironment from './components/DesktopEnvironment';
 import LoginScreen from './components/LoginScreen';
+import type { UserData } from './utils/auth';
 
-export type UserData = {
-  username: string;
-  name: string;
-  avatar: string;
-};
+export type { UserData };
 
 export default function App() {
   const [x11Started, setX11Started] = useState(true);
@@ -22,3 +19,4 @@ export default function App() {
 
   return <KernelMonitor onStartX={() => setX11Started(true)} />;
 }
+

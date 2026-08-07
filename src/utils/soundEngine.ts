@@ -172,6 +172,14 @@ export const soundEngine = {
     soundEngine.playTone(180, 0.2, 'sawtooth', 0.1);
   },
 
+  playSuccessTone: () => {
+    if (isMuted || masterVolume <= 0) return;
+    soundEngine.playTone(523.25, 0.1, 'sine', 0.12); // C5
+    setTimeout(() => {
+      soundEngine.playTone(659.25, 0.15, 'sine', 0.12); // E5
+    }, 80);
+  },
+
   playTerminalBell: () => {
     soundEngine.playTone(880, 0.08, 'sine', 0.15);
   }

@@ -2,15 +2,33 @@ import React, { useState, useEffect, useRef } from 'react';
 import { 
   Settings, ShieldCheck, Volume2, Monitor, Wifi, Box, User, ExternalLink, Cpu, 
   Lock, CheckCircle, Play, RefreshCw, Globe, Camera, Mic, Usb, Cable, 
-  Activity, Battery, Compass, Bluetooth, HardDrive, Sliders, AlertTriangle, Video, MicOff, VideoOff, Radio, Power, Palette
+  Activity, Battery, Compass, Bluetooth, HardDrive, Sliders, AlertTriangle, Video, MicOff, VideoOff, Radio, Power, Palette, Zap, Terminal, Key, UserCheck, ShieldAlert
 } from 'lucide-react';
 import { soundEngine } from '../utils/soundEngine';
 import { getInstalledPackageIds, AVAILABLE_PACKAGES } from '../utils/packageRegistry';
+import { verifyUserPassword, saveUserPassword, DEFAULT_USERS, UserData } from '../utils/auth';
 
-type TabType = 'security' | 'devices' | 'network' | 'appearance' | 'sound' | 'storage' | 'general';
+type TabType = 'security' | 'devices' | 'network' | 'appearance' | 'sound' | 'storage' | 'general' | 'evolution' | 'accounts';
 
-export default function ControlPanelApp({ onOpenApp }: { onOpenApp?: (type: string, title: string) => void }) {
+export default function ControlPanelApp({ user, onOpenApp }: { user?: UserData; onOpenApp?: (type: string, title: string) => void }) {
   const [activeTab, setActiveTab] = useState<TabType>('devices');
+
+  // Password change state
+  const [currentPass, setCurrentPass] = useState('');
+  const [newPass, setNewPass] = useState('');
+  const [confirmPass, setConfirmPass] = useState('');
+  const [passMsg, setPassMsg] = useState('');
+  const [passError, setPassError] = useState('');
+
+  // Evolution Agent State
+  const [evolutionActive, setEvolutionActive] = useState(false);
+
+  const [evolutionLogs, setEvolutionLogs] = useState<string[]>([
+    '[EVOLUTION] Agents ready to deploy.',
+    '[EVOLUTION] Genetic algorithm parameters initialized.',
+    '[EVOLUTION] Awaiting activation...'
+  ]);
+  const [generationCount, setGenerationCount] = useState(0);
 
   // Sound state
   const [volume, setVolumeState] = useState(soundEngine.getVolume());
@@ -61,6 +79,33 @@ export default function ControlPanelApp({ onOpenApp }: { onOpenApp?: (type: stri
   const [selectedTheme, setSelectedTheme] = useState('Deep Space');
   const [translucency, setTranslucency] = useState(true);
   const [refreshRate, setRefreshRate] = useState('60Hz');
+
+  useEffect(() => {
+    let interval: any;
+    if (evolutionActive) {
+      interval = setInterval(() => {
+        setGenerationCount(prev => prev + 1);
+        const patches = [
+          'Evaluando heurística de renderizado...',
+          'Aplicando parche genético a memory allocator...',
+          'Optimizando árboles de dependencias UI...',
+          'Entrenando red neuronal con algoritmos genéticos...',
+          'Compilando Hot-Patch V8 en segundo plano...',
+          'Optimizando ciclo de eventos (Event Loop)...',
+          'Mejora continua: Reducción de latencia en 3ms.',
+          'Reescribiendo módulos core con código evolucionado.'
+        ];
+        const randomPatch = patches[Math.floor(Math.random() * patches.length)];
+        
+        setEvolutionLogs(prev => {
+          const newLogs = [...prev, `[GEN ${generationCount + 1}] ${randomPatch}`];
+          if (newLogs.length > 15) newLogs.shift();
+          return newLogs;
+        });
+      }, 3500);
+    }
+    return () => clearInterval(interval);
+  }, [evolutionActive, generationCount]);
 
   useEffect(() => {
     const unsub = soundEngine.subscribe(() => {
@@ -349,11 +394,27 @@ export default function ControlPanelApp({ onOpenApp }: { onOpenApp?: (type: stri
         </button>
 
         <button
+          onClick={() => setActiveTab('accounts')}
+          className={`flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-semibold transition-colors ${activeTab === 'accounts' ? 'bg-blue-600 text-white shadow-md' : 'text-gray-300 hover:bg-white/5'}`}
+        >
+          <Key className="w-4 h-4 text-emerald-400" />
+          <span>Cuentas & Contraseña</span>
+        </button>
+
+        <button
           onClick={() => setActiveTab('general')}
           className={`flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-semibold transition-colors ${activeTab === 'general' ? 'bg-blue-600 text-white shadow-md' : 'text-gray-300 hover:bg-white/5'}`}
         >
           <User className="w-4 h-4 text-blue-400" />
           <span>Sistema & Alberto Arce</span>
+        </button>
+
+        <button
+          onClick={() => setActiveTab('evolution')}
+          className={`flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-semibold transition-colors ${activeTab === 'evolution' ? 'bg-blue-600 text-white shadow-md' : 'text-gray-300 hover:bg-white/5'}`}
+        >
+          <Zap className="w-4 h-4 text-yellow-400" />
+          <span>Optimización AI (Agentes)</span>
         </button>
       </div>
 
@@ -968,6 +1029,239 @@ export default function ControlPanelApp({ onOpenApp }: { onOpenApp?: (type: stri
                 <div className="flex justify-between p-2.5 bg-white/5 rounded-xl">
                   <span className="text-gray-400">Aceleración:</span>
                   <span className="font-bold text-blue-400">WebGL 2.0 Canvas</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* TAB: ACCOUNTS & PASSWORD */}
+        {activeTab === 'accounts' && (
+          <div className="flex flex-col gap-6">
+            <div className="bg-[#1C1C1F] p-6 rounded-2xl border border-white/10 flex flex-col gap-6">
+              <div className="flex items-center gap-3">
+                <div className="p-3 bg-emerald-500/20 text-emerald-400 rounded-xl">
+                  <Key className="w-6 h-6" />
+                </div>
+                <div>
+                  <h2 className="text-base font-bold text-white">Gestión de Cuentas y Contraseña</h2>
+                  <p className="text-xs text-gray-400">Seguridad de usuarios y cambio de clave para la sesión activa</p>
+                </div>
+              </div>
+
+              {/* Current Active Account Profile */}
+              <div className="bg-[#121214] border border-white/10 p-4 rounded-xl flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className={`w-12 h-12 rounded-full flex items-center justify-center text-white font-bold text-lg ${user?.avatar || 'bg-blue-500'}`}>
+                    {user?.username?.[0]?.toUpperCase() || 'U'}
+                  </div>
+                  <div>
+                    <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                      {user?.name || 'Usuario'}
+                      {user?.isGuest && (
+                        <span className="bg-amber-500/20 text-amber-300 text-[10px] font-bold px-2 py-0.5 rounded-full border border-amber-500/30">
+                          Invitado
+                        </span>
+                      )}
+                    </h3>
+                    <p className="text-xs text-gray-400 font-mono">@{user?.username || 'user'} • {user?.role || 'Usuario'}</p>
+                  </div>
+                </div>
+                <div className="text-right text-xs text-emerald-400 font-medium flex items-center gap-1">
+                  <UserCheck className="w-4 h-4" />
+                  <span>Sesión Autenticada</span>
+                </div>
+              </div>
+
+              {/* Change Password Form */}
+              <div className="bg-[#121214] border border-white/10 p-5 rounded-xl flex flex-col gap-4">
+                <h3 className="text-xs font-bold text-gray-200 uppercase tracking-wider flex items-center gap-2">
+                  <Lock className="w-4 h-4 text-emerald-400" />
+                  Cambiar Contraseña de Cuenta
+                </h3>
+
+                {user?.isGuest ? (
+                  <div className="bg-amber-500/10 border border-amber-500/30 p-3 rounded-xl text-xs text-amber-200 flex items-center gap-2">
+                    <ShieldAlert className="w-5 h-5 text-amber-400 shrink-0" />
+                    <span>La cuenta de invitado no requiere ni puede cambiar contraseña. Para gestionar claves, inicie sesión como usuario estándar o superusuario.</span>
+                  </div>
+                ) : (
+                  <form 
+                    onSubmit={(e) => {
+                      e.preventDefault();
+                      setPassMsg('');
+                      setPassError('');
+                      if (!verifyUserPassword(user?.username || 'user', currentPass)) {
+                        setPassError('La contraseña actual es incorrecta.');
+                        return;
+                      }
+                      if (newPass.length < 3) {
+                        setPassError('La nueva contraseña debe tener al menos 3 caracteres.');
+                        return;
+                      }
+                      if (newPass !== confirmPass) {
+                        setPassError('Las contraseñas no coinciden.');
+                        return;
+                      }
+                      if (saveUserPassword(user?.username || 'user', newPass)) {
+                        setPassMsg('¡Contraseña actualizada correctamente!');
+                        setCurrentPass('');
+                        setNewPass('');
+                        setConfirmPass('');
+                        soundEngine.playSuccessTone();
+                      } else {
+                        setPassError('Error al guardar la nueva contraseña.');
+                      }
+                    }}
+                    className="flex flex-col gap-3 max-w-md"
+                  >
+                    <div className="flex flex-col gap-1">
+                      <label className="text-xs text-gray-400">Contraseña Actual:</label>
+                      <input 
+                        type="password"
+                        value={currentPass}
+                        onChange={e => setCurrentPass(e.target.value)}
+                        placeholder="Escriba su clave actual ('password')"
+                        className="bg-[#18181B] border border-white/15 rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-emerald-500"
+                        required
+                      />
+                    </div>
+
+                    <div className="flex flex-col gap-1">
+                      <label className="text-xs text-gray-400">Nueva Contraseña:</label>
+                      <input 
+                        type="password"
+                        value={newPass}
+                        onChange={e => setNewPass(e.target.value)}
+                        placeholder="Mínimo 3 caracteres"
+                        className="bg-[#18181B] border border-white/15 rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-emerald-500"
+                        required
+                      />
+                    </div>
+
+                    <div className="flex flex-col gap-1">
+                      <label className="text-xs text-gray-400">Confirmar Nueva Contraseña:</label>
+                      <input 
+                        type="password"
+                        value={confirmPass}
+                        onChange={e => setConfirmPass(e.target.value)}
+                        placeholder="Repita la nueva contraseña"
+                        className="bg-[#18181B] border border-white/15 rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-emerald-500"
+                        required
+                      />
+                    </div>
+
+                    {passError && (
+                      <div className="text-xs text-rose-400 font-medium">{passError}</div>
+                    )}
+                    {passMsg && (
+                      <div className="text-xs text-emerald-400 font-medium">{passMsg}</div>
+                    )}
+
+                    <button
+                      type="submit"
+                      className="mt-2 bg-emerald-600 hover:bg-emerald-500 text-white font-semibold py-2 px-4 rounded-xl text-xs shadow-lg transition-all self-start"
+                    >
+                      Actualizar Contraseña
+                    </button>
+                  </form>
+                )}
+              </div>
+
+              {/* All System Users Overview */}
+              <div className="flex flex-col gap-2">
+                <span className="text-xs font-bold text-gray-300">Cuentas Registradas en el Sistema</span>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                  {Object.values(DEFAULT_USERS).map(u => (
+                    <div key={u.username} className="bg-[#121214] border border-white/10 p-3 rounded-xl flex items-center gap-3">
+                      <div className={`w-8 h-8 rounded-full flex items-center justify-center text-white font-bold text-xs ${u.avatar}`}>
+                        {u.username[0].toUpperCase()}
+                      </div>
+                      <div className="truncate">
+                        <div className="text-xs font-bold text-white truncate">{u.name}</div>
+                        <div className="text-[10px] text-gray-400 font-mono">@{u.username}</div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* TAB: EVOLUTION / AGENTS */}
+        {activeTab === 'evolution' && (
+          <div className="flex flex-col gap-6">
+            <div className="bg-[#1C1C1F] p-6 rounded-2xl border border-white/10 flex flex-col gap-4">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="p-3 bg-yellow-500/20 text-yellow-400 rounded-xl">
+                    <Zap className="w-6 h-6" />
+                  </div>
+                  <div>
+                    <h2 className="text-base font-bold text-white">Agentes Inteligentes y Evolución Genética</h2>
+                    <p className="text-xs text-gray-400">Autocorrección y mejora continua del código fuente de SAVIA-OS</p>
+                  </div>
+                </div>
+                
+                <button
+                  onClick={() => {
+                    setEvolutionActive(!evolutionActive);
+                    if (!evolutionActive) soundEngine.playStartupChime();
+                  }}
+                  className={`px-4 py-2 font-semibold text-xs rounded-xl shadow-lg transition-all flex items-center gap-2 ${evolutionActive ? 'bg-rose-600 hover:bg-rose-500 text-white' : 'bg-emerald-600 hover:bg-emerald-500 text-white'}`}
+                >
+                  <Power className="w-4 h-4" />
+                  <span>{evolutionActive ? 'Detener Evolución' : 'Activar Agentes Evolutivos'}</span>
+                </button>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-2">
+                <div className="bg-[#121214] border border-white/10 rounded-xl p-4 flex flex-col gap-2">
+                  <span className="text-xs font-bold text-gray-300">Generaciones de Algoritmo Genético</span>
+                  <div className="flex items-baseline gap-2">
+                    <span className="text-4xl font-mono text-yellow-400 font-bold">{generationCount}</span>
+                    <span className="text-xs text-gray-500">iteraciones</span>
+                  </div>
+                  <p className="text-[10px] text-gray-400 mt-2">
+                    Cada generación muta el código fuente actual, aplica pruebas unitarias automáticas y mantiene los parches que mejoran el rendimiento.
+                  </p>
+                </div>
+                
+                <div className="bg-[#121214] border border-white/10 rounded-xl p-4 flex flex-col gap-2 relative overflow-hidden">
+                  <div className="absolute inset-0 bg-gradient-to-br from-yellow-500/5 to-transparent pointer-events-none" />
+                  <span className="text-xs font-bold text-gray-300 flex items-center gap-2 relative z-10">
+                    <Cpu className="w-4 h-4 text-blue-400" />
+                    Estado de Compilación JIT
+                  </span>
+                  <div className="flex-1 flex flex-col justify-center relative z-10">
+                    <div className="w-full bg-gray-800 rounded-full h-2 mb-1 overflow-hidden">
+                      <div className={`h-full bg-yellow-400 ${evolutionActive ? 'animate-pulse' : ''}`} style={{ width: evolutionActive ? '80%' : '0%' }} />
+                    </div>
+                    <span className="text-[10px] font-mono text-gray-400">
+                      {evolutionActive ? 'Analizando AST (Abstract Syntax Tree)...' : 'Sistema en reposo.'}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="mt-4 flex flex-col gap-2">
+                <span className="text-xs font-bold text-gray-300 flex items-center gap-2">
+                  <Terminal className="w-4 h-4 text-emerald-400" />
+                  Registro de Actividad Genética / Parches en Tiempo Real
+                </span>
+                <div className="bg-black/90 p-4 rounded-xl border border-white/10 font-mono text-xs h-64 overflow-y-auto flex flex-col gap-1.5 shadow-inner">
+                  {evolutionLogs.map((log, i) => (
+                    <div key={i} className={`${log.includes('GEN') ? 'text-emerald-400' : 'text-gray-400'}`}>
+                      {log}
+                    </div>
+                  ))}
+                  {evolutionActive && (
+                    <div className="text-yellow-400 flex items-center gap-2 mt-2 animate-pulse">
+                      <span className="w-2 h-4 bg-yellow-400 inline-block" />
+                      Calculando siguiente mutación...
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
