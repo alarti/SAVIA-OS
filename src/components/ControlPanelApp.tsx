@@ -8,11 +8,13 @@ import { soundEngine } from '../utils/soundEngine';
 import { getInstalledPackageIds, AVAILABLE_PACKAGES, installPackage, uninstallPackage, isPackageInstalled } from '../utils/packageRegistry';
 import { verifyUserPassword, saveUserPassword, DEFAULT_USERS, UserData } from '../utils/auth';
 import { securityEngine, SecurityEvent } from '../utils/securityEngine';
+import SudoDialog from './SudoDialog';
 
 type TabType = 'security' | 'appstore' | 'appearance' | 'sound' | 'devices' | 'accounts' | 'network';
 
 export default function ControlPanelApp({ user, onOpenApp }: { user?: UserData; onOpenApp?: (type: string, title: string) => void }) {
   const [activeTab, setActiveTab] = useState<TabType>('security');
+  const [pendingAdminAction, setPendingAdminAction] = useState<{ title: string; execute: () => void } | null>(null);
 
   // --- CIBERSEGURIDAD SHIELD & BEHAVIORAL AI STATE ---
   const [shieldActive, setShieldActiveState] = useState(securityEngine.isShieldOn());
@@ -32,25 +34,42 @@ export default function ControlPanelApp({ user, onOpenApp }: { user?: UserData; 
     return unsub;
   }, []);
 
+  const requireAdminAction = (actionTitle: string, actionName: string, callback: () => void) => {
+    const username = user?.username || 'user';
+    const check = securityEngine.checkAdminAction(username, actionName);
+    if (!check.allowed) {
+      soundEngine.playError();
+      setPendingAdminAction({ title: actionTitle, execute: callback });
+      return;
+    }
+    callback();
+  };
+
   const toggleShield = () => {
-    const next = !shieldActive;
-    setShieldActiveState(next);
-    securityEngine.setShieldActive(next);
-    soundEngine.playNotification();
+    requireAdminAction('Modificar Escudo de Seguridad Kernel', 'toggle_shield', () => {
+      const next = !shieldActive;
+      setShieldActiveState(next);
+      securityEngine.setShieldActive(next);
+      soundEngine.playNotification();
+    });
   };
 
   const toggleFirewall = () => {
-    const next = !firewallActive;
-    setFirewallActiveState(next);
-    securityEngine.setFirewallActive(next);
-    soundEngine.playNotification();
+    requireAdminAction('Modificar Cortafuegos de Red NetworkGuard', 'toggle_firewall', () => {
+      const next = !firewallActive;
+      setFirewallActiveState(next);
+      securityEngine.setFirewallActive(next);
+      soundEngine.playNotification();
+    });
   };
 
   const toggleBehavioralAi = () => {
-    const next = !behavioralAiActive;
-    setBehavioralAiActiveState(next);
-    securityEngine.setBehavioralAiActive(next);
-    soundEngine.playNotification();
+    requireAdminAction('Modificar Inteligencia de Comportamiento Antivirus', 'toggle_behavioral_ai', () => {
+      const next = !behavioralAiActive;
+      setBehavioralAiActiveState(next);
+      securityEngine.setBehavioralAiActive(next);
+      soundEngine.playNotification();
+    });
   };
 
   const runSecurityAudit = () => {
@@ -71,15 +90,19 @@ export default function ControlPanelApp({ user, onOpenApp }: { user?: UserData; 
   const [installedPkgIds, setInstalledPkgIds] = useState<string[]>(getInstalledPackageIds());
 
   const handleInstallPkg = (id: string) => {
-    installPackage(id);
-    setInstalledPkgIds(getInstalledPackageIds());
-    soundEngine.playNotification();
+    requireAdminAction(`Instalar paquete de sistema apt/npm: ${id}`, 'install_package', () => {
+      installPackage(id);
+      setInstalledPkgIds(getInstalledPackageIds());
+      soundEngine.playNotification();
+    });
   };
 
   const handleUninstallPkg = (id: string) => {
-    uninstallPackage(id);
-    setInstalledPkgIds(getInstalledPackageIds());
-    soundEngine.playNotification();
+    requireAdminAction(`Desinstalar paquete de sistema apt/npm: ${id}`, 'uninstall_package', () => {
+      uninstallPackage(id);
+      setInstalledPkgIds(getInstalledPackageIds());
+      soundEngine.playNotification();
+    });
   };
 
   // --- WALLPAPER & APPEARANCE STATE ---
@@ -978,6 +1001,20 @@ export default function ControlPanelApp({ user, onOpenApp }: { user?: UserData; 
         )}
 
       </div>
+
+      {/* Sudo Privilege Escalation Dialog */}
+      {pendingAdminAction && (
+        <SudoDialog
+          username={user?.username || 'user'}
+          actionTitle={pendingAdminAction.title}
+          onSuccess={() => {
+            const action = pendingAdminAction;
+            setPendingAdminAction(null);
+            action.execute();
+          }}
+          onCancel={() => setPendingAdminAction(null)}
+        />
+      )}
     </div>
   );
 }

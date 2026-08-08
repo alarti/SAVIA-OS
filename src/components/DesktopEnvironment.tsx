@@ -22,6 +22,7 @@ import ImageViewerApp from './ImageViewerApp';
 import WineRunnerApp, { WIN32_APP_CATALOG } from './WineRunnerApp';
 import { soundEngine } from '../utils/soundEngine';
 import { getInstalledPackageIds, AVAILABLE_PACKAGES } from '../utils/packageRegistry';
+import { userStorage } from '../utils/userStorage';
 
 type WindowData = {
   id: string;
@@ -194,14 +195,17 @@ export default function DesktopEnvironment({ user, onExit }: { user: UserData, o
 
   // Desktop Icons State & Draggable Position Management
   const [desktopIcons, setDesktopIcons] = useState<DesktopIcon[]>(() => {
-    try {
-      const saved = localStorage.getItem('savia_os_desktop_icons');
-      if (saved) return JSON.parse(saved);
-    } catch {}
-    return DEFAULT_DESKTOP_ICONS;
+    return userStorage.getDesktopIcons(user.username);
   });
   const [draggingIcon, setDraggingIcon] = useState<{ id: string, startX: number, startY: number, initialX: number, initialY: number, isMoved: boolean } | null>(null);
   const [selectedIconId, setSelectedIconId] = useState<string | null>(null);
+
+  // Sync icons and theme when user changes
+  useEffect(() => {
+    setDesktopIcons(userStorage.getDesktopIcons(user.username));
+    setWallpaper(userStorage.getWallpaper(user.username));
+    setOverlayOpacity(userStorage.getOverlayOpacity(user.username));
+  }, [user.username]);
 
   // Desktop Icon Context Menu & Creation Modals State
   const [iconContextMenu, setIconContextMenu] = useState<{ icon: DesktopIcon, x: number, y: number } | null>(null);
@@ -244,9 +248,7 @@ export default function DesktopEnvironment({ user, onExit }: { user: UserData, o
       };
 
       const updated = [...prevIcons, newIcon];
-      try {
-        localStorage.setItem('savia_os_desktop_icons', JSON.stringify(updated));
-      } catch {}
+      userStorage.setDesktopIcons(user.username, updated);
       soundEngine.playSuccessTone();
       return updated;
     });
@@ -255,9 +257,7 @@ export default function DesktopEnvironment({ user, onExit }: { user: UserData, o
   const deleteDesktopIcon = (id: string) => {
     setDesktopIcons(prev => {
       const updated = prev.filter(i => i.id !== id);
-      try {
-        localStorage.setItem('savia_os_desktop_icons', JSON.stringify(updated));
-      } catch {}
+      userStorage.setDesktopIcons(user.username, updated);
       return updated;
     });
     soundEngine.playButtonClick();
@@ -267,20 +267,15 @@ export default function DesktopEnvironment({ user, onExit }: { user: UserData, o
     if (!newTitle.trim()) return;
     setDesktopIcons(prev => {
       const updated = prev.map(i => i.id === id ? { ...i, title: newTitle.trim() } : i);
-      try {
-        localStorage.setItem('savia_os_desktop_icons', JSON.stringify(updated));
-      } catch {}
+      userStorage.setDesktopIcons(user.username, updated);
       return updated;
     });
     soundEngine.playSuccessTone();
   };
 
   // Desktop Wallpaper & Theme State
-  const [wallpaper, setWallpaper] = useState<string>(() => localStorage.getItem('savia_os_wallpaper') || PRESET_WALLPAPERS[0].url);
-  const [overlayOpacity, setOverlayOpacity] = useState<number>(() => {
-    const saved = localStorage.getItem('savia_os_overlay_opacity');
-    return saved ? parseFloat(saved) : 50;
-  });
+  const [wallpaper, setWallpaper] = useState<string>(() => userStorage.getWallpaper(user.username));
+  const [overlayOpacity, setOverlayOpacity] = useState<number>(() => userStorage.getOverlayOpacity(user.username));
 
   // Sound & Desktop init
   useEffect(() => {
@@ -297,10 +292,7 @@ export default function DesktopEnvironment({ user, onExit }: { user: UserData, o
     };
 
     const handleIconsUpdated = () => {
-      try {
-        const saved = localStorage.getItem('savia_os_desktop_icons');
-        if (saved) setDesktopIcons(JSON.parse(saved));
-      } catch {}
+      setDesktopIcons(userStorage.getDesktopIcons(user.username));
     };
 
     window.addEventListener('savia_os_desktop_icons_updated', handleIconsUpdated);
@@ -484,6 +476,14 @@ export default function DesktopEnvironment({ user, onExit }: { user: UserData, o
 
   const openApp = (type: WindowData['type'], title: string, data?: any) => {
     soundEngine.playWindowOpen();
+
+    userStorage.addRecent(user.username, {
+      name: title,
+      path: data ? String(data) : title,
+      appType: type,
+      iconType: type === 'folder' ? 'folder' : (type === 'office' ? 'doc' : (type === 'wine' ? 'wine' : 'app'))
+    });
+
     // Allow multiple instances if data is provided so we can open different documents
     const existing = windows.find(w => w.type === type && (data === undefined || w.data === data));
     if (existing) {
@@ -920,19 +920,19 @@ export default function DesktopEnvironment({ user, onExit }: { user: UserData, o
               {w.type === 'appstore' && <AppStore user={user} onOpenApp={(type, title) => openApp(type as any, title)} />}
               {w.type === 'soundsettings' && <SoundSettings />}
               {w.type === 'paint' && <PaintApp />}
-              {w.type === 'theme' && <ThemeCustomizerApp />}
+              {w.type === 'theme' && <ThemeCustomizerApp user={user} />}
               {w.type === 'webgl' && <WebGLApp />}
               {w.type === 'folder' && <FileExplorer user={user} onOpenFile={(type, title) => openApp(type as any, title)} />}
               {w.type === 'browser' && <BrowserApp user={user} />}
               {w.type === 'texteditor' && <TextEditorApp />}
               {w.type === 'pdfviewer' && <PdfViewerApp />}
-              {w.type === 'office' && <OfficeApp initialFile={w.data} />}
+              {w.type === 'office' && <OfficeApp user={user} initialFile={w.data} />}
               {w.type === 'taskmanager' && <TaskManager windows={windows} closeWindow={closeWindow} />}
               {w.type === 'tetris' && <TetrisApp />}
               {w.type === 'calculator' && <CalculatorApp />}
               {w.type === 'calendar' && <CalendarClockApp />}
               {w.type === 'imageviewer' && <ImageViewerApp />}
-              {w.type === 'wine' && <WineRunnerApp initialFile={w.data} onOpenApp={(type, title, data) => openApp(type as any, title, data)} />}
+              {w.type === 'wine' && <WineRunnerApp user={user} initialFile={w.data} onOpenApp={(type, title, data) => openApp(type as any, title, data)} />}
             </div>
 
             {/* Window Resizing Handle */}

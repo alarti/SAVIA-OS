@@ -4,10 +4,13 @@ import {
   ChevronLeft, ChevronRight, ChevronUp, Copy, Trash2, Edit2, Info, 
   File, Play, ExternalLink, ShieldAlert, Plus, Upload, Clipboard, 
   Check, X, HardDrive, Box, Image as ImageIcon, Music, Film, Home, 
-  Monitor, Zap, Settings, RefreshCcw, ExternalLink as LinkIcon
+  Monitor, Zap, Settings, RefreshCcw, ExternalLink as LinkIcon, Clock
 } from 'lucide-react';
 import type { UserData } from '../utils/auth';
 import { soundEngine } from '../utils/soundEngine';
+import { securityEngine } from '../utils/securityEngine';
+import { userStorage } from '../utils/userStorage';
+import SudoDialog from './SudoDialog';
 
 export type FileItem = {
   id: string;
@@ -22,15 +25,40 @@ export type FileItem = {
 
 const INITIAL_FS: Record<string, FileItem[]> = {
   '/': [
+    { id: 'root_dir', name: 'root', type: 'folder', iconType: 'folder', date: 'Oct 12 09:30', permissions: 'drwx------', owner: 'root' },
     { id: 'usr', name: 'usr', type: 'folder', iconType: 'folder', date: 'Oct 12 09:30', permissions: 'drwxr-xr-x', owner: 'root' },
     { id: 'bin', name: 'bin', type: 'folder', iconType: 'folder', date: 'Oct 12 09:30', permissions: 'drwxr-xr-x', owner: 'root' },
     { id: 'etc', name: 'etc', type: 'folder', iconType: 'folder', date: 'Oct 12 09:30', permissions: 'drwxr-xr-x', owner: 'root' },
     { id: 'home', name: 'home', type: 'folder', iconType: 'folder', date: 'Oct 12 09:30', permissions: 'drwxr-xr-x', owner: 'root' },
     { id: 'games', name: 'games', type: 'folder', iconType: 'folder', date: 'Oct 12 09:30', permissions: 'drwxr-xr-x', owner: 'user' },
   ],
+  '/root': [
+    { id: 'r_sec', name: 'root_secrets.key', type: 'file', iconType: 'text', size: '1 KB', date: 'Hoy 00:00', permissions: '-rw-------', owner: 'root' },
+    { id: 'r_desktop', name: 'Desktop', type: 'folder', iconType: 'folder', date: 'Hoy 00:00', permissions: 'drwx------', owner: 'root' },
+    { id: 'r_docs', name: 'Documents', type: 'folder', iconType: 'folder', date: 'Hoy 00:00', permissions: 'drwx------', owner: 'root' },
+    { id: 'r_downloads', name: 'Downloads', type: 'folder', iconType: 'folder', date: 'Hoy 00:00', permissions: 'drwx------', owner: 'root' },
+    { id: 'r_pics', name: 'Pictures', type: 'folder', iconType: 'folder', date: 'Hoy 00:00', permissions: 'drwx------', owner: 'root' },
+  ],
+  '/root/Desktop': [
+    { id: 'rd_tools', name: 'Herramientas_Root.sh', type: 'executable', iconType: 'terminal', size: '8 KB', date: 'Hoy 00:00', permissions: '-rwx------', owner: 'root' },
+    { id: 'rd_audit', name: 'Audit_Log.key', type: 'file', iconType: 'text', size: '3 KB', date: 'Hoy 00:00', permissions: '-rw-------', owner: 'root' },
+  ],
+  '/root/Documents': [
+    { id: 'rdoc_man', name: 'Manual_Superusuario.pdf', type: 'file', iconType: 'file', size: '2.5 MB', date: 'Hoy 00:00', permissions: '-rw-------', owner: 'root' },
+  ],
+  '/root/Downloads': [
+    { id: 'rdl_patch', name: 'Kernel_Update.patch', type: 'file', iconType: 'text', size: '450 KB', date: 'Hoy 00:00', permissions: '-rw-------', owner: 'root' },
+  ],
+  '/root/Pictures': [
+    { id: 'rpic_avatar', name: 'Root_Avatar.png', type: 'file', iconType: 'image', size: '120 KB', date: 'Hoy 00:00', permissions: '-rw-------', owner: 'root' },
+  ],
   '/home': [
+    { id: 'root_h_dir', name: 'root', type: 'folder', iconType: 'folder', date: 'Oct 12 09:30', permissions: 'drwx------', owner: 'root' },
     { id: 'user_dir', name: 'user', type: 'folder', iconType: 'folder', date: 'Oct 12 09:30', permissions: 'drwxr-xr-x', owner: 'user' },
     { id: 'guest_dir', name: 'guest', type: 'folder', iconType: 'folder', date: 'Oct 12 09:30', permissions: 'drwxr-xr-x', owner: 'guest' },
+  ],
+  '/home/root': [
+    { id: 'r_audit', name: 'audit_log.db', type: 'file', iconType: 'file', size: '12 KB', date: 'Hoy 00:00', permissions: '-rw-------', owner: 'root' },
   ],
   '/home/user': [
     { id: 'u_desktop', name: 'Desktop', type: 'folder', iconType: 'folder', date: 'Hoy 09:00', permissions: 'drwxr-xr-x', owner: 'user' },
@@ -102,8 +130,24 @@ const INITIAL_FS: Record<string, FileItem[]> = {
     { id: 'sys_gdi32', name: 'gdi32.dll', type: 'file', iconType: 'file', size: '640 KB', date: 'Hoy 09:00', permissions: '-rw-r--r--', owner: 'user' },
   ],
   '/home/guest': [
+    { id: 'g_desktop', name: 'Desktop', type: 'folder', iconType: 'folder', date: 'Hoy 08:00', permissions: 'drwxr-xr-x', owner: 'guest' },
+    { id: 'g_docs', name: 'Documents', type: 'folder', iconType: 'folder', date: 'Hoy 08:00', permissions: 'drwxr-xr-x', owner: 'guest' },
+    { id: 'g_downloads', name: 'Downloads', type: 'folder', iconType: 'folder', date: 'Hoy 08:00', permissions: 'drwxr-xr-x', owner: 'guest' },
+    { id: 'g_pictures', name: 'Pictures', type: 'folder', iconType: 'folder', date: 'Hoy 08:00', permissions: 'drwxr-xr-x', owner: 'guest' },
     { id: 'guest_readme', name: 'ReadMe_Guest.txt', type: 'file', iconType: 'text', size: '1 KB', date: 'Hoy 08:00', permissions: '-rw-r--r--', owner: 'guest' },
     { id: 'guest_welcome', name: 'Welcome.pdf', type: 'file', iconType: 'file', size: '500 KB', date: 'Hoy 08:00', permissions: '-rw-r--r--', owner: 'guest' },
+  ],
+  '/home/guest/Desktop': [
+    { id: 'gd_welcome', name: 'Bienvenida_Invitado.txt', type: 'file', iconType: 'text', size: '1 KB', date: 'Hoy 08:00', permissions: '-rw-r--r--', owner: 'guest' },
+  ],
+  '/home/guest/Documents': [
+    { id: 'gdoc_guest', name: 'Documento_Invitado.docx', type: 'file', iconType: 'text', size: '12 KB', date: 'Hoy 08:00', permissions: '-rw-r--r--', owner: 'guest' },
+  ],
+  '/home/guest/Downloads': [
+    { id: 'gdl_guest', name: 'Ejemplo_Invitado.zip', type: 'file', iconType: 'file', size: '1.2 MB', date: 'Hoy 08:00', permissions: '-rw-r--r--', owner: 'guest' },
+  ],
+  '/home/guest/Pictures': [
+    { id: 'gpic_guest', name: 'Foto_Invitado.png', type: 'file', iconType: 'image', size: '220 KB', date: 'Hoy 08:00', permissions: '-rw-r--r--', owner: 'guest' },
   ],
   '/bin': [
     { id: 'b_bash', name: 'bash', type: 'executable', iconType: 'terminal', size: '1.2 MB', date: 'Oct 12 09:30', permissions: '-rwxr-xr-x', owner: 'root' },
@@ -112,6 +156,9 @@ const INITIAL_FS: Record<string, FileItem[]> = {
 };
 
 export default function FileExplorer({ user, onOpenFile }: { user?: UserData; onOpenFile?: (type: string, title: string, data?: string) => void }) {
+  const activeUsername = user?.username || 'user';
+  const defaultHome = activeUsername === 'root' ? '/root' : `/home/${activeUsername}`;
+
   const [fs, setFs] = useState<Record<string, FileItem[]>>(() => {
     try {
       const saved = localStorage.getItem('savia_os_mock_fs');
@@ -120,9 +167,15 @@ export default function FileExplorer({ user, onOpenFile }: { user?: UserData; on
     return INITIAL_FS;
   });
 
-  const [currentPath, setCurrentPath] = useState('/home/user');
-  const [history, setHistory] = useState<string[]>(['/home/user']);
+  const [currentPath, setCurrentPath] = useState(defaultHome);
+  const [history, setHistory] = useState<string[]>([defaultHome]);
   const [historyIndex, setHistoryIndex] = useState(0);
+
+  useEffect(() => {
+    setCurrentPath(defaultHome);
+    setHistory([defaultHome]);
+    setHistoryIndex(0);
+  }, [activeUsername]);
   const [selectedItemId, setSelectedItemId] = useState<string | null>(null);
   const [isTouch, setIsTouch] = useState(false);
   const [contextMenu, setContextMenu] = useState<{ x: number, y: number, item: FileItem | null } | null>(null);
@@ -154,10 +207,20 @@ export default function FileExplorer({ user, onOpenFile }: { user?: UserData; on
     } catch {}
   };
 
+  const [sudoModalPath, setSudoModalPath] = useState<string | null>(null);
+
   const navigateTo = (path: string) => {
     const cleanPath = path.replace(/\/+/g, '/').replace(/\/$/, '') || '/';
+    const activeUsername = user?.username || 'user';
+    const accessCheck = securityEngine.checkPathAccess(activeUsername, cleanPath);
+
+    if (!accessCheck.allowed) {
+      soundEngine.playError();
+      setSudoModalPath(cleanPath);
+      return;
+    }
+
     if (!fs[cleanPath]) {
-      // Create empty folder entry if navigating to newly created path
       setFs(prev => ({ ...prev, [cleanPath]: [] }));
     }
     const newHistory = history.slice(0, historyIndex + 1);
@@ -245,6 +308,7 @@ export default function FileExplorer({ user, onOpenFile }: { user?: UserData; on
     }
 
     const nameLower = item.name.toLowerCase();
+    let appTypeForRecent = 'texteditor';
     
     if (nameLower.endsWith('.exe') || nameLower.endsWith('.msi') || nameLower.endsWith('.bat') || item.iconType === 'wine') {
       let win32AppId = item.name;
@@ -259,40 +323,54 @@ export default function FileExplorer({ user, onOpenFile }: { user?: UserData; on
       else if (nameLower.includes('paint')) win32AppId = 'mspaint_win32';
       else if (nameLower.includes('task')) win32AppId = 'taskmgr_win32';
 
+      appTypeForRecent = 'wine';
       if (onOpenFile) {
         onOpenFile('wine', `Wine 9.0 Win32 Subsystem - ${item.name}`, win32AppId);
       }
     } else if (nameLower.endsWith('.txt') || nameLower.endsWith('.js') || nameLower.endsWith('.json') || nameLower.endsWith('.html') || nameLower.endsWith('.md')) {
+      appTypeForRecent = 'texteditor';
       if (onOpenFile) {
         onOpenFile('texteditor', `Editor de Código - ${item.name}`);
       }
     } else if (nameLower.endsWith('.pdf')) {
+      appTypeForRecent = 'pdfviewer';
       if (onOpenFile) {
         onOpenFile('pdfviewer', `Visor PDF - ${item.name}`);
       }
     } else if (nameLower.endsWith('.png') || nameLower.endsWith('.jpg') || nameLower.endsWith('.jpeg')) {
+      appTypeForRecent = 'imageviewer';
       if (onOpenFile) {
         onOpenFile('imageviewer', `Galería Fotos - ${item.name}`);
       }
     } else if (nameLower.endsWith('.docx') || nameLower.endsWith('.xlsx') || nameLower.endsWith('.pptx')) {
+      appTypeForRecent = 'office';
       if (onOpenFile) {
         onOpenFile('office', `SaviaOffice - ${item.name}`, item.name);
       }
     } else if (item.type === 'executable' || nameLower.endsWith('.sh')) {
+      appTypeForRecent = 'terminal';
       if (onOpenFile) {
         onOpenFile('terminal', `Ejecución Terminal - ${item.name}`);
       }
     } else {
+      appTypeForRecent = 'texteditor';
       if (onOpenFile) {
         onOpenFile('texteditor', `Editor de Archivos - ${item.name}`);
       }
     }
+
+    userStorage.addRecent(activeUsername, {
+      name: item.name,
+      path: currentPath === '/' ? `/${item.name}` : `${currentPath}/${item.name}`,
+      appType: appTypeForRecent,
+      iconType: item.iconType
+    });
   };
 
   const addShortcutToDesktop = (item: FileItem) => {
     try {
-      const existingIcons = JSON.parse(localStorage.getItem('savia_os_desktop_icons') || '[]');
-      let appType: string = 'texteditor';
+      const existingIcons = userStorage.getDesktopIcons(activeUsername);
+      let appType: any = 'texteditor';
       let docData: string | undefined = item.name;
       const nameLower = item.name.toLowerCase();
 
@@ -329,8 +407,7 @@ export default function FileExplorer({ user, onOpenFile }: { user?: UserData; on
         y: 20 + Math.floor(existingIcons.length / 4) * 100
       };
 
-      localStorage.setItem('savia_os_desktop_icons', JSON.stringify([...existingIcons, newIcon]));
-      window.dispatchEvent(new CustomEvent('savia_os_desktop_icons_updated'));
+      userStorage.setDesktopIcons(activeUsername, [...existingIcons, newIcon as any]);
       soundEngine.playSuccessTone();
     } catch (e) {
       console.error(e);
@@ -517,15 +594,18 @@ export default function FileExplorer({ user, onOpenFile }: { user?: UserData; on
   const currentItems = fs[currentPath] || [];
   const selectedItem = currentItems.find(i => i.id === selectedItemId);
 
+  const userHomePath = activeUsername === 'root' ? '/root' : `/home/${activeUsername}`;
+
   const QUICK_BOOKMARKS = [
-    { label: 'Inicio (user)', path: '/home/user', icon: Home, color: 'text-blue-400' },
-    { label: 'Escritorio', path: '/home/user/Desktop', icon: Monitor, color: 'text-amber-400' },
-    { label: 'Documentos', path: '/home/user/Documents', icon: FileText, color: 'text-emerald-400' },
-    { label: 'Descargas', path: '/home/user/Downloads', icon: Upload, color: 'text-cyan-400' },
-    { label: 'Imágenes', path: '/home/user/Pictures', icon: ImageIcon, color: 'text-purple-400' },
-    { label: 'Música', path: '/home/user/Music', icon: Music, color: 'text-pink-400' },
-    { label: 'Vídeos', path: '/home/user/Videos', icon: Film, color: 'text-red-400' },
-    { label: 'Disco C: (Wine)', path: '/home/user/.wine/drive_c', icon: HardDrive, color: 'text-amber-500' },
+    { label: `Inicio (${activeUsername})`, path: userHomePath, icon: Home, color: 'text-blue-400' },
+    { label: 'Archivos Recientes', path: '/recents', icon: Clock, color: 'text-amber-300' },
+    { label: 'Escritorio', path: `${userHomePath}/Desktop`, icon: Monitor, color: 'text-amber-400' },
+    { label: 'Documentos', path: `${userHomePath}/Documents`, icon: FileText, color: 'text-emerald-400' },
+    { label: 'Descargas', path: `${userHomePath}/Downloads`, icon: Upload, color: 'text-cyan-400' },
+    { label: 'Imágenes', path: `${userHomePath}/Pictures`, icon: ImageIcon, color: 'text-purple-400' },
+    { label: 'Música', path: `${userHomePath}/Music`, icon: Music, color: 'text-pink-400' },
+    { label: 'Vídeos', path: `${userHomePath}/Videos`, icon: Film, color: 'text-red-400' },
+    { label: 'Disco C: (Wine)', path: `${userHomePath}/.wine/drive_c`, icon: HardDrive, color: 'text-amber-500' },
     { label: 'Raíz del Sistema', path: '/', icon: Folder, color: 'text-gray-400' },
   ];
 
@@ -712,35 +792,71 @@ export default function FileExplorer({ user, onOpenFile }: { user?: UserData; on
           )}
 
           {/* File Grid */}
-          <div className={`flex-1 overflow-y-auto ${isTouch ? 'p-4 gap-6' : 'p-4 gap-4'} grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 content-start`}>
-            {currentItems.map(item => {
-              const isSelected = selectedItemId === item.id;
-              return (
-                <div 
-                  key={item.id}
-                  onClick={(e) => handleItemSelect(e, item)}
-                  onDoubleClick={(e) => { e.stopPropagation(); handleOpenItem(item); }}
-                  onContextMenu={(e) => handleContextMenu(e, item)}
-                  className={`flex flex-col items-center gap-2 cursor-pointer ${isTouch ? 'p-3' : 'p-2.5'} rounded-xl transition-all relative ${
-                    isSelected 
-                      ? 'bg-blue-600/30 border border-blue-500/80 shadow-lg scale-[1.02]' 
-                      : 'hover:bg-white/10 border border-transparent'
-                  }`}
+          {currentPath === '/recents' ? (
+            <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-2">
+              <span className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">
+                Archivos y documentos abiertos recientemente por {activeUsername}
+              </span>
+              {userStorage.getRecents(activeUsername).map((rec, idx) => (
+                <div
+                  key={idx}
+                  onDoubleClick={() => {
+                    if (onOpenFile && rec.appType) {
+                      onOpenFile(rec.appType, rec.name);
+                    }
+                  }}
+                  className="flex items-center justify-between p-3 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 cursor-pointer transition-all"
                 >
-                  {getIcon(item.iconType, isTouch ? 'w-12 h-12' : 'w-10 h-10')}
-                  <span className={`text-center font-medium truncate w-full ${isTouch ? 'text-xs' : 'text-[11px]'} ${isSelected ? 'text-white font-bold' : 'text-gray-200'}`}>
-                    {item.name}
+                  <div className="flex items-center gap-3">
+                    {getIcon((rec.iconType as any) || 'text', 'w-8 h-8')}
+                    <div className="flex flex-col">
+                      <span className="font-semibold text-white text-xs">{rec.name}</span>
+                      <span className="text-[10px] text-gray-400 font-mono">{rec.path}</span>
+                    </div>
+                  </div>
+                  <span className="text-[10px] text-amber-400 font-mono">
+                    {new Date(rec.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                   </span>
                 </div>
-              );
-            })}
-            {currentItems.length === 0 && (
-              <div className="col-span-full flex flex-col items-center justify-center h-48 text-gray-500 text-xs font-mono gap-2">
-                <Folder className="w-8 h-8 opacity-40" />
-                <span>Directorio vacío. Haga clic derecho para crear un nuevo fichero o carpeta.</span>
-              </div>
-            )}
-          </div>
+              ))}
+              {userStorage.getRecents(activeUsername).length === 0 && (
+                <div className="flex flex-col items-center justify-center h-48 text-gray-500 text-xs font-mono gap-2">
+                  <Clock className="w-8 h-8 opacity-40" />
+                  <span>Sin archivos recientes registrados para este usuario.</span>
+                </div>
+              )}
+            </div>
+          ) : (
+            <div className={`flex-1 overflow-y-auto ${isTouch ? 'p-4 gap-6' : 'p-4 gap-4'} grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 content-start`}>
+              {currentItems.map(item => {
+                const isSelected = selectedItemId === item.id;
+                return (
+                  <div 
+                    key={item.id}
+                    onClick={(e) => handleItemSelect(e, item)}
+                    onDoubleClick={(e) => { e.stopPropagation(); handleOpenItem(item); }}
+                    onContextMenu={(e) => handleContextMenu(e, item)}
+                    className={`flex flex-col items-center gap-2 cursor-pointer ${isTouch ? 'p-3' : 'p-2.5'} rounded-xl transition-all relative ${
+                      isSelected 
+                        ? 'bg-blue-600/30 border border-blue-500/80 shadow-lg scale-[1.02]' 
+                        : 'hover:bg-white/10 border border-transparent'
+                    }`}
+                  >
+                    {getIcon(item.iconType, isTouch ? 'w-12 h-12' : 'w-10 h-10')}
+                    <span className={`text-center font-medium truncate w-full ${isTouch ? 'text-xs' : 'text-[11px]'} ${isSelected ? 'text-white font-bold' : 'text-gray-200'}`}>
+                      {item.name}
+                    </span>
+                  </div>
+                );
+              })}
+              {currentItems.length === 0 && (
+                <div className="col-span-full flex flex-col items-center justify-center h-48 text-gray-500 text-xs font-mono gap-2">
+                  <Folder className="w-8 h-8 opacity-40" />
+                  <span>Directorio vacío. Haga clic derecho para crear un nuevo fichero o carpeta.</span>
+                </div>
+              )}
+            </div>
+          )}
         </div>
       </div>
 
@@ -1033,6 +1149,30 @@ export default function FileExplorer({ user, onOpenFile }: { user?: UserData; on
             </div>
           </div>
         </div>
+      )}
+
+      {/* Sudo Privilege Escalation Modal */}
+      {sudoModalPath && (
+        <SudoDialog
+          username={user?.username || 'user'}
+          actionTitle={`Acceder al directorio restringido '${sudoModalPath}'`}
+          onSuccess={() => {
+            const target = sudoModalPath;
+            setSudoModalPath(null);
+            if (target) {
+              if (!fs[target]) {
+                setFs(prev => ({ ...prev, [target]: [] }));
+              }
+              const newHistory = history.slice(0, historyIndex + 1);
+              newHistory.push(target);
+              setHistory(newHistory);
+              setHistoryIndex(newHistory.length - 1);
+              setCurrentPath(target);
+              setSelectedItemId(null);
+            }
+          }}
+          onCancel={() => setSudoModalPath(null)}
+        />
       )}
     </div>
   );

@@ -334,8 +334,10 @@ export function installPackage(pkgId: string): { success: boolean; message: stri
 
   // Dispatch custom system event for GUI desktop/start menu refresh
   if (typeof window !== 'undefined') {
-    window.dispatchEvent(new CustomEvent('savia_os_package_updated', { detail: { action: 'install', package: pkg } }));
-    window.dispatchEvent(new CustomEvent('webos_package_updated', { detail: { action: 'install', package: pkg } }));
+    setTimeout(() => {
+      window.dispatchEvent(new CustomEvent('savia_os_package_updated', { detail: { action: 'install', package: pkg } }));
+      window.dispatchEvent(new CustomEvent('webos_package_updated', { detail: { action: 'install', package: pkg } }));
+    }, 0);
   }
 
   return {
@@ -358,8 +360,10 @@ export function uninstallPackage(pkgId: string): { success: boolean; message: st
   soundEngine.playWindowClose();
 
   if (typeof window !== 'undefined') {
-    window.dispatchEvent(new CustomEvent('savia_os_package_updated', { detail: { action: 'uninstall', package: pkg } }));
-    window.dispatchEvent(new CustomEvent('webos_package_updated', { detail: { action: 'uninstall', package: pkg } }));
+    setTimeout(() => {
+      window.dispatchEvent(new CustomEvent('savia_os_package_updated', { detail: { action: 'uninstall', package: pkg } }));
+      window.dispatchEvent(new CustomEvent('webos_package_updated', { detail: { action: 'uninstall', package: pkg } }));
+    }, 0);
   }
 
   return {

@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { Palette, Image, Sliders, Check, RefreshCw, Sparkles, Sun, Moon, Monitor, Layout, Copy } from 'lucide-react';
 import { soundEngine } from '../utils/soundEngine';
+import { userStorage } from '../utils/userStorage';
+import type { UserData } from '../utils/auth';
 
 export const PRESET_WALLPAPERS = [
   {
@@ -57,22 +59,23 @@ export const DESKTOP_THEMES = [
   { id: 'minimal-light', name: 'Nordic Clean Light', description: 'Interfaz clara y luminosa', mode: 'light' },
 ];
 
-export default function ThemeCustomizerApp() {
+export default function ThemeCustomizerApp({ user }: { user?: UserData }) {
+  const username = user?.username || 'user';
+
   const [currentWallpaper, setCurrentWallpaper] = useState<string>(() => {
-    return localStorage.getItem('savia_os_wallpaper') || PRESET_WALLPAPERS[0].url;
+    return userStorage.getWallpaper(username);
   });
 
   const [currentTheme, setCurrentTheme] = useState<string>(() => {
-    return localStorage.getItem('savia_os_theme') || 'dark-glass';
+    return userStorage.getTheme(username);
   });
 
   const [currentAccent, setCurrentAccent] = useState<string>(() => {
-    return localStorage.getItem('savia_os_accent') || 'blue';
+    return userStorage.getAccent(username);
   });
 
   const [darkOverlayOpacity, setDarkOverlayOpacity] = useState<number>(() => {
-    const saved = localStorage.getItem('savia_os_overlay_opacity');
-    return saved ? parseFloat(saved) : 50;
+    return userStorage.getOverlayOpacity(username);
   });
 
   const [customUrlInput, setCustomUrlInput] = useState('');
@@ -83,10 +86,10 @@ export default function ThemeCustomizerApp() {
     const ac = newAccent !== undefined ? newAccent : currentAccent;
     const op = newOpacity !== undefined ? newOpacity : darkOverlayOpacity;
 
-    localStorage.setItem('savia_os_wallpaper', wp);
-    localStorage.setItem('savia_os_theme', th);
-    localStorage.setItem('savia_os_accent', ac);
-    localStorage.setItem('savia_os_overlay_opacity', op.toString());
+    userStorage.setWallpaper(username, wp);
+    userStorage.setTheme(username, th);
+    userStorage.setAccent(username, ac);
+    userStorage.setOverlayOpacity(username, op);
 
     soundEngine.playNotification();
 

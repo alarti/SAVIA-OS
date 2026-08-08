@@ -20,7 +20,9 @@ function getAudioContext(): AudioContext | null {
 }
 
 function notifyListeners() {
-  listeners.forEach(fn => fn());
+  setTimeout(() => {
+    listeners.forEach(fn => fn());
+  }, 0);
 }
 
 export const soundEngine = {

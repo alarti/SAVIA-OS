@@ -15,14 +15,27 @@ type FileSystem = {
 
 const initialFS: FileSystem = {
   '/': { type: 'dir', permissions: 'rwxr-xr-x', owner: 'root' },
+  '/root': { type: 'dir', permissions: 'rwx------', owner: 'root' },
+  '/root/root_secrets.key': { type: 'file', content: 'CLAVE MAESTRA DE KERNEL SAVIA-OS: 0x99A8F41B-SECURE-RUST. Solo root y sudo.', permissions: '-rw-------', owner: 'root' },
+  '/etc': { type: 'dir', permissions: 'rwxr-xr-x', owner: 'root' },
+  '/etc/sudoers': { type: 'file', content: '# /etc/sudoers\nroot ALL=(ALL:ALL) ALL\nuser ALL=(ALL:ALL) ALL\n%admin ALL=(ALL) ALL', permissions: '-r--r-----', owner: 'root' },
+  '/etc/shadow': { type: 'file', content: 'root:$6$vL9.p:19000:0:99999:7:::\nuser:$6$qP1.x:19000:0:99999:7:::\nguest:*:19000:0:99999:7:::', permissions: '-rw-------', owner: 'root' },
   '/home': { type: 'dir', permissions: 'rwxr-xr-x', owner: 'root' },
+  '/home/root': { type: 'dir', permissions: 'rwx------', owner: 'root' },
+  '/home/root/audit_log.db': { type: 'file', content: 'REGISTRO DE SEGURIDAD PRIVADO DE SUPERUSUARIO.', permissions: '-rw-------', owner: 'root' },
   '/home/user': { type: 'dir', permissions: 'rwxr-xr-x', owner: 'user' },
+  '/home/user/notes.txt': { type: 'file', content: 'Bienvenido a SAVIA-OS. Espacio personal del usuario. Aislado de otros entornos.', permissions: '-rw-r--r--', owner: 'user' },
+  '/home/user/test.exe': { type: 'executable', permissions: 'rwxr-xr-x', owner: 'user' },
+  '/home/guest': { type: 'dir', permissions: 'rwxr-xr-x', owner: 'guest' },
+  '/home/guest/bienvenida.txt': { type: 'file', content: 'Espacio temporal restringido para el usuario invitado.', permissions: '-rw-r--r--', owner: 'guest' },
   '/bin': { type: 'dir', permissions: 'rwxr-xr-x', owner: 'root' },
   '/bin/ls': { type: 'executable', permissions: 'rwxr-xr-x', owner: 'root' },
   '/bin/cat': { type: 'executable', permissions: 'rwxr-xr-x', owner: 'root' },
   '/bin/echo': { type: 'executable', permissions: 'rwxr-xr-x', owner: 'root' },
   '/bin/pwd': { type: 'executable', permissions: 'rwxr-xr-x', owner: 'root' },
   '/bin/whoami': { type: 'executable', permissions: 'rwxr-xr-x', owner: 'root' },
+  '/bin/sudo': { type: 'executable', permissions: 'rwsr-xr-x', owner: 'root' },
+  '/bin/su': { type: 'executable', permissions: 'rwsr-xr-x', owner: 'root' },
   '/bin/uname': { type: 'executable', permissions: 'rwxr-xr-x', owner: 'root' },
   '/bin/clear': { type: 'executable', permissions: 'rwxr-xr-x', owner: 'root' },
   '/system': { type: 'dir', permissions: 'rwxr-xr-x', owner: 'root' },
@@ -30,20 +43,24 @@ const initialFS: FileSystem = {
   '/system/bin/cmd.exe': { type: 'executable', permissions: 'rwxr-xr-x', owner: 'root' },
   '/system/bin/powershell.exe': { type: 'executable', permissions: 'rwxr-xr-x', owner: 'root' },
   '/Applications': { type: 'dir', permissions: 'rwxr-xr-x', owner: 'root' },
-  '/home/user/notes.txt': { type: 'file', content: 'Welcome to SAVIA-OS! Use terminal commands or the GUI package manager.', owner: 'user' },
-  '/home/user/test.exe': { type: 'executable', permissions: 'rwxr-xr-x', owner: 'user' },
 };
 
 export default function TerminalApp({ user, onOpenApp }: { user: UserData; onOpenApp?: (type: string, title: string) => void }) {
   const [input, setInput] = useState('');
   const [shellMode, setShellMode] = useState<'bash' | 'cmd' | 'powershell'>('bash');
+  const [activeTerminalUser, setActiveTerminalUser] = useState<string>(user.username);
+  const [isPasswordPrompt, setIsPasswordPrompt] = useState(false);
+  const [passwordPromptType, setPasswordPromptType] = useState<'sudo' | 'su' | null>(null);
+  const [pendingSudoCmd, setPendingSudoCmd] = useState<string | null>(null);
+
   const [output, setOutput] = useState<string[]>([
     'SAVIA-OS Real Package Execution Kernel v2.4 (x86_64 WASM)',
     'Supported Subsystems: POSIX Bash, Windows cmd.exe, PowerShell, APT / NPM',
+    'Aislamiento de Usuarios & Control de Privilegios Sudo: ACTIVO',
     'Created and Architected by Alberto Arce (https://www.linkedin.com/in/albertoarce)',
-    'Type "help", "about", "cmd.exe", "powershell.exe", "snake", or "apt list".',
+    'Type "help", "about", "sudo <cmd>", "su", "whoami", "cmd.exe", or "apt list".',
   ]);
-  const [cwd, setCwd] = useState(`/home/${user.username === 'root' ? 'root' : 'user'}`);
+  const [cwd, setCwd] = useState(`/home/${user.username === 'root' ? 'root' : user.username}`);
   const [fs, setFs] = useState<FileSystem>(initialFS);
   const [matrixActive, setMatrixActive] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
@@ -336,6 +353,12 @@ export default function TerminalApp({ user, onOpenApp }: { user: UserData; onOpe
       case 'ls':
       case 'dir':
         const targetDir = args[1] || cwd;
+        const accessCheckLs = securityEngine.checkPathAccess(activeTerminalUser, targetDir);
+        if (!accessCheckLs.allowed) {
+          soundEngine.playError();
+          setOutput(prev => [...prev, `ls: cannot open directory '${targetDir}': Permiso denegado. ${accessCheckLs.reason}`]);
+          break;
+        }
         const contents = Object.keys(fs)
           .filter(path => path.startsWith(targetDir === '/' ? '/' : targetDir + '/') && 
                           path !== targetDir && 
@@ -350,7 +373,80 @@ export default function TerminalApp({ user, onOpenApp }: { user: UserData; onOpe
         break;
 
       case 'whoami':
-        setOutput(prev => [...prev, user.username]);
+        setOutput(prev => [...prev, activeTerminalUser]);
+        break;
+
+      case 'id':
+        setOutput(prev => [...prev, activeTerminalUser === 'root' 
+          ? 'uid=0(root) gid=0(root) groups=0(root),27(sudo)' 
+          : activeTerminalUser === 'guest' 
+          ? 'uid=1001(guest) gid=1001(guest) groups=1001(guest)' 
+          : 'uid=1000(user) gid=1000(user) groups=1000(user),27(sudo)'
+        ]);
+        break;
+
+      case 'sudo':
+        const sudoSub = args.slice(1).join(' ');
+        if (!sudoSub) {
+          setOutput(prev => [...prev, 'usage: sudo -h | -K | -k | -V', 'usage: sudo [-u user] command']);
+          break;
+        }
+        if (args[1] === '-k' || args[1] === '-K') {
+          securityEngine.revokeSudo();
+          setOutput(prev => [...prev, '[sudo] Sesión de sudo revocada correctamente.']);
+          break;
+        }
+        if (args[1] === '-v') {
+          if (securityEngine.isSudoActive(activeTerminalUser) || activeTerminalUser === 'root') {
+            setOutput(prev => [...prev, `[sudo] Credenciales de sudo válidas. Tiempo restante: ${securityEngine.getSudoTimeRemainingSeconds()}s`]);
+          } else {
+            setIsPasswordPrompt(true);
+            setPasswordPromptType('sudo');
+            setPendingSudoCmd('sudo -v');
+          }
+          break;
+        }
+        if (sudoSub === 'su' || sudoSub === 'su -' || sudoSub === '-i') {
+          if (securityEngine.isSudoActive(activeTerminalUser) || activeTerminalUser === 'root') {
+            setActiveTerminalUser('root');
+            setCwd('/root');
+            setOutput(prev => [...prev, 'Sesión de superusuario root (#) activada.']);
+          } else {
+            setIsPasswordPrompt(true);
+            setPasswordPromptType('su');
+            setPendingSudoCmd('sudo su');
+          }
+          break;
+        }
+
+        if (securityEngine.isSudoActive(activeTerminalUser) || activeTerminalUser === 'root') {
+          setOutput(prev => [...prev, `[sudo] Ejecutando comando como root:`]);
+          const saveUser = activeTerminalUser;
+          setActiveTerminalUser('root');
+          await handleCommand(sudoSub);
+          setActiveTerminalUser(saveUser);
+        } else {
+          setIsPasswordPrompt(true);
+          setPasswordPromptType('sudo');
+          setPendingSudoCmd(sudoSub);
+        }
+        break;
+
+      case 'su':
+        const targetSuUser = args[1] || 'root';
+        if (activeTerminalUser === targetSuUser) {
+          setOutput(prev => [...prev, `Ya estás autenticado como '${targetSuUser}'.`]);
+          break;
+        }
+        if (securityEngine.isSudoActive(activeTerminalUser) || activeTerminalUser === 'root') {
+          setActiveTerminalUser(targetSuUser);
+          setCwd(targetSuUser === 'root' ? '/root' : `/home/${targetSuUser}`);
+          setOutput(prev => [...prev, `Sesión cambiada al usuario '${targetSuUser}'.`]);
+        } else {
+          setIsPasswordPrompt(true);
+          setPasswordPromptType('su');
+          setPendingSudoCmd(`su ${targetSuUser}`);
+        }
         break;
 
       case 'uname':
@@ -364,16 +460,28 @@ export default function TerminalApp({ user, onOpenApp }: { user: UserData; onOpe
       case 'cd':
         const newDir = args[1];
         if (!newDir || newDir === '~') {
-          setCwd(`/home/${user.username}`);
+          const defaultHome = activeTerminalUser === 'root' ? '/root' : `/home/${activeTerminalUser}`;
+          setCwd(defaultHome);
         } else if (newDir === '..') {
           if (cwd !== '/') {
             const parts = cwd.split('/');
             parts.pop();
-            setCwd(parts.join('/') || '/');
+            const parent = parts.join('/') || '/';
+            const accessCheck = securityEngine.checkPathAccess(activeTerminalUser, parent);
+            if (!accessCheck.allowed) {
+              soundEngine.playError();
+              setOutput(prev => [...prev, `bash: cd: ${parent}: Permiso denegado. ${accessCheck.reason}`]);
+            } else {
+              setCwd(parent);
+            }
           }
         } else {
           const path = newDir.startsWith('/') ? newDir : (cwd === '/' ? `/${newDir}` : `${cwd}/${newDir}`);
-          if (fs[path] && fs[path].type === 'dir') {
+          const accessCheck = securityEngine.checkPathAccess(activeTerminalUser, path);
+          if (!accessCheck.allowed) {
+            soundEngine.playError();
+            setOutput(prev => [...prev, `bash: cd: ${newDir}: Permiso denegado. ${accessCheck.reason}`]);
+          } else if (fs[path] && fs[path].type === 'dir') {
             setCwd(path);
           } else {
             soundEngine.playError();
@@ -386,7 +494,11 @@ export default function TerminalApp({ user, onOpenApp }: { user: UserData; onOpe
         const file = args[1];
         if (file) {
           const path = file.startsWith('/') ? file : (cwd === '/' ? `/${file}` : `${cwd}/${file}`);
-          if (fs[path]) {
+          const accessCheck = securityEngine.checkPathAccess(activeTerminalUser, path);
+          if (!accessCheck.allowed) {
+            soundEngine.playError();
+            setOutput(prev => [...prev, `cat: ${file}: Permiso denegado. ${accessCheck.reason}`]);
+          } else if (fs[path]) {
             if (fs[path].type === 'dir') {
               setOutput(prev => [...prev, `cat: ${file}: Is a directory`]);
             } else {
@@ -626,10 +738,43 @@ export default function TerminalApp({ user, onOpenApp }: { user: UserData; onOpe
     }
   };
 
-  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+  const handleKeyDown = async (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Enter') {
-      handleCommand(input);
+      const currentInput = input;
       setInput('');
+
+      if (isPasswordPrompt) {
+        setOutput(prev => [...prev, `[sudo] contraseña para ${user.username}: *******`]);
+        const res = securityEngine.elevateSudo(currentInput, user.username);
+        if (res.success) {
+          soundEngine.playButtonClick();
+          if (passwordPromptType === 'su') {
+            setActiveTerminalUser('root');
+            setCwd('/root');
+            setOutput(prev => [...prev, `[su] Autenticación correcta. Sesión cambiada a superusuario 'root' (#).`]);
+          } else if (pendingSudoCmd) {
+            setOutput(prev => [...prev, `[sudo] Elevación concedida. Ejecutando comando como root:`]);
+            const cmdToRun = pendingSudoCmd;
+            setIsPasswordPrompt(false);
+            setPasswordPromptType(null);
+            setPendingSudoCmd(null);
+            const saveUser = activeTerminalUser;
+            setActiveTerminalUser('root');
+            await handleCommand(cmdToRun);
+            setActiveTerminalUser(saveUser);
+            return;
+          }
+        } else {
+          soundEngine.playError();
+          setOutput(prev => [...prev, `sudo: 1 intento de contraseña incorrecto`]);
+        }
+        setIsPasswordPrompt(false);
+        setPasswordPromptType(null);
+        setPendingSudoCmd(null);
+        return;
+      }
+
+      await handleCommand(currentInput);
     }
   };
 
@@ -651,20 +796,37 @@ export default function TerminalApp({ user, onOpenApp }: { user: UserData; onOpe
           {output.map((line, i) => (
             <div key={i} className="min-h-[1.2em] whitespace-pre-wrap break-words">{line}</div>
           ))}
-          <div className="flex">
-            <span className="shrink-0">{user.username}@savia-os:{cwd === "/home/" + user.username ? '~' : cwd}$&nbsp;</span>
-            <input
-              id="terminal-input"
-              type="text"
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              onKeyDown={handleKeyDown}
-              className="bg-transparent outline-none flex-1 text-emerald-400 min-w-[50%]"
-              autoFocus
-              spellCheck={false}
-              autoComplete="off"
-            />
-          </div>
+          {isPasswordPrompt ? (
+            <div className="flex">
+              <span className="shrink-0 text-amber-400 font-bold">[sudo] contraseña para {user.username}:&nbsp;</span>
+              <input
+                id="terminal-input"
+                type="password"
+                value={input}
+                onChange={(e) => setInput(e.target.value)}
+                onKeyDown={handleKeyDown}
+                className="bg-transparent outline-none flex-1 text-amber-300 min-w-[50%]"
+                autoFocus
+                spellCheck={false}
+                autoComplete="off"
+              />
+            </div>
+          ) : (
+            <div className="flex">
+              <span className="shrink-0">{activeTerminalUser}@savia-os:{cwd === (activeTerminalUser === 'root' ? '/root' : "/home/" + activeTerminalUser) ? '~' : cwd}{activeTerminalUser === 'root' ? '#' : '$'}&nbsp;</span>
+              <input
+                id="terminal-input"
+                type="text"
+                value={input}
+                onChange={(e) => setInput(e.target.value)}
+                onKeyDown={handleKeyDown}
+                className="bg-transparent outline-none flex-1 text-emerald-400 min-w-[50%]"
+                autoFocus
+                spellCheck={false}
+                autoComplete="off"
+              />
+            </div>
+          )}
         </>
       )}
       <div ref={bottomRef} />

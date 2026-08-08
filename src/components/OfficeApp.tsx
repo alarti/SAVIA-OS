@@ -8,6 +8,9 @@ import {
   ExternalLink, X, Upload
 } from 'lucide-react';
 
+import { userStorage } from '../utils/userStorage';
+import type { UserData } from '../utils/auth';
+
 type SuiteMode = 'writer' | 'calc' | 'impress';
 type ActiveTab = 'archivo' | 'inicio' | 'insertar' | 'diseno' | 'formulas' | 'ver' | 'ayuda';
 
@@ -21,7 +24,8 @@ interface Slide {
 
 const DEFAULT_WRITER_HTML = `<h1 style="font-size: 1.5rem; font-weight: bold; margin-bottom: 1rem; color: #111827;">Documento en Blanco</h1><p style="color: #374151; line-height: 1.625; margin-bottom: 0.75rem;">Escriba aquí el contenido de su documento. Utilice la barra de herramientas superior para aplicar formatos de texto, fuentes, alineaciones, listas e imágenes.</p>`;
 
-export default function OfficeApp({ initialFile }: { initialFile?: string }) {
+export default function OfficeApp({ initialFile, user }: { initialFile?: string; user?: UserData }) {
+  const username = user?.username || 'user';
   // Determine initial suite mode from initialFile extension or default to writer
   const detectMode = (filename?: string): SuiteMode => {
     if (!filename) return 'writer';
@@ -98,16 +102,17 @@ export default function OfficeApp({ initialFile }: { initialFile?: string }) {
         else if (mode === 'calc') contentToSave = JSON.stringify(sheets);
         else if (mode === 'impress') contentToSave = JSON.stringify(slides);
 
-        const savedDocsKey = 'savia_office_documents';
-        const existingStr = localStorage.getItem(savedDocsKey) || '{}';
-        const existing = JSON.parse(existingStr);
-        existing[docTitle] = {
+        userStorage.saveOfficeDoc(username, docTitle, {
           mode,
           title: docTitle,
-          updatedAt: new Date().toISOString(),
           content: contentToSave
-        };
-        localStorage.setItem(savedDocsKey, JSON.stringify(existing));
+        });
+        userStorage.addRecent(username, {
+          name: docTitle,
+          path: `/home/${username}/Documents/${docTitle}`,
+          appType: 'office',
+          iconType: 'office'
+        });
       } catch {}
     }, 800);
   };
@@ -115,9 +120,7 @@ export default function OfficeApp({ initialFile }: { initialFile?: string }) {
   // Load document content whenever docTitle or mode changes
   useEffect(() => {
     try {
-      const savedDocsKey = 'savia_office_documents';
-      const existingStr = localStorage.getItem(savedDocsKey) || '{}';
-      const existing = JSON.parse(existingStr);
+      const existing = userStorage.getOfficeDocs(username);
       const savedDoc = existing[docTitle];
 
       if (mode === 'writer') {
