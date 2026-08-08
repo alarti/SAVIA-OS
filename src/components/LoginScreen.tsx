@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { User, Lock, ArrowRight, Power, ShieldAlert, RotateCw, Terminal, Cpu, CheckCircle2, Activity, HardDrive } from 'lucide-react';
 import { DEFAULT_USERS, verifyUserPassword, UserData } from '../utils/auth';
 import { soundEngine } from '../utils/soundEngine';
+import { securityEngine } from '../utils/securityEngine';
 
 export default function LoginScreen({ onLogin, onPowerOff }: { onLogin: (user: UserData) => void, onPowerOff: () => void }) {
   const [selectedUser, setSelectedUser] = useState<string>('custom');
@@ -69,6 +70,7 @@ export default function LoginScreen({ onLogin, onPowerOff }: { onLogin: (user: U
 
     if (cleanUser.toLowerCase() === 'guest' || verifyUserPassword(userToVerify, password)) {
       soundEngine.playButtonClick();
+      securityEngine.recordAuthAttempt(userToVerify, true, 0);
       setFailedAttempts(0);
       onLogin(resolvedUserData);
     } else {
@@ -76,6 +78,7 @@ export default function LoginScreen({ onLogin, onPowerOff }: { onLogin: (user: U
       setError(true);
       const newAttempts = failedAttempts + 1;
       setFailedAttempts(newAttempts);
+      securityEngine.recordAuthAttempt(userToVerify, false, newAttempts);
 
       if (newAttempts >= 5) {
         setLockoutRemaining(10); // 10s lockout after 5 failed tries

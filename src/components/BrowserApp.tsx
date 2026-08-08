@@ -1,6 +1,7 @@
 import React, { useState, useRef } from 'react';
 import { Globe, ArrowLeft, ArrowRight, RotateCw, Home, Search, Star, MoreVertical, Shield, Plus, X, Lock, ShieldAlert } from 'lucide-react';
 import type { UserData } from '../utils/auth';
+import { securityEngine } from '../utils/securityEngine';
 
 type Tab = {
   id: string;
@@ -23,6 +24,13 @@ export default function BrowserApp({ user }: { user?: UserData }) {
 
   const handleNavigate = (urlToLoad: string) => {
     let finalUrl = urlToLoad.trim();
+
+    // Security Shield Inspection
+    const checkSec = securityEngine.analyzeProxyRequest(finalUrl, user?.username || 'user');
+    if (!checkSec.allowed) {
+      alert(`[ESCUDO CIBERSEGURIDAD SAVIA-OS]: ${checkSec.reason}`);
+      return;
+    }
 
     // Security check: Block malicious pseudo-protocols (XSS Protection)
     const lower = finalUrl.toLowerCase();

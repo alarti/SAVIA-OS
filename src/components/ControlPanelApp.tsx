@@ -2,51 +2,164 @@ import React, { useState, useEffect, useRef } from 'react';
 import { 
   Settings, ShieldCheck, Volume2, Monitor, Wifi, Box, User, ExternalLink, Cpu, 
   Lock, CheckCircle, Play, RefreshCw, Globe, Camera, Mic, Usb, Cable, 
-  Activity, Battery, Compass, Bluetooth, HardDrive, Sliders, AlertTriangle, Video, MicOff, VideoOff, Radio, Power, Palette, Zap, Terminal, Key, UserCheck, ShieldAlert
+  Activity, Battery, Compass, Bluetooth, HardDrive, Sliders, AlertTriangle, Video, MicOff, VideoOff, Radio, Power, Palette, Zap, Terminal, Key, UserCheck, ShieldAlert, Download, Check, Trash2, Search, Eye
 } from 'lucide-react';
 import { soundEngine } from '../utils/soundEngine';
-import { getInstalledPackageIds, AVAILABLE_PACKAGES } from '../utils/packageRegistry';
+import { getInstalledPackageIds, AVAILABLE_PACKAGES, installPackage, uninstallPackage, isPackageInstalled } from '../utils/packageRegistry';
 import { verifyUserPassword, saveUserPassword, DEFAULT_USERS, UserData } from '../utils/auth';
+import { securityEngine, SecurityEvent } from '../utils/securityEngine';
 
-type TabType = 'security' | 'devices' | 'network' | 'appearance' | 'sound' | 'storage' | 'general' | 'evolution' | 'accounts';
+type TabType = 'security' | 'appstore' | 'appearance' | 'sound' | 'devices' | 'accounts' | 'network';
 
 export default function ControlPanelApp({ user, onOpenApp }: { user?: UserData; onOpenApp?: (type: string, title: string) => void }) {
-  const [activeTab, setActiveTab] = useState<TabType>('devices');
+  const [activeTab, setActiveTab] = useState<TabType>('security');
 
-  // Password change state
+  // --- CIBERSEGURIDAD SHIELD & BEHAVIORAL AI STATE ---
+  const [shieldActive, setShieldActiveState] = useState(securityEngine.isShieldOn());
+  const [firewallActive, setFirewallActiveState] = useState(securityEngine.isFirewallOn());
+  const [behavioralAiActive, setBehavioralAiActiveState] = useState(securityEngine.isBehavioralAiOn());
+  const [threatScore, setThreatScore] = useState(securityEngine.getTotalThreatScore());
+  const [securityEvents, setSecurityEvents] = useState<SecurityEvent[]>(securityEngine.getEvents());
+  const [baseline, setBaseline] = useState(securityEngine.getBaseline());
+
+  // Subscribe to securityEngine live updates
+  useEffect(() => {
+    const unsub = securityEngine.subscribe((latestEvent, score) => {
+      setSecurityEvents(securityEngine.getEvents());
+      setThreatScore(score);
+      setBaseline(securityEngine.getBaseline());
+    });
+    return unsub;
+  }, []);
+
+  const toggleShield = () => {
+    const next = !shieldActive;
+    setShieldActiveState(next);
+    securityEngine.setShieldActive(next);
+    soundEngine.playNotification();
+  };
+
+  const toggleFirewall = () => {
+    const next = !firewallActive;
+    setFirewallActiveState(next);
+    securityEngine.setFirewallActive(next);
+    soundEngine.playNotification();
+  };
+
+  const toggleBehavioralAi = () => {
+    const next = !behavioralAiActive;
+    setBehavioralAiActiveState(next);
+    securityEngine.setBehavioralAiActive(next);
+    soundEngine.playNotification();
+  };
+
+  const runSecurityAudit = () => {
+    soundEngine.playNotification();
+    securityEngine.recordEvent({
+      source: 'KERNEL',
+      action: 'SYSTEM_AUDIT',
+      user: user?.username || 'admin',
+      riskScore: 0,
+      level: 'LOW',
+      details: 'Auditoría de integridad realizada: Sandboxing WASM, sanitización Bash y filtros CORS 100% estables.',
+      blocked: false,
+    });
+  };
+
+  // --- SOFTWARE CENTER / APP STORE STATE ---
+  const [packageSearch, setPackageSearch] = useState('');
+  const [installedPkgIds, setInstalledPkgIds] = useState<string[]>(getInstalledPackageIds());
+
+  const handleInstallPkg = (id: string) => {
+    installPackage(id);
+    setInstalledPkgIds(getInstalledPackageIds());
+    soundEngine.playNotification();
+  };
+
+  const handleUninstallPkg = (id: string) => {
+    uninstallPackage(id);
+    setInstalledPkgIds(getInstalledPackageIds());
+    soundEngine.playNotification();
+  };
+
+  // --- WALLPAPER & APPEARANCE STATE ---
+  const [selectedTheme, setSelectedTheme] = useState(() => {
+    return localStorage.getItem('savia_os_wallpaper') || 'Deep Space';
+  });
+  const [customBgUrl, setCustomBgUrl] = useState('');
+  const [translucency, setTranslucency] = useState(true);
+
+  const applyWallpaperPreset = (presetName: string, url: string) => {
+    setSelectedTheme(presetName);
+    localStorage.setItem('savia_os_wallpaper', url);
+    soundEngine.playNotification();
+    window.dispatchEvent(new Event('storage'));
+  };
+
+  const applyCustomWallpaper = () => {
+    if (!customBgUrl.trim()) return;
+    localStorage.setItem('savia_os_wallpaper', customBgUrl.trim());
+    setSelectedTheme('Personalizado');
+    soundEngine.playNotification();
+    window.dispatchEvent(new Event('storage'));
+  };
+
+  // --- SOUND STATE ---
+  const [volume, setVolumeState] = useState(soundEngine.getVolume());
+  const [isMuted, setIsMutedState] = useState(soundEngine.isMuted());
+
+  useEffect(() => {
+    return soundEngine.subscribe(() => {
+      setVolumeState(soundEngine.getVolume());
+      setIsMutedState(soundEngine.isMuted());
+    });
+  }, []);
+
+  const handleVolumeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const val = parseFloat(e.target.value);
+    soundEngine.setVolume(val);
+  };
+
+  // --- PASSWORD & ACCOUNTS STATE ---
   const [currentPass, setCurrentPass] = useState('');
   const [newPass, setNewPass] = useState('');
   const [confirmPass, setConfirmPass] = useState('');
   const [passMsg, setPassMsg] = useState('');
   const [passError, setPassError] = useState('');
 
-  // Evolution Agent State
-  const [evolutionActive, setEvolutionActive] = useState(false);
+  const handleChangePassword = (e: React.FormEvent) => {
+    e.preventDefault();
+    setPassMsg('');
+    setPassError('');
 
-  const [evolutionLogs, setEvolutionLogs] = useState<string[]>([
-    '[EVOLUTION] Agents ready to deploy.',
-    '[EVOLUTION] Genetic algorithm parameters initialized.',
-    '[EVOLUTION] Awaiting activation...'
-  ]);
-  const [generationCount, setGenerationCount] = useState(0);
+    const targetUsername = user?.username || 'usuario';
+    if (!verifyUserPassword(targetUsername, currentPass)) {
+      setPassError('La contraseña actual es incorrecta.');
+      soundEngine.playError();
+      return;
+    }
 
-  // Sound state
-  const [volume, setVolumeState] = useState(soundEngine.getVolume());
-  const [isMuted, setIsMutedState] = useState(soundEngine.isMuted());
+    if (newPass.length < 4) {
+      setPassError('La nueva contraseña debe tener al menos 4 caracteres.');
+      soundEngine.playError();
+      return;
+    }
 
-  // Security state
-  const [firewallActive, setFirewallActive] = useState(true);
-  const [sandboxEnforced, setSandboxEnforced] = useState(true);
-  const [pathShieldActive, setPathShieldActive] = useState(true);
-  const [securityLogs, setSecurityLogs] = useState<string[]>([
-    '[SECURITY ENGINE] System Audit initialized.',
-    '[POSIX SHIELD] WASM Process Sandboxing verified (Isolation Level 3).',
-    '[FIREWALL] Inbound/Outbound CORS network filters active.',
-    '[SANITY GUARD] Terminal command input sanitization active.',
-    '[VFS SHIELD] Path traversal protection verified on /home /bin /sys.',
-  ]);
+    if (newPass !== confirmPass) {
+      setPassError('Las contraseñas no coinciden.');
+      soundEngine.playError();
+      return;
+    }
 
-  // Hardware / Device local state
+    saveUserPassword(targetUsername, newPass);
+    setPassMsg('¡Contraseña actualizada con éxito!');
+    soundEngine.playNotification();
+    setCurrentPass('');
+    setNewPass('');
+    setConfirmPass('');
+  };
+
+  // --- HARDWARE & DEVICES STATE ---
   const [cameraActive, setCameraActive] = useState(false);
   const [cameraStream, setCameraStream] = useState<MediaStream | null>(null);
   const [cameraInfo, setCameraInfo] = useState<string>('');
@@ -61,106 +174,26 @@ export default function ControlPanelApp({ user, onOpenApp }: { user?: UserData; 
 
   const [usbDevices, setUsbDevices] = useState<{ name: string; vendorId: string; productId: string }[]>([]);
   const [usbStatus, setUsbStatus] = useState<string>('Sin dispositivos USB WebUSB vinculados.');
-  
   const [serialPorts, setSerialPorts] = useState<string[]>([]);
   const [serialStatus, setSerialStatus] = useState<string>('Sin puertos serie WebSerial vinculados.');
-
   const [bluetoothStatus, setBluetoothStatus] = useState<string>('Pulsar para buscar dispositivos Bluetooth cercanos.');
-
   const [batteryInfo, setBatteryInfo] = useState<{ level: number; charging: boolean; chargingTime: number } | null>(null);
   const [geoInfo, setGeoInfo] = useState<string>('');
 
-  // Network state
-  const [isOnline, setIsOnline] = useState<boolean>(navigator.onLine);
-  const [networkLatency, setNetworkLatency] = useState<number | null>(null);
-  const [pinging, setPinging] = useState(false);
-
-  // Screen & Appearance state
-  const [selectedTheme, setSelectedTheme] = useState('Deep Space');
-  const [translucency, setTranslucency] = useState(true);
-  const [refreshRate, setRefreshRate] = useState('60Hz');
-
-  useEffect(() => {
-    let interval: any;
-    if (evolutionActive) {
-      interval = setInterval(() => {
-        setGenerationCount(prev => prev + 1);
-        const patches = [
-          'Evaluando heurística de renderizado...',
-          'Aplicando parche genético a memory allocator...',
-          'Optimizando árboles de dependencias UI...',
-          'Entrenando red neuronal con algoritmos genéticos...',
-          'Compilando Hot-Patch V8 en segundo plano...',
-          'Optimizando ciclo de eventos (Event Loop)...',
-          'Mejora continua: Reducción de latencia en 3ms.',
-          'Reescribiendo módulos core con código evolucionado.'
-        ];
-        const randomPatch = patches[Math.floor(Math.random() * patches.length)];
-        
-        setEvolutionLogs(prev => {
-          const newLogs = [...prev, `[GEN ${generationCount + 1}] ${randomPatch}`];
-          if (newLogs.length > 15) newLogs.shift();
-          return newLogs;
-        });
-      }, 3500);
-    }
-    return () => clearInterval(interval);
-  }, [evolutionActive, generationCount]);
-
-  useEffect(() => {
-    const unsub = soundEngine.subscribe(() => {
-      setVolumeState(soundEngine.getVolume());
-      setIsMutedState(soundEngine.isMuted());
-    });
-
-    const handleOnline = () => setIsOnline(true);
-    const handleOffline = () => setIsOnline(false);
-    window.addEventListener('online', handleOnline);
-    window.addEventListener('offline', handleOffline);
-
-    // Initial check for Battery API
-    if ('getBattery' in navigator) {
-      (navigator as any).getBattery().then((bat: any) => {
-        setBatteryInfo({
-          level: Math.round(bat.level * 100),
-          charging: bat.charging,
-          chargingTime: bat.chargingTime
-        });
-        bat.addEventListener('levelchange', () => {
-          setBatteryInfo({
-            level: Math.round(bat.level * 100),
-            charging: bat.charging,
-            chargingTime: bat.chargingTime
-          });
-        });
-      }).catch(() => {});
-    }
-
-    return () => {
-      unsub();
-      window.removeEventListener('online', handleOnline);
-      window.removeEventListener('offline', handleOffline);
-      stopCamera();
-      stopMic();
-    };
-  }, []);
-
-  // Camera Handlers
+  // Hardware functions
   const startCamera = async () => {
     setCameraError('');
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ video: { width: { ideal: 640 }, height: { ideal: 480 } } });
       setCameraStream(stream);
       setCameraActive(true);
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream;
-      }
+      if (videoRef.current) videoRef.current.srcObject = stream;
       const track = stream.getVideoTracks()[0];
       const settings = track.getSettings();
-      setCameraInfo(`${track.label || 'Webcam NAtiva'} (${settings.width || 640}x${settings.height || 480} @ ${Math.round(settings.frameRate || 30)}fps)`);
+      setCameraInfo(`${track.label || 'Webcam'} (${settings.width || 640}x${settings.height || 480})`);
       soundEngine.playNotification();
     } catch (err: any) {
-      setCameraError(err.message || 'Acceso denegado o webcam no disponible');
+      setCameraError(err.message || 'Webcam no disponible.');
       setCameraActive(false);
     }
   };
@@ -171,291 +204,571 @@ export default function ControlPanelApp({ user, onOpenApp }: { user?: UserData; 
       setCameraStream(null);
     }
     setCameraActive(false);
-    setCameraInfo('');
   };
 
-  // Mic Handlers
   const startMic = async () => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       setMicStream(stream);
       setMicActive(true);
-
-      const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
-      const ctx = new AudioContextClass();
+      const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
+      const ctx = new AudioCtx();
       audioContextRef.current = ctx;
-
       const source = ctx.createMediaStreamSource(stream);
       const analyser = ctx.createAnalyser();
       analyser.fftSize = 256;
       source.connect(analyser);
-
       const dataArray = new Uint8Array(analyser.frequencyBinCount);
 
       const updateLevel = () => {
         analyser.getByteFrequencyData(dataArray);
         let sum = 0;
-        for (let i = 0; i < dataArray.length; i++) {
-          sum += dataArray[i];
-        }
+        for (let i = 0; i < dataArray.length; i++) sum += dataArray[i];
         const average = sum / dataArray.length;
         setMicLevel(Math.min(100, Math.round((average / 128) * 100)));
         animFrameRef.current = requestAnimationFrame(updateLevel);
       };
-
       updateLevel();
       soundEngine.playNotification();
     } catch (err: any) {
-      alert('Error accediendo al micrófono: ' + err.message);
+      alert('Error en micrófono: ' + err.message);
       setMicActive(false);
     }
   };
 
   const stopMic = () => {
-    if (animFrameRef.current) {
-      cancelAnimationFrame(animFrameRef.current);
-    }
-    if (audioContextRef.current) {
-      audioContextRef.current.close().catch(() => {});
-      audioContextRef.current = null;
-    }
-    if (micStream) {
-      micStream.getTracks().forEach(track => track.stop());
-      setMicStream(null);
-    }
+    if (animFrameRef.current) cancelAnimationFrame(animFrameRef.current);
+    if (audioContextRef.current) audioContextRef.current.close().catch(() => {});
+    if (micStream) micStream.getTracks().forEach(track => track.stop());
     setMicActive(false);
     setMicLevel(0);
   };
 
-  // WebUSB Handler
   const requestUsbDevice = async () => {
-    if (!('usb' in navigator)) {
-      setUsbStatus('API WebUSB no soportada en este navegador.');
-      return;
-    }
+    if (!('usb' in navigator)) { setUsbStatus('WebUSB no disponible.'); return; }
     try {
       const device: any = await (navigator as any).usb.requestDevice({ filters: [] });
-      const devInfo = {
-        name: device.productName || 'Dispositivo USB Desconocido',
-        vendorId: '0x' + device.vendorId.toString(16).padStart(4, '0'),
-        productId: '0x' + device.productId.toString(16).padStart(4, '0')
-      };
+      const devInfo = { name: device.productName || 'USB Device', vendorId: '0x' + device.vendorId.toString(16), productId: '0x' + device.productId.toString(16) };
       setUsbDevices(prev => [...prev, devInfo]);
-      setUsbStatus(`Dispositivo vinculado: ${devInfo.name} (${devInfo.vendorId}:${devInfo.productId})`);
+      setUsbStatus(`Vinculado: ${devInfo.name}`);
       soundEngine.playNotification();
     } catch (err: any) {
-      setUsbStatus(`Operación cancelada o rechazada: ${err.message}`);
+      setUsbStatus(`Error: ${err.message}`);
     }
   };
 
-  // Web Serial Handler
   const requestSerialPort = async () => {
-    if (!('serial' in navigator)) {
-      setSerialStatus('API WebSerial no soportada en este navegador.');
-      return;
-    }
+    if (!('serial' in navigator)) { setSerialStatus('WebSerial no disponible.'); return; }
     try {
       const port: any = await (navigator as any).serial.requestPort();
       const info = port.getInfo ? port.getInfo() : {};
-      const portDesc = `Puerto UART/Serial (Vendor: 0x${(info.usbVendorId || 0).toString(16)})`;
-      setSerialPorts(prev => [...prev, portDesc]);
-      setSerialStatus(`Puerto vinculado con éxito: ${portDesc}`);
+      setSerialPorts(prev => [...prev, `Puerto UART Vendor: 0x${(info.usbVendorId || 0).toString(16)}`]);
+      setSerialStatus('Puerto serie listo.');
       soundEngine.playNotification();
     } catch (err: any) {
-      setSerialStatus(`Cancelado o rechazado: ${err.message}`);
+      setSerialStatus(`Error: ${err.message}`);
     }
   };
 
-  // Bluetooth Handler
   const requestBluetoothDevice = async () => {
-    if (!('bluetooth' in navigator)) {
-      setBluetoothStatus('API Web Bluetooth no disponible.');
-      return;
-    }
+    if (!('bluetooth' in navigator)) { setBluetoothStatus('Web Bluetooth no disponible.'); return; }
     try {
-      const device: any = await (navigator as any).bluetooth.requestDevice({
-        acceptAllDevices: true
-      });
-      setBluetoothStatus(`Emparejado: ${device.name || 'Dispositivo BT'} (${device.id})`);
+      const device: any = await (navigator as any).bluetooth.requestDevice({ acceptAllDevices: true });
+      setBluetoothStatus(`Emparejado: ${device.name || 'Bluetooth'}`);
       soundEngine.playNotification();
     } catch (err: any) {
-      setBluetoothStatus(`Búsqueda cancelada: ${err.message}`);
+      setBluetoothStatus(`Cancelado: ${err.message}`);
     }
   };
 
-  // Geolocation Handler
   const requestGeolocation = () => {
-    if (!navigator.geolocation) {
-      setGeoInfo('Geolocalización no soportada.');
-      return;
-    }
-    setGeoInfo('Obteniendo coordenadas de satélite...');
+    if (!navigator.geolocation) { setGeoInfo('No soportado'); return; }
+    setGeoInfo('Buscando señal GPS...');
     navigator.geolocation.getCurrentPosition(
       (pos) => {
-        setGeoInfo(`Lat: ${pos.coords.latitude.toFixed(4)}, Lon: ${pos.coords.longitude.toFixed(4)} (Precisión: ±${Math.round(pos.coords.accuracy)}m)`);
+        setGeoInfo(`Lat: ${pos.coords.latitude.toFixed(4)}, Lon: ${pos.coords.longitude.toFixed(4)} (±${Math.round(pos.coords.accuracy)}m)`);
         soundEngine.playNotification();
       },
-      (err) => {
-        setGeoInfo(`Permiso denegado o error: ${err.message}`);
-      }
+      (err) => setGeoInfo(`Error: ${err.message}`)
     );
   };
 
-  // Network Ping Test
+  // --- NETWORK & EVOLUTION STATE ---
+  const [isOnline, setIsOnline] = useState<boolean>(navigator.onLine);
+  const [networkLatency, setNetworkLatency] = useState<number | null>(null);
+  const [pinging, setPinging] = useState(false);
+  const [evolutionActive, setEvolutionActive] = useState(false);
+  const [evolutionLogs, setEvolutionLogs] = useState<string[]>([
+    '[GENETIC AI] Motor de optimización adaptativo listo.',
+    '[GENETIC AI] Ponderación de subprocesos UI calibrada.'
+  ]);
+
   const runNetworkPing = async () => {
     setPinging(true);
     const start = performance.now();
     try {
       await fetch('/api/health', { cache: 'no-store' });
-      const elapsed = Math.round(performance.now() - start);
-      setNetworkLatency(elapsed);
+      setNetworkLatency(Math.round(performance.now() - start));
     } catch {
-      setNetworkLatency(12);
+      setNetworkLatency(14);
     } finally {
       setPinging(false);
       soundEngine.playNotification();
     }
   };
 
-  const runSecurityCheck = () => {
-    soundEngine.playNotification();
-    const timestamp = new Date().toLocaleTimeString();
-    setSecurityLogs(prev => [
-      `[${timestamp}] [AUDIT PASSED] Memory Sandbox integrity check: 100% OK`,
-      `[${timestamp}] [AUDIT PASSED] Terminal Injection Defense: Enforcing`,
-      `[${timestamp}] [AUDIT PASSED] Local Hardware Sandbox: WebUSB/WebCam isolation active`,
-      ...prev
-    ]);
-  };
-
-  const handleOpenLinkedIn = () => {
-    soundEngine.playNotification();
-    window.open('https://www.linkedin.com/in/albertoarce', '_blank', 'noopener,noreferrer');
-  };
-
   return (
     <div className="w-full h-full bg-[#18181B] text-white flex flex-col md:flex-row font-sans select-none overflow-hidden">
       {/* Sidebar Navigation */}
       <div className="w-full md:w-64 bg-[#202023] border-b md:border-b-0 md:border-r border-[#3F3F46] p-3 flex flex-col gap-1 shrink-0 overflow-y-auto">
-        <div className="flex items-center gap-2.5 px-3 py-2 mb-2 border-b border-[#3F3F46]">
+        <div className="flex items-center gap-2.5 px-3 py-2.5 mb-2 border-b border-[#3F3F46]">
           <Settings className="w-5 h-5 text-blue-400" />
           <div>
             <span className="font-bold text-sm text-white block leading-none">Panel de Control</span>
-            <span className="text-[10px] text-gray-400">SAVIA-OS System Settings</span>
+            <span className="text-[10px] text-gray-400">SaviaOS System Hub</span>
           </div>
         </div>
 
         <button
-          onClick={() => setActiveTab('devices')}
-          className={`flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-semibold transition-colors ${activeTab === 'devices' ? 'bg-blue-600 text-white shadow-md' : 'text-gray-300 hover:bg-white/5'}`}
-        >
-          <Camera className="w-4 h-4 text-rose-400" />
-          <span>Dispositivos y Hardware</span>
-        </button>
-
-        <button
           onClick={() => setActiveTab('security')}
-          className={`flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-semibold transition-colors ${activeTab === 'security' ? 'bg-blue-600 text-white shadow-md' : 'text-gray-300 hover:bg-white/5'}`}
+          className={`flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-xs font-semibold transition-all ${activeTab === 'security' ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-md' : 'text-gray-300 hover:bg-white/5'}`}
         >
-          <ShieldCheck className="w-4 h-4 text-emerald-400" />
-          <span>Seguridad y Kernel</span>
+          <ShieldAlert className="w-4 h-4 text-emerald-400" />
+          <span>Ciberseguridad Shield AI</span>
         </button>
 
         <button
-          onClick={() => setActiveTab('network')}
-          className={`flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-semibold transition-colors ${activeTab === 'network' ? 'bg-blue-600 text-white shadow-md' : 'text-gray-300 hover:bg-white/5'}`}
+          onClick={() => setActiveTab('appstore')}
+          className={`flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-xs font-semibold transition-all ${activeTab === 'appstore' ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-md' : 'text-gray-300 hover:bg-white/5'}`}
         >
-          <Wifi className="w-4 h-4 text-cyan-400" />
-          <span>Red Local e Internet</span>
+          <Box className="w-4 h-4 text-amber-400" />
+          <span>Software & App Store</span>
+        </button>
+
+        <button
+          onClick={() => setActiveTab('appearance')}
+          className={`flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-xs font-semibold transition-all ${activeTab === 'appearance' ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-md' : 'text-gray-300 hover:bg-white/5'}`}
+        >
+          <Palette className="w-4 h-4 text-purple-400" />
+          <span>Fondos & Temas</span>
         </button>
 
         <button
           onClick={() => setActiveTab('sound')}
-          className={`flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-semibold transition-colors ${activeTab === 'sound' ? 'bg-blue-600 text-white shadow-md' : 'text-gray-300 hover:bg-white/5'}`}
+          className={`flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-xs font-semibold transition-all ${activeTab === 'sound' ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-md' : 'text-gray-300 hover:bg-white/5'}`}
         >
           <Volume2 className="w-4 h-4 text-pink-400" />
           <span>Audio Core & Mic</span>
         </button>
 
         <button
-          onClick={() => setActiveTab('appearance')}
-          className={`flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-semibold transition-colors ${activeTab === 'appearance' ? 'bg-blue-600 text-white shadow-md' : 'text-gray-300 hover:bg-white/5'}`}
+          onClick={() => setActiveTab('devices')}
+          className={`flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-xs font-semibold transition-all ${activeTab === 'devices' ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-md' : 'text-gray-300 hover:bg-white/5'}`}
         >
-          <Monitor className="w-4 h-4 text-purple-400" />
-          <span>Pantalla y Apariencia</span>
-        </button>
-
-        <button
-          onClick={() => setActiveTab('storage')}
-          className={`flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-semibold transition-colors ${activeTab === 'storage' ? 'bg-blue-600 text-white shadow-md' : 'text-gray-300 hover:bg-white/5'}`}
-        >
-          <HardDrive className="w-4 h-4 text-amber-400" />
-          <span>Disco VFS & Paquetes</span>
+          <Camera className="w-4 h-4 text-rose-400" />
+          <span>Dispositivos & Hardware</span>
         </button>
 
         <button
           onClick={() => setActiveTab('accounts')}
-          className={`flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-semibold transition-colors ${activeTab === 'accounts' ? 'bg-blue-600 text-white shadow-md' : 'text-gray-300 hover:bg-white/5'}`}
+          className={`flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-xs font-semibold transition-all ${activeTab === 'accounts' ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-md' : 'text-gray-300 hover:bg-white/5'}`}
         >
           <Key className="w-4 h-4 text-emerald-400" />
-          <span>Cuentas & Contraseña</span>
+          <span>Cuentas & Usuarios</span>
         </button>
 
         <button
-          onClick={() => setActiveTab('general')}
-          className={`flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-semibold transition-colors ${activeTab === 'general' ? 'bg-blue-600 text-white shadow-md' : 'text-gray-300 hover:bg-white/5'}`}
+          onClick={() => setActiveTab('network')}
+          className={`flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-xs font-semibold transition-all ${activeTab === 'network' ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-md' : 'text-gray-300 hover:bg-white/5'}`}
         >
-          <User className="w-4 h-4 text-blue-400" />
-          <span>Sistema & Alberto Arce</span>
-        </button>
-
-        <button
-          onClick={() => setActiveTab('evolution')}
-          className={`flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-semibold transition-colors ${activeTab === 'evolution' ? 'bg-blue-600 text-white shadow-md' : 'text-gray-300 hover:bg-white/5'}`}
-        >
-          <Zap className="w-4 h-4 text-yellow-400" />
-          <span>Optimización AI (Agentes)</span>
+          <Wifi className="w-4 h-4 text-cyan-400" />
+          <span>Red & Sistema</span>
         </button>
       </div>
 
-      {/* Main Content Pane */}
+      {/* Main Content Area */}
       <div className="flex-1 bg-[#121214] overflow-y-auto p-4 md:p-6 text-sm">
 
-        {/* TAB: LOCAL HARDWARE & DEVICES */}
-        {activeTab === 'devices' && (
+        {/* TAB 1: CIBERSEGURIDAD SHIELD & SIEM AI */}
+        {activeTab === 'security' && (
           <div className="flex flex-col gap-6">
-            <div className="bg-[#1C1C1F] p-4 rounded-2xl border border-white/10 flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div className="p-3 bg-rose-500/20 text-rose-400 rounded-xl">
-                  <Usb className="w-6 h-6" />
+            {/* Header Banner */}
+            <div className="bg-[#1C1C1F] p-5 rounded-2xl border border-white/10 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+              <div className="flex items-center gap-3.5">
+                <div className={`p-3.5 rounded-2xl ${threatScore > 50 ? 'bg-rose-500/20 text-rose-400' : 'bg-emerald-500/20 text-emerald-400'}`}>
+                  <ShieldAlert className="w-7 h-7" />
                 </div>
                 <div>
-                  <h2 className="text-base font-bold text-white">Enlace con Dispositivos Locales y Periféricos</h2>
-                  <p className="text-xs text-gray-400">Conexión directa mediante APIs estándar HTML5 (WebCam, Micrófono, WebUSB, WebSerial, Bluetooth)</p>
+                  <h2 className="text-lg font-bold text-white flex items-center gap-2">
+                    Centro de Ciberseguridad & SIEM IA
+                    <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">Autoaprendizaje Activo</span>
+                  </h2>
+                  <p className="text-xs text-gray-400 mt-0.5">Detección de anomalías en tiempo real, aislamiento de procesos WASM y mitigación anti-fuerza bruta.</p>
+                </div>
+              </div>
+
+              <button
+                onClick={runSecurityAudit}
+                className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white font-semibold text-xs rounded-xl transition-all shadow-lg flex items-center gap-2 shrink-0"
+              >
+                <RefreshCw className="w-4 h-4" />
+                <span>Ejecutar Auditoría Kernel</span>
+              </button>
+            </div>
+
+            {/* Metrics Dashboard */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+              <div className="bg-[#1C1C1F] p-4 rounded-2xl border border-white/10 flex flex-col gap-1">
+                <span className="text-xs text-gray-400 font-medium">Nivel de Amenaza Global</span>
+                <div className="flex items-baseline gap-2 mt-1">
+                  <span className={`text-2xl font-black font-mono ${threatScore > 50 ? 'text-rose-400' : threatScore > 20 ? 'text-amber-400' : 'text-emerald-400'}`}>{threatScore}%</span>
+                  <span className="text-[10px] text-gray-500 font-mono">Puntuación SIEM</span>
+                </div>
+                <div className="w-full bg-gray-800 h-1.5 rounded-full overflow-hidden mt-2">
+                  <div className={`h-full transition-all duration-500 ${threatScore > 50 ? 'bg-rose-500' : threatScore > 20 ? 'bg-amber-500' : 'bg-emerald-500'}`} style={{ width: `${Math.min(100, threatScore)}%` }} />
+                </div>
+              </div>
+
+              <div className="bg-[#1C1C1F] p-4 rounded-2xl border border-white/10 flex flex-col gap-1">
+                <span className="text-xs text-gray-400 font-medium">Autoaprendizaje Adaptativo</span>
+                <div className="flex items-baseline gap-2 mt-1">
+                  <span className="text-2xl font-black font-mono text-cyan-400">{baseline.sensitivityMultiplier.toFixed(2)}x</span>
+                  <span className="text-[10px] text-gray-500">Multiplicador Basal</span>
+                </div>
+                <span className="text-[11px] text-gray-400 mt-1">Calibrado automáticamente según ritmo operativo</span>
+              </div>
+
+              <div className="bg-[#1C1C1F] p-4 rounded-2xl border border-white/10 flex flex-col gap-1">
+                <span className="text-xs text-gray-400 font-medium">Filtro Antiescaneo SSRF</span>
+                <div className="flex items-center justify-between mt-2">
+                  <span className="text-xs font-bold text-emerald-400">Inbound CORS Shield</span>
+                  <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse" />
+                </div>
+                <span className="text-[11px] text-gray-400 mt-1">Bloqueo de rangos de IP privadas</span>
+              </div>
+
+              <div className="bg-[#1C1C1F] p-4 rounded-2xl border border-white/10 flex flex-col gap-1">
+                <span className="text-xs text-gray-400 font-medium">VFS Path Traversal Shield</span>
+                <div className="flex items-center justify-between mt-2">
+                  <span className="text-xs font-bold text-blue-400">Aislamiento POSIX</span>
+                  <Lock className="w-4 h-4 text-blue-400" />
+                </div>
+                <span className="text-[11px] text-gray-400 mt-1">Protección estricta en /home y /sys</span>
+              </div>
+            </div>
+
+            {/* Control Switches */}
+            <div className="bg-[#1C1C1F] p-5 rounded-2xl border border-white/10 flex flex-col gap-4">
+              <h3 className="text-sm font-bold text-white border-b border-white/10 pb-2">Controles de Seguridad del Sistema</h3>
+              
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="flex items-center justify-between p-3 bg-black/30 rounded-xl border border-white/5">
+                  <div>
+                    <span className="text-xs font-bold text-white block">Escudo de Comportamiento</span>
+                    <span className="text-[10px] text-gray-400">Detección de patrones anómalos</span>
+                  </div>
+                  <button onClick={toggleShield} className={`w-11 h-6 rounded-full transition-colors relative p-0.5 ${shieldActive ? 'bg-emerald-600' : 'bg-gray-700'}`}>
+                    <div className={`w-5 h-5 rounded-full bg-white transition-transform ${shieldActive ? 'translate-x-5' : 'translate-x-0'}`} />
+                  </button>
+                </div>
+
+                <div className="flex items-center justify-between p-3 bg-black/30 rounded-xl border border-white/5">
+                  <div>
+                    <span className="text-xs font-bold text-white block">Firewall Proxy SSRF</span>
+                    <span className="text-[10px] text-gray-400">Protección de red interna</span>
+                  </div>
+                  <button onClick={toggleFirewall} className={`w-11 h-6 rounded-full transition-colors relative p-0.5 ${firewallActive ? 'bg-emerald-600' : 'bg-gray-700'}`}>
+                    <div className={`w-5 h-5 rounded-full bg-white transition-transform ${firewallActive ? 'translate-x-5' : 'translate-x-0'}`} />
+                  </button>
+                </div>
+
+                <div className="flex items-center justify-between p-3 bg-black/30 rounded-xl border border-white/5">
+                  <div>
+                    <span className="text-xs font-bold text-white block">Autoaprendizaje IA</span>
+                    <span className="text-[10px] text-gray-400">Calibración de umbrales</span>
+                  </div>
+                  <button onClick={toggleBehavioralAi} className={`w-11 h-6 rounded-full transition-colors relative p-0.5 ${behavioralAiActive ? 'bg-emerald-600' : 'bg-gray-700'}`}>
+                    <div className={`w-5 h-5 rounded-full bg-white transition-transform ${behavioralAiActive ? 'translate-x-5' : 'translate-x-0'}`} />
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            {/* Live Security Event Feed */}
+            <div className="bg-[#1C1C1F] p-5 rounded-2xl border border-white/10 flex flex-col gap-3">
+              <div className="flex items-center justify-between border-b border-white/10 pb-2">
+                <span className="text-sm font-bold text-white flex items-center gap-2">
+                  <Activity className="w-4 h-4 text-blue-400" /> Registro SIEM en Tiempo Real ({securityEvents.length} eventos)
+                </span>
+                <span className="text-[10px] font-mono text-gray-400">Live Telemetry Stream</span>
+              </div>
+
+              <div className="bg-black/60 rounded-xl p-3 font-mono text-xs max-h-64 overflow-y-auto flex flex-col gap-2 border border-white/5">
+                {securityEvents.map(evt => (
+                  <div key={evt.id} className="flex items-start justify-between gap-2 border-b border-white/5 pb-1.5 last:border-0">
+                    <div className="flex items-start gap-2">
+                      <span className="text-gray-500 text-[10px] shrink-0 mt-0.5">{evt.timestamp}</span>
+                      <span className={`px-1.5 py-0.2 rounded text-[10px] font-bold shrink-0 ${
+                        evt.level === 'CRITICAL' ? 'bg-rose-500/30 text-rose-300 border border-rose-500/40' :
+                        evt.level === 'HIGH' ? 'bg-amber-500/30 text-amber-300 border border-amber-500/40' :
+                        'bg-blue-500/20 text-blue-300'
+                      }`}>{evt.source}</span>
+                      <span className="text-gray-200 text-[11px] leading-tight">{evt.details}</span>
+                    </div>
+                    {evt.blocked && <span className="bg-rose-500/20 text-rose-400 text-[9px] px-1.5 py-0.5 rounded font-bold uppercase shrink-0 border border-rose-500/30">Bloqueado</span>}
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* TAB 2: SOFTWARE CENTER & APP STORE */}
+        {activeTab === 'appstore' && (
+          <div className="flex flex-col gap-6">
+            <div className="bg-[#1C1C1F] p-5 rounded-2xl border border-white/10 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+              <div className="flex items-center gap-3.5">
+                <div className="p-3 bg-amber-500/20 text-amber-400 rounded-2xl">
+                  <Box className="w-6 h-6" />
+                </div>
+                <div>
+                  <h2 className="text-base font-bold text-white">Centro de Software & Gestor de Paquetes</h2>
+                  <p className="text-xs text-gray-400">Instala, actualiza o desinstala aplicaciones directamente en la memoria virtual del SO.</p>
+                </div>
+              </div>
+
+              {onOpenApp && (
+                <button 
+                  onClick={() => onOpenApp('appstore', 'App Store Independiente')}
+                  className="px-3.5 py-2 bg-white/10 hover:bg-white/20 text-xs font-semibold rounded-xl transition-all flex items-center gap-2"
+                >
+                  <ExternalLink className="w-3.5 h-3.5" />
+                  <span>Ventana App Store</span>
+                </button>
+              )}
+            </div>
+
+            {/* Search Input */}
+            <div className="relative">
+              <Search className="w-4 h-4 text-gray-400 absolute left-3.5 top-3" />
+              <input
+                type="text"
+                value={packageSearch}
+                onChange={e => setPackageSearch(e.target.value)}
+                placeholder="Buscar por nombre, categoría o comando..."
+                className="w-full bg-[#1C1C1F] border border-white/10 focus:border-blue-500 pl-10 pr-4 py-2.5 rounded-xl text-xs text-white outline-none"
+              />
+            </div>
+
+            {/* Package Grid */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {AVAILABLE_PACKAGES.filter(p => 
+                p.name.toLowerCase().includes(packageSearch.toLowerCase()) || 
+                p.description.toLowerCase().includes(packageSearch.toLowerCase())
+              ).map(pkg => {
+                const installed = installedPkgIds.includes(pkg.id);
+                return (
+                  <div key={pkg.id} className="bg-[#1C1C1F] p-4 rounded-2xl border border-white/10 flex items-start gap-4">
+                    <div className="text-3xl p-2 bg-black/40 rounded-xl shrink-0">{pkg.icon}</div>
+                    <div className="flex-1">
+                      <div className="flex items-center justify-between">
+                        <h3 className="font-bold text-sm text-white">{pkg.name}</h3>
+                        <span className="text-[10px] font-mono text-gray-400">{pkg.version}</span>
+                      </div>
+                      <p className="text-xs text-gray-400 mt-1 leading-relaxed">{pkg.description}</p>
+
+                      <div className="flex items-center justify-between mt-4">
+                        <span className="text-[10px] font-mono bg-white/5 px-2 py-0.5 rounded text-gray-300">
+                          {pkg.size}
+                        </span>
+
+                        <div className="flex items-center gap-2">
+                          {installed ? (
+                            <>
+                              <button
+                                onClick={() => onOpenApp && onOpenApp(pkg.id, pkg.name)}
+                                className="px-3 py-1.5 bg-blue-600/30 text-blue-300 hover:bg-blue-600/50 rounded-xl text-xs font-bold transition-all flex items-center gap-1 border border-blue-500/30"
+                              >
+                                <Play className="w-3 h-3" /> Abrir
+                              </button>
+                              <button
+                                onClick={() => handleUninstallPkg(pkg.id)}
+                                className="p-1.5 bg-rose-500/20 text-rose-400 hover:bg-rose-500/30 rounded-xl transition-all"
+                                title="Desinstalar"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </button>
+                            </>
+                          ) : (
+                            <button
+                              onClick={() => handleInstallPkg(pkg.id)}
+                              className="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 shadow"
+                            >
+                              <Download className="w-3.5 h-3.5" /> Instalar
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* TAB 3: FONDOS & TEMAS */}
+        {activeTab === 'appearance' && (
+          <div className="flex flex-col gap-6">
+            <div className="bg-[#1C1C1F] p-5 rounded-2xl border border-white/10 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+              <div className="flex items-center gap-3.5">
+                <div className="p-3 bg-purple-500/20 text-purple-400 rounded-2xl">
+                  <Palette className="w-6 h-6" />
+                </div>
+                <div>
+                  <h2 className="text-base font-bold text-white">Personalización Visual de Pantalla</h2>
+                  <p className="text-xs text-gray-400">Selecciona el fondo de escritorio o configura estilos de cristal e interfaz.</p>
+                </div>
+              </div>
+
+              {onOpenApp && (
+                <button
+                  onClick={() => onOpenApp('theme', 'Personalizador de Temas')}
+                  className="px-3.5 py-2 bg-white/10 hover:bg-white/20 text-xs font-semibold rounded-xl transition-all flex items-center gap-2"
+                >
+                  <ExternalLink className="w-3.5 h-3.5" />
+                  <span>Ventana Completa de Temas</span>
+                </button>
+              )}
+            </div>
+
+            {/* Presets */}
+            <div className="bg-[#1C1C1F] p-5 rounded-2xl border border-white/10 flex flex-col gap-4">
+              <h3 className="text-xs font-bold text-white uppercase tracking-wider text-gray-400">Wallpapers Predeterminados</h3>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
+                {[
+                  { name: 'Deep Space', url: 'https://images.unsplash.com/photo-1506703719100-a0f3a48c0f86?auto=format&fit=crop&w=1920&q=80' },
+                  { name: 'Cyberpunk Neon', url: 'https://images.unsplash.com/photo-1518709268805-4e9042af9f23?auto=format&fit=crop&w=1920&q=80' },
+                  { name: 'Minimal Slate', url: 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?auto=format&fit=crop&w=1920&q=80' },
+                  { name: 'Aurora Borealis', url: 'https://images.unsplash.com/photo-1531366936337-7c912a4589a7?auto=format&fit=crop&w=1920&q=80' }
+                ].map(p => (
+                  <div
+                    key={p.name}
+                    onClick={() => applyWallpaperPreset(p.name, p.url)}
+                    className={`group cursor-pointer rounded-2xl overflow-hidden border-2 transition-all relative ${selectedTheme === p.name ? 'border-blue-500 shadow-lg shadow-blue-500/20' : 'border-white/10 hover:border-white/30'}`}
+                  >
+                    <img src={p.url} alt={p.name} className="w-full h-28 object-cover group-hover:scale-105 transition-transform duration-300" />
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent flex items-end p-2.5">
+                      <span className="text-xs font-bold text-white">{p.name}</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Custom URL wallpaper */}
+            <div className="bg-[#1C1C1F] p-5 rounded-2xl border border-white/10 flex flex-col gap-3">
+              <h3 className="text-xs font-bold text-white uppercase tracking-wider text-gray-400">URL Personalizada de Imagen</h3>
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={customBgUrl}
+                  onChange={e => setCustomBgUrl(e.target.value)}
+                  placeholder="https://images.unsplash.com/..."
+                  className="flex-1 bg-black/40 border border-white/10 focus:border-purple-500 px-3.5 py-2 rounded-xl text-xs text-white outline-none"
+                />
+                <button
+                  onClick={applyCustomWallpaper}
+                  className="px-4 py-2 bg-purple-600 hover:bg-purple-500 text-white font-semibold text-xs rounded-xl transition-all"
+                >
+                  Establecer
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* TAB 4: AUDIO CORE & MIC */}
+        {activeTab === 'sound' && (
+          <div className="flex flex-col gap-6">
+            <div className="bg-[#1C1C1F] p-5 rounded-2xl border border-white/10 flex items-center justify-between">
+              <div className="flex items-center gap-3.5">
+                <div className="p-3 bg-pink-500/20 text-pink-400 rounded-2xl">
+                  <Volume2 className="w-6 h-6" />
+                </div>
+                <div>
+                  <h2 className="text-base font-bold text-white">Servidor de Audio Sintetizado</h2>
+                  <p className="text-xs text-gray-400">Motor de sonido Web Audio API con síntesis de frecuencias y control maestro.</p>
                 </div>
               </div>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {/* Webcam Container */}
+              <div className="bg-[#1C1C1F] p-5 rounded-2xl border border-white/10 flex flex-col gap-4">
+                <h3 className="text-xs font-bold text-white uppercase tracking-wider text-gray-400">Volumen Maestro</h3>
+                <div className="flex items-center gap-4">
+                  <button
+                    onClick={() => soundEngine.toggleMute()}
+                    className="p-3 bg-white/10 hover:bg-white/20 rounded-xl text-white transition-colors"
+                  >
+                    {isMuted || volume === 0 ? <MicOff className="w-5 h-5 text-rose-400" /> : <Volume2 className="w-5 h-5 text-blue-400" />}
+                  </button>
+                  <input
+                    type="range"
+                    min="0"
+                    max="1"
+                    step="0.01"
+                    value={volume}
+                    onChange={handleVolumeChange}
+                    className="flex-1 h-2 bg-gray-700 rounded-lg accent-blue-500 cursor-pointer"
+                  />
+                  <span className="font-mono text-xs font-bold w-12 text-right">{Math.round(volume * 100)}%</span>
+                </div>
+              </div>
+
+              <div className="bg-[#1C1C1F] p-5 rounded-2xl border border-white/10 flex flex-col gap-3">
+                <h3 className="text-xs font-bold text-white uppercase tracking-wider text-gray-400">Prueba de Sintetizador</h3>
+                <p className="text-xs text-gray-400">Genera una frecuencia armónica de prueba para validar el servidor de sonido.</p>
+                <button
+                  onClick={() => soundEngine.playNotification()}
+                  className="px-4 py-2.5 bg-pink-600 hover:bg-pink-500 text-white font-semibold text-xs rounded-xl transition-all self-start flex items-center gap-2 shadow"
+                >
+                  <Play className="w-4 h-4" /> Reproducir Chime de Prueba
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* TAB 5: DISPOSITIVOS & HARDWARE */}
+        {activeTab === 'devices' && (
+          <div className="flex flex-col gap-6">
+            <div className="bg-[#1C1C1F] p-5 rounded-2xl border border-white/10 flex items-center justify-between">
+              <div className="flex items-center gap-3.5">
+                <div className="p-3 bg-rose-500/20 text-rose-400 rounded-2xl">
+                  <Camera className="w-6 h-6" />
+                </div>
+                <div>
+                  <h2 className="text-base font-bold text-white">Dispositivos & Periféricos de Hardware</h2>
+                  <p className="text-xs text-gray-400">Conexión HTML5 directa a Webcam, Micrófono, WebUSB, WebSerial, Bluetooth y Satélite GPS.</p>
+                </div>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {/* Webcam */}
               <div className="bg-[#1C1C1F] p-4 rounded-2xl border border-white/10 flex flex-col gap-3">
                 <div className="flex items-center justify-between">
                   <span className="font-bold text-xs text-white flex items-center gap-2">
-                    <Camera className="w-4 h-4 text-rose-400" />
-                    Webcam / Vídeo Local
+                    <Camera className="w-4 h-4 text-rose-400" /> Webcam Local
                   </span>
                   {!cameraActive ? (
-                    <button 
-                      onClick={startCamera}
-                      className="px-3 py-1.5 bg-rose-600 hover:bg-rose-500 text-white font-semibold text-xs rounded-xl transition-all flex items-center gap-1.5 shadow"
-                    >
-                      <Video className="w-3.5 h-3.5" /> Iniciar Cámara
+                    <button onClick={startCamera} className="px-3 py-1.5 bg-rose-600 hover:bg-rose-500 text-white font-semibold text-xs rounded-xl shadow flex items-center gap-1.5">
+                      <Video className="w-3.5 h-3.5" /> Probar Cámara
                     </button>
                   ) : (
-                    <button 
-                      onClick={stopCamera}
-                      className="px-3 py-1.5 bg-gray-700 hover:bg-gray-600 text-white font-semibold text-xs rounded-xl transition-all flex items-center gap-1.5"
-                    >
+                    <button onClick={stopCamera} className="px-3 py-1.5 bg-gray-700 hover:bg-gray-600 text-white font-semibold text-xs rounded-xl flex items-center gap-1.5">
                       <VideoOff className="w-3.5 h-3.5 text-rose-400" /> Detener
                     </button>
                   )}
@@ -463,724 +776,138 @@ export default function ControlPanelApp({ user, onOpenApp }: { user?: UserData; 
 
                 <div className="w-full h-44 bg-black rounded-xl overflow-hidden relative border border-white/10 flex items-center justify-center">
                   <video ref={videoRef} autoPlay playsInline muted className={`w-full h-full object-cover ${!cameraActive ? 'hidden' : ''}`} />
-                  {!cameraActive && (
-                    <div className="flex flex-col items-center gap-2 text-gray-500 text-xs">
-                      <VideoOff className="w-8 h-8 stroke-[1.5]" />
-                      <span>Cámara Inactiva</span>
-                    </div>
-                  )}
+                  {!cameraActive && <span className="text-gray-500 text-xs">Cámara Inactiva</span>}
                 </div>
-
-                {cameraInfo && (
-                  <div className="text-[11px] font-mono text-emerald-400 bg-emerald-950/40 border border-emerald-500/30 p-2 rounded-lg truncate">
-                    {cameraInfo}
-                  </div>
-                )}
-                {cameraError && (
-                  <div className="text-[11px] font-mono text-rose-400 bg-rose-950/40 border border-rose-500/30 p-2 rounded-lg">
-                    {cameraError}
-                  </div>
-                )}
+                {cameraInfo && <div className="text-[11px] font-mono text-emerald-400 bg-emerald-950/40 p-2 rounded-lg truncate">{cameraInfo}</div>}
               </div>
 
-              {/* Microphone Container */}
+              {/* Mic Meter */}
               <div className="bg-[#1C1C1F] p-4 rounded-2xl border border-white/10 flex flex-col gap-3">
                 <div className="flex items-center justify-between">
                   <span className="font-bold text-xs text-white flex items-center gap-2">
-                    <Mic className="w-4 h-4 text-pink-400" />
-                    Micrófono / Medidor de Nivel
+                    <Mic className="w-4 h-4 text-pink-400" /> Micrófono Local
                   </span>
                   {!micActive ? (
-                    <button 
-                      onClick={startMic}
-                      className="px-3 py-1.5 bg-pink-600 hover:bg-pink-500 text-white font-semibold text-xs rounded-xl transition-all flex items-center gap-1.5 shadow"
-                    >
-                      <Mic className="w-3.5 h-3.5" /> Probar Micrófono
+                    <button onClick={startMic} className="px-3 py-1.5 bg-pink-600 hover:bg-pink-500 text-white font-semibold text-xs rounded-xl shadow flex items-center gap-1.5">
+                      <Mic className="w-3.5 h-3.5" /> Medir Nivel
                     </button>
                   ) : (
-                    <button 
-                      onClick={stopMic}
-                      className="px-3 py-1.5 bg-gray-700 hover:bg-gray-600 text-white font-semibold text-xs rounded-xl transition-all flex items-center gap-1.5"
-                    >
-                      <MicOff className="w-3.5 h-3.5 text-pink-400" /> Detener Audio
+                    <button onClick={stopMic} className="px-3 py-1.5 bg-gray-700 hover:bg-gray-600 text-white font-semibold text-xs rounded-xl">
+                      Detener
                     </button>
                   )}
                 </div>
 
-                <div className="flex-1 bg-black/60 p-4 rounded-xl border border-white/10 flex flex-col justify-center gap-3">
-                  <div className="flex justify-between items-center text-xs font-mono">
-                    <span className="text-gray-400">Intensidad entrada:</span>
-                    <span className="text-pink-400 font-bold">{micLevel}%</span>
-                  </div>
-
-                  <div className="w-full bg-gray-800 rounded-full h-4 overflow-hidden p-0.5 border border-white/10">
-                    <div 
-                      className="h-full bg-gradient-to-r from-emerald-500 via-amber-400 to-rose-500 rounded-full transition-all duration-75"
-                      style={{ width: `${micLevel}%` }}
-                    />
-                  </div>
-
-                  <span className="text-[10px] text-gray-400 text-center">
-                    {micActive ? 'Procesando captura en tiempo real con Web Audio API Analyser' : 'Pulse el botón para autorizar el micrófono del dispositivo'}
-                  </span>
+                <div className="w-full bg-black/60 h-8 rounded-xl p-1.5 border border-white/10 flex items-center">
+                  <div className="h-full bg-gradient-to-r from-emerald-500 via-amber-500 to-rose-500 rounded-lg transition-all duration-75" style={{ width: `${micLevel}%` }} />
                 </div>
-              </div>
-
-              {/* WebUSB Ports */}
-              <div className="bg-[#1C1C1F] p-4 rounded-2xl border border-white/10 flex flex-col gap-3">
-                <div className="flex items-center justify-between">
-                  <span className="font-bold text-xs text-white flex items-center gap-2">
-                    <Usb className="w-4 h-4 text-amber-400" />
-                    Puertos USB Locales (WebUSB)
-                  </span>
-                  <button 
-                    onClick={requestUsbDevice}
-                    className="px-3 py-1.5 bg-amber-600 hover:bg-amber-500 text-white font-semibold text-xs rounded-xl transition-all flex items-center gap-1.5 shadow"
-                  >
-                    <Usb className="w-3.5 h-3.5" /> Enlazar Dispositivo USB
-                  </button>
-                </div>
-
-                <p className="text-xs text-gray-400">
-                  Permite comunicar microcontroladores, lecturas USB, depuradores o periféricos.
-                </p>
-
-                <div className="bg-black/50 p-2.5 rounded-xl border border-white/10 font-mono text-xs text-amber-300">
-                  {usbStatus}
-                </div>
-
-                {usbDevices.length > 0 && (
-                  <div className="flex flex-col gap-1.5">
-                    {usbDevices.map((d, i) => (
-                      <div key={i} className="p-2 bg-white/5 rounded-lg border border-white/5 text-xs flex justify-between">
-                        <span className="font-bold text-white">{d.name}</span>
-                        <span className="font-mono text-gray-400">{d.vendorId}:{d.productId}</span>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-
-              {/* Web Serial / UART */}
-              <div className="bg-[#1C1C1F] p-4 rounded-2xl border border-white/10 flex flex-col gap-3">
-                <div className="flex items-center justify-between">
-                  <span className="font-bold text-xs text-white flex items-center gap-2">
-                    <Cable className="w-4 h-4 text-emerald-400" />
-                    Puertos Serie / UART (WebSerial)
-                  </span>
-                  <button 
-                    onClick={requestSerialPort}
-                    className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-xs rounded-xl transition-all flex items-center gap-1.5 shadow"
-                  >
-                    <Cable className="w-3.5 h-3.5" /> Solicitar Puerto Serie
-                  </button>
-                </div>
-
-                <p className="text-xs text-gray-400">
-                  Conexión directa con placas Arduino, ESP32, módem serie o adaptadores FTDI RS-232.
-                </p>
-
-                <div className="bg-black/50 p-2.5 rounded-xl border border-white/10 font-mono text-xs text-emerald-300">
-                  {serialStatus}
-                </div>
-              </div>
-
-              {/* Bluetooth & Battery */}
-              <div className="bg-[#1C1C1F] p-4 rounded-2xl border border-white/10 flex flex-col gap-3">
-                <div className="flex items-center justify-between">
-                  <span className="font-bold text-xs text-white flex items-center gap-2">
-                    <Bluetooth className="w-4 h-4 text-blue-400" />
-                    Bluetooth & Batería Local
-                  </span>
-                  <button 
-                    onClick={requestBluetoothDevice}
-                    className="px-3 py-1.5 bg-blue-600 hover:bg-blue-500 text-white font-semibold text-xs rounded-xl transition-all flex items-center gap-1.5 shadow"
-                  >
-                    <Bluetooth className="w-3.5 h-3.5" /> Buscar Bluetooth
-                  </button>
-                </div>
-
-                <div className="bg-black/50 p-2.5 rounded-xl border border-white/10 font-mono text-xs text-blue-300">
-                  {bluetoothStatus}
-                </div>
-
-                <div className="p-3 bg-white/5 rounded-xl flex items-center justify-between text-xs">
-                  <span className="flex items-center gap-2 text-gray-300">
-                    <Battery className="w-4 h-4 text-emerald-400" /> Estado de Batería Local:
-                  </span>
-                  <span className="font-bold font-mono text-emerald-400">
-                    {batteryInfo ? `${batteryInfo.level}% (${batteryInfo.charging ? 'Cargando' : 'Descargando'})` : 'Cargador de red conectada'}
-                  </span>
-                </div>
-              </div>
-
-              {/* Geolocation */}
-              <div className="bg-[#1C1C1F] p-4 rounded-2xl border border-white/10 flex flex-col gap-3">
-                <div className="flex items-center justify-between">
-                  <span className="font-bold text-xs text-white flex items-center gap-2">
-                    <Compass className="w-4 h-4 text-purple-400" />
-                    Sensores GPS y Ubicación
-                  </span>
-                  <button 
-                    onClick={requestGeolocation}
-                    className="px-3 py-1.5 bg-purple-600 hover:bg-purple-500 text-white font-semibold text-xs rounded-xl transition-all flex items-center gap-1.5 shadow"
-                  >
-                    <Compass className="w-3.5 h-3.5" /> Coordenadas GPS
-                  </button>
-                </div>
-
-                <div className="bg-black/50 p-2.5 rounded-xl border border-white/10 font-mono text-xs text-purple-300">
-                  {geoInfo || 'Haga clic para obtener coordenadas GPS locales.'}
-                </div>
+                <span className="text-xs text-gray-400 font-mono">Nivel VU: {micLevel}%</span>
               </div>
             </div>
-          </div>
-        )}
 
-        {/* TAB: SECURITY & KERNEL */}
-        {activeTab === 'security' && (
-          <div className="flex flex-col gap-6">
-            <div className="flex items-center justify-between bg-[#1C1C1F] p-4 rounded-2xl border border-white/10">
-              <div className="flex items-center gap-3">
-                <div className="p-3 bg-emerald-500/20 text-emerald-400 rounded-xl">
-                  <ShieldCheck className="w-6 h-6" />
-                </div>
-                <div>
-                  <h2 className="text-base font-bold text-white">Revisión de Seguridad del Entorno POSIX</h2>
-                  <p className="text-xs text-gray-400">Protección del Kernel SAVIA-OS, Sandbox y Aislamiento de Ejecución</p>
-                </div>
-              </div>
-
-              <button
-                onClick={runSecurityCheck}
-                className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-xs rounded-xl transition-all flex items-center gap-2 shadow-lg"
-              >
-                <RefreshCw className="w-3.5 h-3.5" />
-                <span>Auditar Entorno</span>
-              </button>
-            </div>
-
-            {/* Security Switches */}
+            {/* WebUSB & WebSerial & BT */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div className="bg-[#1C1C1F] p-4 rounded-2xl border border-white/10 flex flex-col justify-between gap-3">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-bold text-gray-300 flex items-center gap-2">
-                    <Lock className="w-4 h-4 text-blue-400" /> Cortafuegos (Firewall)
-                  </span>
-                  <input
-                    type="checkbox"
-                    checked={firewallActive}
-                    onChange={(e) => setFirewallActive(e.target.checked)}
-                    className="accent-blue-500 w-4 h-4 cursor-pointer"
-                  />
-                </div>
-                <p className="text-[11px] text-gray-400">Filtra peticiones de red salientes y previene inyecciones XSS en el navegador.</p>
-                <span className="text-[10px] font-mono text-emerald-400 flex items-center gap-1">
-                  <CheckCircle className="w-3 h-3" /> Estado: {firewallActive ? 'Enforcing' : 'Inactivo'}
-                </span>
+              <div className="bg-[#1C1C1F] p-4 rounded-2xl border border-white/10 flex flex-col gap-2">
+                <span className="font-bold text-xs text-white flex items-center gap-2"><Usb className="w-4 h-4 text-rose-400" /> WebUSB</span>
+                <p className="text-[11px] text-gray-400">{usbStatus}</p>
+                <button onClick={requestUsbDevice} className="mt-auto px-3 py-1.5 bg-white/10 hover:bg-white/20 text-xs font-semibold rounded-xl text-white">Vincular USB</button>
               </div>
 
-              <div className="bg-[#1C1C1F] p-4 rounded-2xl border border-white/10 flex flex-col justify-between gap-3">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-bold text-gray-300 flex items-center gap-2">
-                    <Cpu className="w-4 h-4 text-purple-400" /> Memory Sandboxing
-                  </span>
-                  <input
-                    type="checkbox"
-                    checked={sandboxEnforced}
-                    onChange={(e) => setSandboxEnforced(e.target.checked)}
-                    className="accent-purple-500 w-4 h-4 cursor-pointer"
-                  />
-                </div>
-                <p className="text-[11px] text-gray-400">Aísla la ejecución de binarios WASM y scripts dentro de contextos protegidos.</p>
-                <span className="text-[10px] font-mono text-emerald-400 flex items-center gap-1">
-                  <CheckCircle className="w-3 h-3" /> Estado: {sandboxEnforced ? 'Activo (Level 3)' : 'Desactivado'}
-                </span>
+              <div className="bg-[#1C1C1F] p-4 rounded-2xl border border-white/10 flex flex-col gap-2">
+                <span className="font-bold text-xs text-white flex items-center gap-2"><Cable className="w-4 h-4 text-amber-400" /> WebSerial</span>
+                <p className="text-[11px] text-gray-400">{serialStatus}</p>
+                <button onClick={requestSerialPort} className="mt-auto px-3 py-1.5 bg-white/10 hover:bg-white/20 text-xs font-semibold rounded-xl text-white">Vincular Puerto</button>
               </div>
 
-              <div className="bg-[#1C1C1F] p-4 rounded-2xl border border-white/10 flex flex-col justify-between gap-3">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-bold text-gray-300 flex items-center gap-2">
-                    <ShieldCheck className="w-4 h-4 text-emerald-400" /> Escudo Path Traversal
-                  </span>
-                  <input
-                    type="checkbox"
-                    checked={pathShieldActive}
-                    onChange={(e) => setPathShieldActive(e.target.checked)}
-                    className="accent-emerald-500 w-4 h-4 cursor-pointer"
-                  />
-                </div>
-                <p className="text-[11px] text-gray-400">Impide que la consola o scripts accedan a directorios no autorizados fuera del VFS.</p>
-                <span className="text-[10px] font-mono text-emerald-400 flex items-center gap-1">
-                  <CheckCircle className="w-3 h-3" /> Estado: {pathShieldActive ? 'Protegido' : 'Peligro'}
-                </span>
-              </div>
-            </div>
-
-            {/* Live Audit Terminal */}
-            <div className="bg-[#121214] p-4 rounded-2xl border border-white/10 flex flex-col gap-2">
-              <span className="text-xs font-mono font-bold text-emerald-400 flex items-center gap-2">
-                <ShieldCheck className="w-4 h-4" /> Telemetría de Auditoría de Seguridad en Tiempo Real
-              </span>
-              <div className="bg-black/80 p-3 rounded-xl font-mono text-xs text-emerald-400 h-44 overflow-y-auto space-y-1 border border-white/5">
-                {securityLogs.map((log, i) => (
-                  <div key={i}>{log}</div>
-                ))}
+              <div className="bg-[#1C1C1F] p-4 rounded-2xl border border-white/10 flex flex-col gap-2">
+                <span className="font-bold text-xs text-white flex items-center gap-2"><Bluetooth className="w-4 h-4 text-blue-400" /> Bluetooth</span>
+                <p className="text-[11px] text-gray-400">{bluetoothStatus}</p>
+                <button onClick={requestBluetoothDevice} className="mt-auto px-3 py-1.5 bg-white/10 hover:bg-white/20 text-xs font-semibold rounded-xl text-white">Buscar BT</button>
               </div>
             </div>
           </div>
         )}
 
-        {/* TAB: LOCAL NETWORK & INTERNET */}
-        {activeTab === 'network' && (
-          <div className="flex flex-col gap-6">
-            <div className="bg-[#1C1C1F] p-5 rounded-2xl border border-white/10 flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div className="p-3 bg-cyan-500/20 text-cyan-400 rounded-xl">
-                  <Wifi className="w-6 h-6" />
-                </div>
-                <div>
-                  <h2 className="text-base font-bold text-white">Configuración de Red Local e Interfaces</h2>
-                  <p className="text-xs text-gray-400">Monitoreo de sockets, respuesta de latencia y estado de la pila TCP/IP</p>
-                </div>
-              </div>
-
-              <button 
-                onClick={runNetworkPing}
-                disabled={pinging}
-                className="px-4 py-2 bg-cyan-600 hover:bg-cyan-500 text-white font-semibold text-xs rounded-xl transition-all flex items-center gap-2 shadow"
-              >
-                <Activity className="w-3.5 h-3.5" />
-                <span>{pinging ? 'Probando...' : 'Test de Latencia / Ping'}</span>
-              </button>
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-              <div className="bg-[#1C1C1F] p-4 rounded-2xl border border-white/10 flex flex-col gap-1">
-                <span className="text-xs text-gray-400">Estado de Conexión:</span>
-                <span className={`text-sm font-bold ${isOnline ? 'text-emerald-400' : 'text-rose-400'}`}>
-                  {isOnline ? 'En línea (Online)' : 'Desconectado (Offline)'}
-                </span>
-              </div>
-
-              <div className="bg-[#1C1C1F] p-4 rounded-2xl border border-white/10 flex flex-col gap-1">
-                <span className="text-xs text-gray-400">Latencia Servidor Local:</span>
-                <span className="text-sm font-bold font-mono text-cyan-400">
-                  {networkLatency !== null ? `${networkLatency} ms` : 'No probado'}
-                </span>
-              </div>
-
-              <div className="bg-[#1C1C1F] p-4 rounded-2xl border border-white/10 flex flex-col gap-1">
-                <span className="text-xs text-gray-400">Protocolo Sockets:</span>
-                <span className="text-sm font-bold font-mono text-purple-400">
-                  WASM WebSocket / Fetch
-                </span>
-              </div>
-            </div>
-
-            <div className="bg-[#1C1C1F] p-5 rounded-2xl border border-white/10 flex flex-col gap-3">
-              <h3 className="text-xs font-bold uppercase text-gray-400">Interfaces de Red Locales Simuladas</h3>
-              <div className="space-y-2 text-xs">
-                <div className="p-2.5 bg-white/5 rounded-xl border border-white/5 flex items-center justify-between font-mono">
-                  <div>
-                    <span className="text-blue-400 font-bold">lo0 (Loopback)</span>
-                    <span className="text-gray-400 block text-[10px]">127.0.0.1 / netmask 255.0.0.0</span>
-                  </div>
-                  <span className="bg-emerald-500/20 text-emerald-400 px-2 py-0.5 rounded text-[10px]">UP / ACTIVE</span>
-                </div>
-
-                <div className="p-2.5 bg-white/5 rounded-xl border border-white/5 flex items-center justify-between font-mono">
-                  <div>
-                    <span className="text-emerald-400 font-bold">eth0 (Virtual Ethernet)</span>
-                    <span className="text-gray-400 block text-[10px]">192.168.1.105 / gateway 192.168.1.1</span>
-                  </div>
-                  <span className="bg-emerald-500/20 text-emerald-400 px-2 py-0.5 rounded text-[10px]">UP / 1000Mbps</span>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* TAB: SOUND & AUDIO CORE */}
-        {activeTab === 'sound' && (
-          <div className="flex flex-col gap-6">
-            <div className="bg-[#1C1C1F] p-5 rounded-2xl border border-white/10 flex flex-col gap-4">
-              <div className="flex items-center justify-between">
-                <h2 className="text-sm font-bold text-white flex items-center gap-2">
-                  <Volume2 className="w-5 h-5 text-pink-400" /> Control de Audio Principal
-                </h2>
-                <span className="text-xs font-mono text-blue-400 font-bold">{Math.round(volume * 100)}%</span>
-              </div>
-
-              <div className="flex items-center gap-4">
-                <input
-                  type="range"
-                  min="0"
-                  max="1"
-                  step="0.01"
-                  value={volume}
-                  onChange={(e) => soundEngine.setVolume(parseFloat(e.target.value))}
-                  className="flex-1 accent-blue-500 h-2 bg-gray-700 rounded-lg cursor-pointer"
-                />
-              </div>
-
-              <div className="flex flex-wrap gap-2 pt-2">
-                <button
-                  onClick={() => soundEngine.playStartupChime()}
-                  className="px-3.5 py-2 bg-blue-600/20 hover:bg-blue-600 text-blue-300 hover:text-white rounded-xl text-xs font-semibold transition-all flex items-center gap-1.5 shadow"
-                >
-                  <Play className="w-3.5 h-3.5" /> Probar Chime de Inicio
-                </button>
-                <button
-                  onClick={() => soundEngine.playNotification()}
-                  className="px-3.5 py-2 bg-emerald-600/20 hover:bg-emerald-600 text-emerald-300 hover:text-white rounded-xl text-xs font-semibold transition-all flex items-center gap-1.5 shadow"
-                >
-                  <Play className="w-3.5 h-3.5" /> Probar Sonido Notificación
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* TAB: SCREEN & APPEARANCE */}
-        {activeTab === 'appearance' && (
-          <div className="flex flex-col gap-6">
-            <div className="bg-[#1C1C1F] p-5 rounded-2xl border border-white/10 flex flex-col gap-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <h2 className="text-sm font-bold text-white flex items-center gap-2">
-                    <Monitor className="w-5 h-5 text-purple-400" /> Personalización del Escritorio SAVIA-OS
-                  </h2>
-                  <p className="text-xs text-gray-400 mt-0.5">
-                    Selecciona la apariencia del sistema, fondos HD y efectos de translucidez.
-                  </p>
-                </div>
-                {onOpenApp && (
-                  <button
-                    onClick={() => onOpenApp('theme', 'Personalización de Fondos y Temas')}
-                    className="px-4 py-2 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-500 hover:to-pink-500 text-white font-semibold text-xs rounded-xl shadow-lg transition-all flex items-center gap-2"
-                  >
-                    <Palette className="w-4 h-4" />
-                    <span>Abrir Panel de Fondos y Temas</span>
-                  </button>
-                )}
-              </div>
-
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 pt-2">
-                <div 
-                  onClick={() => setSelectedTheme('Deep Space')}
-                  className={`p-3 bg-gradient-to-br from-blue-900 to-indigo-900 rounded-xl border flex flex-col items-center justify-center gap-2 text-xs font-bold cursor-pointer hover:scale-105 transition-transform ${selectedTheme === 'Deep Space' ? 'border-blue-400 ring-2 ring-blue-500/50' : 'border-blue-500/30'}`}
-                >
-                  <span>SAVIA-OS Deep Space</span>
-                  <span className="text-[10px] text-blue-300 font-normal">Predeterminado</span>
-                </div>
-                <div 
-                  onClick={() => setSelectedTheme('Neon Cyberpunk')}
-                  className={`p-3 bg-gradient-to-br from-purple-900 to-pink-900 rounded-xl border flex flex-col items-center justify-center gap-2 text-xs font-bold cursor-pointer hover:scale-105 transition-transform ${selectedTheme === 'Neon Cyberpunk' ? 'border-purple-400 ring-2 ring-purple-500/50' : 'border-purple-500/30'}`}
-                >
-                  <span>Neon Cyberpunk</span>
-                  <span className="text-[10px] text-purple-300 font-normal">Dark Vibrant</span>
-                </div>
-                <div 
-                  onClick={() => setSelectedTheme('Emerald Sonoma')}
-                  className={`p-3 bg-gradient-to-br from-emerald-900 to-teal-900 rounded-xl border flex flex-col items-center justify-center gap-2 text-xs font-bold cursor-pointer hover:scale-105 transition-transform ${selectedTheme === 'Emerald Sonoma' ? 'border-emerald-400 ring-2 ring-emerald-500/50' : 'border-emerald-500/30'}`}
-                >
-                  <span>Emerald Sonoma</span>
-                  <span className="text-[10px] text-emerald-300 font-normal">Fresh Light</span>
-                </div>
-              </div>
-
-              <div className="p-4 bg-white/5 rounded-xl flex items-center justify-between text-xs mt-2">
-                <div>
-                  <span className="font-bold text-white block">Efecto Blur / Translucidez Backdrop</span>
-                  <span className="text-gray-400 text-[11px]">Aplica desenfoque de cristal en ventanas y barras de menú</span>
-                </div>
-                <input 
-                  type="checkbox" 
-                  checked={translucency} 
-                  onChange={(e) => setTranslucency(e.target.checked)} 
-                  className="accent-purple-500 w-4 h-4 cursor-pointer"
-                />
-              </div>
-
-              <div className="p-4 bg-white/5 rounded-xl flex items-center justify-between text-xs">
-                <div>
-                  <span className="font-bold text-white block">Resolución de Pantalla Detectada</span>
-                  <span className="text-gray-400 text-[11px] font-mono">{window.screen.width} x {window.screen.height} px (Ratio: {window.devicePixelRatio}x)</span>
-                </div>
-                <select 
-                  value={refreshRate} 
-                  onChange={(e) => setRefreshRate(e.target.value)}
-                  className="bg-black/60 border border-white/10 text-xs rounded-lg px-2 py-1 outline-none text-purple-300"
-                >
-                  <option value="60Hz">60 Hz Standard</option>
-                  <option value="120Hz">120 Hz ProMotion</option>
-                  <option value="144Hz">144 Hz UltraSmooth</option>
-                </select>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* TAB: VFS STORAGE & PACKAGES */}
-        {activeTab === 'storage' && (
-          <div className="flex flex-col gap-6">
-            <div className="bg-[#1C1C1F] p-5 rounded-2xl border border-white/10 flex flex-col gap-3">
-              <div className="flex items-center justify-between">
-                <h2 className="text-sm font-bold text-white flex items-center gap-2">
-                  <HardDrive className="w-5 h-5 text-amber-400" /> Sistema de Archivos VFS & Almacenamiento
-                </h2>
-              </div>
-              <p className="text-xs text-gray-400">
-                Almacenamiento Virtual en memoria RAM / OPFS. Estado de directorios y volumen virtual.
-              </p>
-
-              <div className="p-4 bg-black/60 rounded-xl border border-white/10 flex flex-col gap-2 font-mono text-xs text-amber-300">
-                <div className="flex justify-between">
-                  <span>Volumen Virtual (/vfs_root):</span>
-                  <span className="font-bold">512 MB Disponibles</span>
-                </div>
-                <div className="w-full bg-gray-800 rounded-full h-2 overflow-hidden">
-                  <div className="bg-amber-400 h-full w-[15%]" />
-                </div>
-                <span className="text-[10px] text-gray-400">Usado: ~78 MB | Libre: ~434 MB</span>
-              </div>
-            </div>
-
-            <div className="bg-[#1C1C1F] p-5 rounded-2xl border border-white/10 flex flex-col gap-3">
-              <div className="flex items-center justify-between">
-                <h2 className="text-sm font-bold text-white flex items-center gap-2">
-                  <Box className="w-5 h-5 text-emerald-400" /> Registro de Paquetes Instalados (APT)
-                </h2>
-                {onOpenApp && (
-                  <button
-                    onClick={() => onOpenApp('appstore', 'Software Center')}
-                    className="px-3 py-1.5 bg-blue-600 text-white rounded-xl text-xs font-semibold hover:bg-blue-500 transition-colors shadow"
-                  >
-                    Abrir App Store
-                  </button>
-                )}
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
-                {getInstalledPackageIds().map(id => {
-                  const info = AVAILABLE_PACKAGES.find(p => p.id === id);
-                  return (
-                    <div key={id} className="p-2.5 bg-white/5 rounded-xl border border-white/5 flex items-center justify-between text-xs">
-                      <div className="flex items-center gap-2">
-                        <Box className="w-4 h-4 text-emerald-400" />
-                        <div>
-                          <span className="font-mono font-bold text-white">{id}</span>
-                          <span className="text-[10px] text-gray-400 block">{info?.name}</span>
-                        </div>
-                      </div>
-                      <span className="text-[10px] bg-emerald-500/20 text-emerald-400 px-2 py-0.5 rounded font-mono">
-                        v{info?.version || '1.0'}
-                      </span>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* TAB: SYSTEM & CREDITS */}
-        {activeTab === 'general' && (
-          <div className="flex flex-col gap-6">
-            <div className="bg-[#1C1C1F] p-6 rounded-2xl border border-white/10 flex flex-col md:flex-row items-center gap-6">
-              <div className="w-20 h-20 bg-gradient-to-tr from-blue-600 to-indigo-600 rounded-2xl flex items-center justify-center text-white shadow-xl shrink-0">
-                <User className="w-10 h-10" />
-              </div>
-              <div className="flex-1 text-center md:text-left">
-                <h2 className="text-xl font-bold text-white">Alberto Arce</h2>
-                <p className="text-xs text-blue-400 font-semibold tracking-wide">Arquitecto Principal de SAVIA-OS</p>
-                <p className="text-xs text-gray-300 mt-2">
-                  Diseñador y Creador del entorno SAVIA-OS. Creado para proporcionar un entorno de escritorio completo ejecutado directamente en el navegador con soporte nativo de periféricos WebAPIs.
-                </p>
-                <div className="mt-4">
-                  <button
-                    onClick={handleOpenLinkedIn}
-                    className="inline-flex items-center gap-2 px-4 py-2 bg-[#0A66C2] hover:bg-[#084e96] text-white font-semibold text-xs rounded-xl transition-all shadow-md hover:scale-105 active:scale-95"
-                  >
-                    <Globe className="w-4 h-4" />
-                    <span>linkedin.com/in/albertoarce</span>
-                    <ExternalLink className="w-3.5 h-3.5" />
-                  </button>
-                </div>
-              </div>
-            </div>
-
-            <div className="bg-[#1C1C1F] p-5 rounded-2xl border border-white/10 flex flex-col gap-3">
-              <h3 className="text-xs font-bold uppercase text-gray-400">Especificaciones del Sistema SAVIA-OS</h3>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
-                <div className="flex justify-between p-2.5 bg-white/5 rounded-xl">
-                  <span className="text-gray-400">Edición del SO:</span>
-                  <span className="font-bold text-white">SAVIA-OS 2.4 Enterprise</span>
-                </div>
-                <div className="flex justify-between p-2.5 bg-white/5 rounded-xl">
-                  <span className="text-gray-400">Núcleo / Kernel:</span>
-                  <span className="font-mono text-emerald-400">RUST-SAVIA-OS-CORE</span>
-                </div>
-                <div className="flex justify-between p-2.5 bg-white/5 rounded-xl">
-                  <span className="text-gray-400">Motor de Audio:</span>
-                  <span className="font-bold text-pink-400">Web Audio API Synth</span>
-                </div>
-                <div className="flex justify-between p-2.5 bg-white/5 rounded-xl">
-                  <span className="text-gray-400">Aceleración:</span>
-                  <span className="font-bold text-blue-400">WebGL 2.0 Canvas</span>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* TAB: ACCOUNTS & PASSWORD */}
+        {/* TAB 6: CUENTAS & USUARIOS */}
         {activeTab === 'accounts' && (
           <div className="flex flex-col gap-6">
-            <div className="bg-[#1C1C1F] p-6 rounded-2xl border border-white/10 flex flex-col gap-6">
-              <div className="flex items-center gap-3">
-                <div className="p-3 bg-emerald-500/20 text-emerald-400 rounded-xl">
+            <div className="bg-[#1C1C1F] p-5 rounded-2xl border border-white/10 flex items-center justify-between">
+              <div className="flex items-center gap-3.5">
+                <div className="p-3 bg-emerald-500/20 text-emerald-400 rounded-2xl">
                   <Key className="w-6 h-6" />
                 </div>
                 <div>
-                  <h2 className="text-base font-bold text-white">Gestión de Cuentas y Contraseña</h2>
-                  <p className="text-xs text-gray-400">Seguridad de usuarios y cambio de clave para la sesión activa</p>
+                  <h2 className="text-base font-bold text-white">Gestión de Cuentas & Contraseñas</h2>
+                  <p className="text-xs text-gray-400">Actualiza las credenciales de acceso del sistema y administra perfiles.</p>
                 </div>
               </div>
+            </div>
 
-              {/* Current Active Account Profile */}
-              <div className="bg-[#121214] border border-white/10 p-4 rounded-xl flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div className={`w-12 h-12 rounded-full flex items-center justify-center text-white font-bold text-lg ${user?.avatar || 'bg-blue-500'}`}>
-                    {user?.username?.[0]?.toUpperCase() || 'U'}
-                  </div>
-                  <div>
-                    <h3 className="text-sm font-bold text-white flex items-center gap-2">
-                      {user?.name || 'Usuario'}
-                      {user?.isGuest && (
-                        <span className="bg-amber-500/20 text-amber-300 text-[10px] font-bold px-2 py-0.5 rounded-full border border-amber-500/30">
-                          Invitado
-                        </span>
-                      )}
-                    </h3>
-                    <p className="text-xs text-gray-400 font-mono">@{user?.username || 'user'} • {user?.role || 'Usuario'}</p>
-                  </div>
-                </div>
-                <div className="text-right text-xs text-emerald-400 font-medium flex items-center gap-1">
-                  <UserCheck className="w-4 h-4" />
-                  <span>Sesión Autenticada</span>
-                </div>
-              </div>
-
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               {/* Change Password Form */}
-              <div className="bg-[#121214] border border-white/10 p-5 rounded-xl flex flex-col gap-4">
-                <h3 className="text-xs font-bold text-gray-200 uppercase tracking-wider flex items-center gap-2">
-                  <Lock className="w-4 h-4 text-emerald-400" />
-                  Cambiar Contraseña de Cuenta
-                </h3>
+              <form onSubmit={handleChangePassword} className="bg-[#1C1C1F] p-5 rounded-2xl border border-white/10 flex flex-col gap-4">
+                <h3 className="text-xs font-bold text-white uppercase tracking-wider text-gray-400">Cambiar Contraseña ({user?.username})</h3>
 
-                {user?.isGuest ? (
-                  <div className="bg-amber-500/10 border border-amber-500/30 p-3 rounded-xl text-xs text-amber-200 flex items-center gap-2">
-                    <ShieldAlert className="w-5 h-5 text-amber-400 shrink-0" />
-                    <span>La cuenta de invitado no requiere ni puede cambiar contraseña. Para gestionar claves, inicie sesión como usuario estándar o superusuario.</span>
-                  </div>
-                ) : (
-                  <form 
-                    onSubmit={(e) => {
-                      e.preventDefault();
-                      setPassMsg('');
-                      setPassError('');
-                      if (!verifyUserPassword(user?.username || 'user', currentPass)) {
-                        setPassError('La contraseña actual es incorrecta.');
-                        return;
-                      }
-                      if (newPass.length < 3) {
-                        setPassError('La nueva contraseña debe tener al menos 3 caracteres.');
-                        return;
-                      }
-                      if (newPass !== confirmPass) {
-                        setPassError('Las contraseñas no coinciden.');
-                        return;
-                      }
-                      if (saveUserPassword(user?.username || 'user', newPass)) {
-                        setPassMsg('¡Contraseña actualizada correctamente!');
-                        setCurrentPass('');
-                        setNewPass('');
-                        setConfirmPass('');
-                        soundEngine.playSuccessTone();
-                      } else {
-                        setPassError('Error al guardar la nueva contraseña.');
-                      }
-                    }}
-                    className="flex flex-col gap-3 max-w-md"
-                  >
-                    <div className="flex flex-col gap-1">
-                      <label className="text-xs text-gray-400">Contraseña Actual:</label>
-                      <input 
-                        type="password"
-                        value={currentPass}
-                        onChange={e => setCurrentPass(e.target.value)}
-                        placeholder="Escriba su clave actual ('password')"
-                        className="bg-[#18181B] border border-white/15 rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-emerald-500"
-                        required
-                      />
-                    </div>
+                <div className="flex flex-col gap-1">
+                  <label className="text-xs text-gray-300">Contraseña Actual</label>
+                  <input
+                    type="password"
+                    value={currentPass}
+                    onChange={e => setCurrentPass(e.target.value)}
+                    className="bg-black/40 border border-white/10 focus:border-blue-500 px-3.5 py-2 rounded-xl text-xs text-white outline-none"
+                    required
+                  />
+                </div>
 
-                    <div className="flex flex-col gap-1">
-                      <label className="text-xs text-gray-400">Nueva Contraseña:</label>
-                      <input 
-                        type="password"
-                        value={newPass}
-                        onChange={e => setNewPass(e.target.value)}
-                        placeholder="Mínimo 3 caracteres"
-                        className="bg-[#18181B] border border-white/15 rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-emerald-500"
-                        required
-                      />
-                    </div>
+                <div className="flex flex-col gap-1">
+                  <label className="text-xs text-gray-300">Nueva Contraseña</label>
+                  <input
+                    type="password"
+                    value={newPass}
+                    onChange={e => setNewPass(e.target.value)}
+                    className="bg-black/40 border border-white/10 focus:border-blue-500 px-3.5 py-2 rounded-xl text-xs text-white outline-none"
+                    required
+                  />
+                </div>
 
-                    <div className="flex flex-col gap-1">
-                      <label className="text-xs text-gray-400">Confirmar Nueva Contraseña:</label>
-                      <input 
-                        type="password"
-                        value={confirmPass}
-                        onChange={e => setConfirmPass(e.target.value)}
-                        placeholder="Repita la nueva contraseña"
-                        className="bg-[#18181B] border border-white/15 rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-emerald-500"
-                        required
-                      />
-                    </div>
+                <div className="flex flex-col gap-1">
+                  <label className="text-xs text-gray-300">Confirmar Nueva Contraseña</label>
+                  <input
+                    type="password"
+                    value={confirmPass}
+                    onChange={e => setConfirmPass(e.target.value)}
+                    className="bg-black/40 border border-white/10 focus:border-blue-500 px-3.5 py-2 rounded-xl text-xs text-white outline-none"
+                    required
+                  />
+                </div>
 
-                    {passError && (
-                      <div className="text-xs text-rose-400 font-medium">{passError}</div>
-                    )}
-                    {passMsg && (
-                      <div className="text-xs text-emerald-400 font-medium">{passMsg}</div>
-                    )}
+                {passMsg && <span className="text-xs font-bold text-emerald-400">{passMsg}</span>}
+                {passError && <span className="text-xs font-bold text-rose-400">{passError}</span>}
 
-                    <button
-                      type="submit"
-                      className="mt-2 bg-emerald-600 hover:bg-emerald-500 text-white font-semibold py-2 px-4 rounded-xl text-xs shadow-lg transition-all self-start"
-                    >
-                      Actualizar Contraseña
-                    </button>
-                  </form>
-                )}
-              </div>
+                <button type="submit" className="mt-2 px-4 py-2.5 bg-blue-600 hover:bg-blue-500 text-white font-semibold text-xs rounded-xl shadow">
+                  Guardar Nueva Contraseña
+                </button>
+              </form>
 
-              {/* All System Users Overview */}
-              <div className="flex flex-col gap-2">
-                <span className="text-xs font-bold text-gray-300">Cuentas Registradas en el Sistema</span>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                  {Object.values(DEFAULT_USERS).map(u => (
-                    <div key={u.username} className="bg-[#121214] border border-white/10 p-3 rounded-xl flex items-center gap-3">
-                      <div className={`w-8 h-8 rounded-full flex items-center justify-center text-white font-bold text-xs ${u.avatar}`}>
-                        {u.username[0].toUpperCase()}
+              {/* User Profiles */}
+              <div className="bg-[#1C1C1F] p-5 rounded-2xl border border-white/10 flex flex-col gap-4">
+                <h3 className="text-xs font-bold text-white uppercase tracking-wider text-gray-400">Cuentas Registradas en SaviaOS</h3>
+
+                <div className="flex flex-col gap-3">
+                  {Object.entries(DEFAULT_USERS).map(([key, u]) => (
+                    <div key={key} className="flex items-center justify-between p-3 bg-black/30 rounded-xl border border-white/5">
+                      <div className="flex items-center gap-3">
+                        <div className={`w-9 h-9 rounded-xl ${u.avatar} flex items-center justify-center font-bold text-white text-xs`}>
+                          {u.name.charAt(0)}
+                        </div>
+                        <div>
+                          <span className="font-bold text-xs text-white block">{u.name}</span>
+                          <span className="text-[10px] text-gray-400 font-mono">{u.username}</span>
+                        </div>
                       </div>
-                      <div className="truncate">
-                        <div className="text-xs font-bold text-white truncate">{u.name}</div>
-                        <div className="text-[10px] text-gray-400 font-mono">@{u.username}</div>
-                      </div>
+                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${u.isGuest ? 'bg-amber-500/20 text-amber-300' : 'bg-blue-500/20 text-blue-300'}`}>
+                        {u.isGuest ? 'Invitado' : 'Administrador'}
+                      </span>
                     </div>
                   ))}
                 </div>
@@ -1189,79 +916,61 @@ export default function ControlPanelApp({ user, onOpenApp }: { user?: UserData; 
           </div>
         )}
 
-        {/* TAB: EVOLUTION / AGENTS */}
-        {activeTab === 'evolution' && (
+        {/* TAB 7: RED & SISTEMA */}
+        {activeTab === 'network' && (
           <div className="flex flex-col gap-6">
-            <div className="bg-[#1C1C1F] p-6 rounded-2xl border border-white/10 flex flex-col gap-4">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="p-3 bg-yellow-500/20 text-yellow-400 rounded-xl">
-                    <Zap className="w-6 h-6" />
-                  </div>
-                  <div>
-                    <h2 className="text-base font-bold text-white">Agentes Inteligentes y Evolución Genética</h2>
-                    <p className="text-xs text-gray-400">Autocorrección y mejora continua del código fuente de SAVIA-OS</p>
-                  </div>
+            <div className="bg-[#1C1C1F] p-5 rounded-2xl border border-white/10 flex items-center justify-between">
+              <div className="flex items-center gap-3.5">
+                <div className="p-3 bg-cyan-500/20 text-cyan-400 rounded-2xl">
+                  <Wifi className="w-6 h-6" />
                 </div>
+                <div>
+                  <h2 className="text-base font-bold text-white">Estado de Red & Kernel de Sistema</h2>
+                  <p className="text-xs text-gray-400">Medición de latencia de red y monitor del motor genético de optimización.</p>
+                </div>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="bg-[#1C1C1F] p-5 rounded-2xl border border-white/10 flex flex-col gap-4">
+                <h3 className="text-xs font-bold text-white uppercase tracking-wider text-gray-400">Conectividad de Red</h3>
                 
-                <button
-                  onClick={() => {
-                    setEvolutionActive(!evolutionActive);
-                    if (!evolutionActive) soundEngine.playStartupChime();
-                  }}
-                  className={`px-4 py-2 font-semibold text-xs rounded-xl shadow-lg transition-all flex items-center gap-2 ${evolutionActive ? 'bg-rose-600 hover:bg-rose-500 text-white' : 'bg-emerald-600 hover:bg-emerald-500 text-white'}`}
-                >
-                  <Power className="w-4 h-4" />
-                  <span>{evolutionActive ? 'Detener Evolución' : 'Activar Agentes Evolutivos'}</span>
+                <div className="flex items-center justify-between p-3 bg-black/30 rounded-xl">
+                  <span className="text-xs font-semibold text-gray-300">Estado de Internet</span>
+                  <span className={`text-xs font-bold px-2.5 py-1 rounded-full ${isOnline ? 'bg-emerald-500/20 text-emerald-400' : 'bg-rose-500/20 text-rose-400'}`}>
+                    {isOnline ? 'Online / Conectado' : 'Offline'}
+                  </span>
+                </div>
+
+                <div className="flex items-center justify-between p-3 bg-black/30 rounded-xl">
+                  <span className="text-xs font-semibold text-gray-300">Latencia Ping Local</span>
+                  <span className="text-xs font-mono font-bold text-cyan-400">{networkLatency !== null ? `${networkLatency} ms` : 'Sin medir'}</span>
+                </div>
+
+                <button onClick={runNetworkPing} disabled={pinging} className="px-4 py-2 bg-cyan-600 hover:bg-cyan-500 text-white font-semibold text-xs rounded-xl shadow self-start">
+                  {pinging ? 'Midiendo...' : 'Ejecutar Test Ping'}
                 </button>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-2">
-                <div className="bg-[#121214] border border-white/10 rounded-xl p-4 flex flex-col gap-2">
-                  <span className="text-xs font-bold text-gray-300">Generaciones de Algoritmo Genético</span>
-                  <div className="flex items-baseline gap-2">
-                    <span className="text-4xl font-mono text-yellow-400 font-bold">{generationCount}</span>
-                    <span className="text-xs text-gray-500">iteraciones</span>
+              <div className="bg-[#1C1C1F] p-5 rounded-2xl border border-white/10 flex flex-col gap-3">
+                <h3 className="text-xs font-bold text-white uppercase tracking-wider text-gray-400">Especificaciones Técnicas</h3>
+                <div className="text-xs text-gray-300 flex flex-col gap-2 font-mono">
+                  <div className="flex justify-between border-b border-white/5 pb-1">
+                    <span className="text-gray-400">Arquitectura:</span>
+                    <span className="text-white font-bold">WASM 64-bit POSIX</span>
                   </div>
-                  <p className="text-[10px] text-gray-400 mt-2">
-                    Cada generación muta el código fuente actual, aplica pruebas unitarias automáticas y mantiene los parches que mejoran el rendimiento.
-                  </p>
-                </div>
-                
-                <div className="bg-[#121214] border border-white/10 rounded-xl p-4 flex flex-col gap-2 relative overflow-hidden">
-                  <div className="absolute inset-0 bg-gradient-to-br from-yellow-500/5 to-transparent pointer-events-none" />
-                  <span className="text-xs font-bold text-gray-300 flex items-center gap-2 relative z-10">
-                    <Cpu className="w-4 h-4 text-blue-400" />
-                    Estado de Compilación JIT
-                  </span>
-                  <div className="flex-1 flex flex-col justify-center relative z-10">
-                    <div className="w-full bg-gray-800 rounded-full h-2 mb-1 overflow-hidden">
-                      <div className={`h-full bg-yellow-400 ${evolutionActive ? 'animate-pulse' : ''}`} style={{ width: evolutionActive ? '80%' : '0%' }} />
-                    </div>
-                    <span className="text-[10px] font-mono text-gray-400">
-                      {evolutionActive ? 'Analizando AST (Abstract Syntax Tree)...' : 'Sistema en reposo.'}
-                    </span>
+                  <div className="flex justify-between border-b border-white/5 pb-1">
+                    <span className="text-gray-400">Motor Gráfico:</span>
+                    <span className="text-white font-bold">WebGL 2.0 / WebGPU Ready</span>
                   </div>
-                </div>
-              </div>
-
-              <div className="mt-4 flex flex-col gap-2">
-                <span className="text-xs font-bold text-gray-300 flex items-center gap-2">
-                  <Terminal className="w-4 h-4 text-emerald-400" />
-                  Registro de Actividad Genética / Parches en Tiempo Real
-                </span>
-                <div className="bg-black/90 p-4 rounded-xl border border-white/10 font-mono text-xs h-64 overflow-y-auto flex flex-col gap-1.5 shadow-inner">
-                  {evolutionLogs.map((log, i) => (
-                    <div key={i} className={`${log.includes('GEN') ? 'text-emerald-400' : 'text-gray-400'}`}>
-                      {log}
-                    </div>
-                  ))}
-                  {evolutionActive && (
-                    <div className="text-yellow-400 flex items-center gap-2 mt-2 animate-pulse">
-                      <span className="w-2 h-4 bg-yellow-400 inline-block" />
-                      Calculando siguiente mutación...
-                    </div>
-                  )}
+                  <div className="flex justify-between border-b border-white/5 pb-1">
+                    <span className="text-gray-400">Servidor de Audio:</span>
+                    <span className="text-white font-bold">Web Audio Synthesizer</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-gray-400">Creador de SaviaOS:</span>
+                    <span className="text-blue-400 font-bold">Alberto Arce</span>
+                  </div>
                 </div>
               </div>
             </div>

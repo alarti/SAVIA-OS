@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import KernelMonitor from './components/KernelMonitor';
 import DesktopEnvironment from './components/DesktopEnvironment';
 import LoginScreen from './components/LoginScreen';
@@ -9,6 +9,10 @@ export type { UserData };
 export default function App() {
   const [x11Started, setX11Started] = useState(true);
   const [currentUser, setCurrentUser] = useState<UserData | null>(null);
+
+  useEffect(() => {
+    document.title = "Savia OS";
+  }, []);
 
   if (x11Started) {
     if (!currentUser) {

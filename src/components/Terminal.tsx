@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import type { UserData } from '../App';
 import { AVAILABLE_PACKAGES, getInstalledPackageIds, installPackage, uninstallPackage, isPackageInstalled } from '../utils/packageRegistry';
 import { soundEngine } from '../utils/soundEngine';
+import { securityEngine } from '../utils/securityEngine';
 
 type FileSystem = {
   [path: string]: {
@@ -66,6 +67,14 @@ export default function TerminalApp({ user, onOpenApp }: { user: UserData; onOpe
   const handleCommand = async (cmdStr: string) => {
     const trimmed = cmdStr.trim();
     if (!trimmed) return;
+
+    // Behavioral & Security Shield Evaluation
+    const checkSec = securityEngine.analyzeTerminalCommand(cmdStr, user?.username || 'user');
+    if (!checkSec.allowed) {
+      setOutput(prev => [...prev, `[ESCUDO CIBERSEGURIDAD SAVIA-OS] Bloqueado: ${checkSec.reason}`]);
+      soundEngine.playError();
+      return;
+    }
 
     let promptStr = '';
     if (shellMode === 'cmd') {

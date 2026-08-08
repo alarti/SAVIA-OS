@@ -18,9 +18,9 @@ export default function AboutApp() {
 
         <div className="flex-1 text-center sm:text-left">
           <div className="flex items-center justify-center sm:justify-start gap-2">
-            <h1 className="text-2xl font-extrabold tracking-tight text-white">SAVIA-OS</h1>
+            <h1 className="text-2xl font-extrabold tracking-tight text-white">SaviaOS</h1>
             <span className="bg-blue-500/20 text-blue-400 text-xs px-2.5 py-0.5 rounded-full font-mono font-bold border border-blue-500/30">
-              v2.4 Enterprise Edition
+              v2.5 Enterprise Edition
             </span>
           </div>
           <p className="text-xs text-gray-300 mt-1 max-w-xl">

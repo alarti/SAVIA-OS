@@ -151,7 +151,7 @@ export type DesktopIcon = {
 };
 
 const DEFAULT_DESKTOP_ICONS: DesktopIcon[] = [
-  { id: 'about', title: 'Acerca de OS', appType: 'about', iconType: 'info', x: 20, y: 20 },
+  { id: 'about', title: 'Acerca de SaviaOS', appType: 'about', iconType: 'info', x: 20, y: 20 },
   { id: 'theme', title: 'Fondos & Temas', appType: 'theme', iconType: 'theme', x: 20, y: 120 },
   { id: 'controlpanel', title: 'Panel Control', appType: 'controlpanel', iconType: 'controlpanel', x: 20, y: 220 },
   { id: 'appstore', title: 'App Store', appType: 'appstore', iconType: 'appstore', x: 20, y: 320 },
@@ -494,8 +494,8 @@ export default function DesktopEnvironment({ user, onExit }: { user: UserData, o
       defaultW = 460;
       defaultH = 580;
     } else if (type === 'about') {
-      defaultW = 680;
-      defaultH = 520;
+      defaultW = Math.min(940, Math.max(760, Math.floor(screenW * 0.75)));
+      defaultH = Math.min(700, Math.max(580, Math.floor(screenH * 0.78)));
     }
 
     const windowCount = windows.length;
@@ -1071,13 +1071,14 @@ export default function DesktopEnvironment({ user, onExit }: { user: UserData, o
         </div>
       )}
 
-      {/* Floating Taskbar */}
-      <footer className="absolute bottom-2 left-1/2 -translate-x-1/2 h-12 bg-[#18181B]/90 backdrop-blur-xl border border-white/10 rounded-2xl flex items-center px-3 z-40 shadow-2xl" onClick={e => e.stopPropagation()}>
-        <button onClick={() => { setIsStartMenuOpen(!isStartMenuOpen); setIsVolumeMenuOpen(false); }} className="flex items-center justify-center p-2 hover:bg-white/10 rounded-xl transition-colors mx-1" title="SAVIA-OS Start">
-          <Zap className="w-5 h-5 text-blue-500 fill-blue-500" />
+      {/* Floating Extended Taskbar */}
+      <footer className="absolute bottom-3 left-1/2 -translate-x-1/2 h-15 bg-[#16161A]/92 backdrop-blur-2xl border border-white/15 rounded-2xl flex items-center px-4 z-40 shadow-[0_16px_48px_rgba(0,0,0,0.7)] gap-1.5" onClick={e => e.stopPropagation()}>
+        <button onClick={() => { setIsStartMenuOpen(!isStartMenuOpen); setIsVolumeMenuOpen(false); }} className="flex items-center justify-center p-2.5 hover:bg-blue-600/20 active:scale-95 text-blue-400 hover:text-blue-300 rounded-xl transition-all mx-0.5 group relative" title="Menú de Inicio SaviaOS">
+          <Zap className="w-5 h-5 text-blue-400 fill-blue-400/20 group-hover:fill-blue-400 transition-all" />
+          <span className="sr-only">Start</span>
         </button>
-        <div className="h-6 w-px bg-white/10 mx-2"></div>
-        <div className="flex items-center gap-1 overflow-x-auto px-1 no-scrollbar">
+        <div className="h-7 w-px bg-white/15 mx-1.5"></div>
+        <div className="flex items-center gap-1.5 overflow-x-auto px-1 max-w-[55vw] sm:max-w-[65vw] no-scrollbar">
           {windows.map(w => (
             <button
               key={w.id}
@@ -1087,7 +1088,7 @@ export default function DesktopEnvironment({ user, onExit }: { user: UserData, o
                 e.stopPropagation();
                 setWindowContextMenu({ id: w.id, x: e.clientX, y: e.clientY });
               }}
-              className={`flex items-center gap-2 p-2 rounded-xl transition-all relative group ${activeId === w.id && !w.minimized ? 'bg-white/20 shadow-sm' : 'hover:bg-white/10'}`}
+              className={`flex items-center gap-2 px-3 py-2 rounded-xl transition-all relative group shrink-0 ${activeId === w.id && !w.minimized ? 'bg-white/15 shadow-inner border border-white/10' : 'hover:bg-white/10'}`}
               title={w.title}
             >
               {w.type === 'about' && <Info className="w-5 h-5 shrink-0 text-blue-400" />}
@@ -1110,19 +1111,21 @@ export default function DesktopEnvironment({ user, onExit }: { user: UserData, o
               {w.type === 'calculator' && <CalcIcon className="w-5 h-5 shrink-0 text-amber-400" />}
               {w.type === 'calendar' && <CalendarIcon className="w-5 h-5 shrink-0 text-cyan-400" />}
               {w.type === 'imageviewer' && <ImageIcon className="w-5 h-5 shrink-0 text-purple-400" />}
-              
+
+              <span className="hidden lg:inline text-xs font-medium text-gray-200 truncate max-w-[120px]">{w.title}</span>
+
               {/* Active Indicator */}
-              <div className={`absolute -bottom-1 left-1/2 -translate-x-1/2 h-1 rounded-full transition-all ${activeId === w.id && !w.minimized ? 'w-4 bg-blue-500' : 'w-1 bg-gray-500 opacity-0 group-hover:opacity-100'}`} />
+              <div className={`absolute -bottom-1.5 left-1/2 -translate-x-1/2 rounded-full transition-all ${activeId === w.id && !w.minimized ? 'w-5 h-1 bg-blue-400 shadow-[0_0_8px_rgba(96,165,250,0.8)]' : 'w-1.5 h-1.5 bg-gray-500 opacity-0 group-hover:opacity-100'}`} />
             </button>
           ))}
         </div>
-        <div className="h-6 w-px bg-white/10 mx-2"></div>
+        <div className="h-7 w-px bg-white/15 mx-1.5"></div>
 
         {/* Taskbar Audio & Tray */}
         <div className="flex items-center gap-2 relative">
           <button
             onClick={() => { setIsControlCenterOpen(!isControlCenterOpen); setIsStartMenuOpen(false); setIsVolumeMenuOpen(false); }}
-            className="p-1.5 hover:bg-white/10 rounded-lg transition-colors text-gray-300 relative"
+            className="p-2 hover:bg-white/10 rounded-xl transition-colors text-gray-300 hover:text-white relative"
             title="Panel de Control SAVIA-OS"
           >
             <Sliders className="w-4 h-4 text-amber-400" />
@@ -1130,22 +1133,22 @@ export default function DesktopEnvironment({ user, onExit }: { user: UserData, o
 
           {/* Control Center Popup */}
           {isControlCenterOpen && (
-            <div className="absolute bottom-12 right-0 z-50 animate-in fade-in slide-in-from-bottom-2 duration-150">
+            <div className="absolute bottom-14 right-0 z-50 animate-in fade-in slide-in-from-bottom-2 duration-150">
               <ControlCenter onOpenApp={openApp} onClose={() => setIsControlCenterOpen(false)} />
             </div>
           )}
 
           <button
             onClick={() => { setIsVolumeMenuOpen(!isVolumeMenuOpen); setIsStartMenuOpen(false); }}
-            className="p-1.5 hover:bg-white/10 rounded-lg transition-colors text-gray-300 relative"
+            className="p-2 hover:bg-white/10 rounded-xl transition-colors text-gray-300 hover:text-white relative"
             title="Control de Volumen"
           >
             {isMuted || volume === 0 ? <VolumeX className="w-4 h-4 text-red-400" /> : <Volume2 className="w-4 h-4 text-blue-400" />}
           </button>
 
-          <div className="flex flex-col items-end leading-tight text-[#A1A1AA] text-xs font-medium px-2 cursor-pointer hover:bg-white/10 py-1 rounded-lg transition-colors" onClick={() => openApp('calendar', 'Calendario y Reloj')}>
-             <span>{new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
-             <span className="text-[9px]">{new Date().toLocaleDateString()}</span>
+          <div className="flex flex-col items-end leading-tight text-[#A1A1AA] text-xs font-medium px-2.5 cursor-pointer hover:bg-white/10 py-1.5 rounded-xl transition-colors" onClick={() => openApp('calendar', 'Calendario y Reloj')}>
+             <span className="font-mono font-bold text-white text-xs">{new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+             <span className="text-[10px] text-gray-400">{new Date().toLocaleDateString()}</span>
           </div>
         </div>
       </footer>
