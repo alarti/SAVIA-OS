@@ -175,7 +175,24 @@ export default function FileExplorer({ user, onOpenFile }: { user?: UserData; on
     setCurrentPath(defaultHome);
     setHistory([defaultHome]);
     setHistoryIndex(0);
+    try {
+      const saved = localStorage.getItem('savia_os_mock_fs');
+      if (saved) setFs(JSON.parse(saved));
+      else setFs(INITIAL_FS);
+    } catch {}
   }, [activeUsername]);
+
+  useEffect(() => {
+    const handleGuestReset = () => {
+      try {
+        const saved = localStorage.getItem('savia_os_mock_fs');
+        if (saved) setFs(JSON.parse(saved));
+        else setFs(INITIAL_FS);
+      } catch {}
+    };
+    window.addEventListener('savia_os_guest_reset', handleGuestReset);
+    return () => window.removeEventListener('savia_os_guest_reset', handleGuestReset);
+  }, []);
   const [selectedItemId, setSelectedItemId] = useState<string | null>(null);
   const [isTouch, setIsTouch] = useState(false);
   const [contextMenu, setContextMenu] = useState<{ x: number, y: number, item: FileItem | null } | null>(null);

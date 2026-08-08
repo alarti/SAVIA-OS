@@ -3,6 +3,7 @@ import KernelMonitor from './components/KernelMonitor';
 import DesktopEnvironment from './components/DesktopEnvironment';
 import LoginScreen from './components/LoginScreen';
 import type { UserData } from './utils/auth';
+import { userStorage } from './utils/userStorage';
 
 export type { UserData };
 
@@ -14,9 +15,16 @@ export default function App() {
     document.title = "Savia OS";
   }, []);
 
+  const handleLogin = (user: UserData) => {
+    if (user.username === 'guest' || user.isGuest) {
+      userStorage.resetGuestAccount();
+    }
+    setCurrentUser(user);
+  };
+
   if (x11Started) {
     if (!currentUser) {
-      return <LoginScreen onLogin={setCurrentUser} onPowerOff={() => setX11Started(false)} />;
+      return <LoginScreen onLogin={handleLogin} onPowerOff={() => setX11Started(false)} />;
     }
     return <DesktopEnvironment user={currentUser} onExit={() => setCurrentUser(null)} />;
   }

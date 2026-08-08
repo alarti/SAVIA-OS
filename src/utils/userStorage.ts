@@ -249,5 +249,86 @@ export const userStorage = {
     try {
       localStorage.setItem(key, JSON.stringify(apps));
     } catch {}
+  },
+
+  // --- GUEST ACCOUNT AUTOMATIC RESET ---
+  resetGuestAccount(): void {
+    const keysToRemove = [
+      'savia_os_desktop_icons_guest',
+      'savia_os_wallpaper_guest',
+      'savia_os_theme_guest',
+      'savia_os_accent_guest',
+      'savia_os_overlay_opacity_guest',
+      'savia_os_recent_files_guest',
+      'savia_office_documents_guest',
+      'savia_os_wine_installed_apps_guest'
+    ];
+    for (const key of keysToRemove) {
+      try {
+        localStorage.removeItem(key);
+      } catch (e) {
+        console.error('Error removing guest key ' + key, e);
+      }
+    }
+
+    // Reset mock file system for guest in localStorage
+    try {
+      const savedFsStr = localStorage.getItem('savia_os_mock_fs');
+      if (savedFsStr) {
+        const fs = JSON.parse(savedFsStr);
+
+        const defaultGuestPaths = [
+          '/',
+          '/home',
+          '/home/guest',
+          '/home/guest/Desktop',
+          '/home/guest/Documents',
+          '/home/guest/Downloads',
+          '/home/guest/Pictures'
+        ];
+
+        Object.keys(fs).forEach(dirPath => {
+          if (dirPath.startsWith('/home/guest')) {
+            if (!defaultGuestPaths.includes(dirPath)) {
+              delete fs[dirPath];
+            }
+          } else if (Array.isArray(fs[dirPath])) {
+            // Filter out items owned by guest in non-guest directories
+            fs[dirPath] = fs[dirPath].filter((item: any) => item.owner !== 'guest');
+          }
+        });
+
+        // Restore default guest file system structure
+        fs['/home/guest'] = [
+          { id: 'g_desktop', name: 'Desktop', type: 'folder', iconType: 'folder', date: 'Hoy 08:00', permissions: 'drwxr-xr-x', owner: 'guest' },
+          { id: 'g_docs', name: 'Documents', type: 'folder', iconType: 'folder', date: 'Hoy 08:00', permissions: 'drwxr-xr-x', owner: 'guest' },
+          { id: 'g_downloads', name: 'Downloads', type: 'folder', iconType: 'folder', date: 'Hoy 08:00', permissions: 'drwxr-xr-x', owner: 'guest' },
+          { id: 'g_pictures', name: 'Pictures', type: 'folder', iconType: 'folder', date: 'Hoy 08:00', permissions: 'drwxr-xr-x', owner: 'guest' },
+          { id: 'guest_readme', name: 'ReadMe_Guest.txt', type: 'file', iconType: 'text', size: '1 KB', date: 'Hoy 08:00', permissions: '-rw-r--r--', owner: 'guest' },
+          { id: 'guest_welcome', name: 'Welcome.pdf', type: 'file', iconType: 'file', size: '500 KB', date: 'Hoy 08:00', permissions: '-rw-r--r--', owner: 'guest' },
+        ];
+        fs['/home/guest/Desktop'] = [
+          { id: 'gd_welcome', name: 'Bienvenida_Invitado.txt', type: 'file', iconType: 'text', size: '1 KB', date: 'Hoy 08:00', permissions: '-rw-r--r--', owner: 'guest' },
+        ];
+        fs['/home/guest/Documents'] = [
+          { id: 'gdoc_guest', name: 'Documento_Invitado.docx', type: 'file', iconType: 'text', size: '12 KB', date: 'Hoy 08:00', permissions: '-rw-r--r--', owner: 'guest' },
+        ];
+        fs['/home/guest/Downloads'] = [
+          { id: 'gdl_guest', name: 'Ejemplo_Invitado.zip', type: 'file', iconType: 'file', size: '1.2 MB', date: 'Hoy 08:00', permissions: '-rw-r--r--', owner: 'guest' },
+        ];
+        fs['/home/guest/Pictures'] = [
+          { id: 'gpic_guest', name: 'Foto_Invitado.png', type: 'file', iconType: 'image', size: '220 KB', date: 'Hoy 08:00', permissions: '-rw-r--r--', owner: 'guest' },
+        ];
+
+        localStorage.setItem('savia_os_mock_fs', JSON.stringify(fs));
+      }
+    } catch (e) {
+      console.error('Error resetting guest mock filesystem:', e);
+    }
+
+    // Trigger update events
+    window.dispatchEvent(new CustomEvent('savia_os_desktop_icons_updated', { detail: { username: 'guest' } }));
+    window.dispatchEvent(new CustomEvent('savia_os_recents_updated', { detail: { username: 'guest' } }));
+    window.dispatchEvent(new CustomEvent('savia_os_guest_reset'));
   }
 };

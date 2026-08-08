@@ -724,7 +724,14 @@ export default function DesktopEnvironment({ user, onExit }: { user: UserData, o
       setDesktopIcons(userStorage.getDesktopIcons(user.username));
     };
 
+    const handleGuestResetEvent = () => {
+      setDesktopIcons(userStorage.getDesktopIcons(user.username));
+      setWallpaper(userStorage.getWallpaper(user.username));
+      setOverlayOpacity(userStorage.getOverlayOpacity(user.username));
+    };
+
     window.addEventListener('savia_os_desktop_icons_updated', handleIconsUpdated);
+    window.addEventListener('savia_os_guest_reset', handleGuestResetEvent);
 
     const handleThemeChange = (e: any) => {
       if (e.detail?.wallpaper) setWallpaper(e.detail.wallpaper);
@@ -744,6 +751,8 @@ export default function DesktopEnvironment({ user, onExit }: { user: UserData, o
     return () => {
       unsub();
       window.removeEventListener('click', closeWindowCtxMenu);
+      window.removeEventListener('savia_os_desktop_icons_updated', handleIconsUpdated);
+      window.removeEventListener('savia_os_guest_reset', handleGuestResetEvent);
       window.removeEventListener('savia_os_package_updated', handlePkgUpdate);
       window.removeEventListener('webos_package_updated', handlePkgUpdate);
       window.removeEventListener('savia_os_theme_changed', handleThemeChange as any);

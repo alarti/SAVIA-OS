@@ -256,7 +256,7 @@ export default function OfficeApp({ initialFile, user }: { initialFile?: string;
       else if (mode === 'calc') contentToSave = JSON.stringify(sheets);
       else if (mode === 'impress') contentToSave = JSON.stringify(slides);
 
-      const savedDocsKey = 'savia_office_documents';
+      const savedDocsKey = `savia_office_documents_${username}`;
       const existingStr = localStorage.getItem(savedDocsKey) || '{}';
       const existing = JSON.parse(existingStr);
       existing[docTitle] = {

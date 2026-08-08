@@ -8,6 +8,7 @@ import { soundEngine } from '../utils/soundEngine';
 import { getInstalledPackageIds, AVAILABLE_PACKAGES, installPackage, uninstallPackage, isPackageInstalled } from '../utils/packageRegistry';
 import { verifyUserPassword, saveUserPassword, DEFAULT_USERS, UserData } from '../utils/auth';
 import { securityEngine, SecurityEvent } from '../utils/securityEngine';
+import { userStorage } from '../utils/userStorage';
 import SudoDialog from './SudoDialog';
 
 type TabType = 'security' | 'appstore' | 'appearance' | 'sound' | 'devices' | 'accounts' | 'network';
@@ -106,22 +107,23 @@ export default function ControlPanelApp({ user, onOpenApp }: { user?: UserData; 
   };
 
   // --- WALLPAPER & APPEARANCE STATE ---
+  const activeUsername = user?.username || 'user';
   const [selectedTheme, setSelectedTheme] = useState(() => {
-    return localStorage.getItem('savia_os_wallpaper') || 'Deep Space';
+    return userStorage.getWallpaper(activeUsername) || 'Deep Space';
   });
   const [customBgUrl, setCustomBgUrl] = useState('');
   const [translucency, setTranslucency] = useState(true);
 
   const applyWallpaperPreset = (presetName: string, url: string) => {
     setSelectedTheme(presetName);
-    localStorage.setItem('savia_os_wallpaper', url);
+    userStorage.setWallpaper(activeUsername, url);
     soundEngine.playNotification();
     window.dispatchEvent(new Event('storage'));
   };
 
   const applyCustomWallpaper = () => {
     if (!customBgUrl.trim()) return;
-    localStorage.setItem('savia_os_wallpaper', customBgUrl.trim());
+    userStorage.setWallpaper(activeUsername, customBgUrl.trim());
     setSelectedTheme('Personalizado');
     soundEngine.playNotification();
     window.dispatchEvent(new Event('storage'));
