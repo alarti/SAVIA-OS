@@ -95,6 +95,7 @@ export default function AppStore({ user, onOpenApp }: { user?: UserData; onOpenA
           <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider px-2 py-1">Categories</span>
           {[
             { id: 'all', label: 'All Packages' },
+            { id: 'windows', label: 'Apps Windows (Wine Win32)' },
             { id: 'system', label: 'System & Core' },
             { id: 'utilities', label: 'Utilities' },
             { id: 'development', label: 'Development' },

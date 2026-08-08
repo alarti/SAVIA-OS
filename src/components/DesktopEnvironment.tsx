@@ -19,13 +19,14 @@ import OfficeApp from './OfficeApp';
 import CalculatorApp from './CalculatorApp';
 import CalendarClockApp from './CalendarClockApp';
 import ImageViewerApp from './ImageViewerApp';
+import WineRunnerApp, { WIN32_APP_CATALOG } from './WineRunnerApp';
 import { soundEngine } from '../utils/soundEngine';
 import { getInstalledPackageIds, AVAILABLE_PACKAGES } from '../utils/packageRegistry';
 
 type WindowData = {
   id: string;
   title: string;
-  type: 'terminal' | 'webgl' | 'folder' | 'browser' | 'texteditor' | 'pdfviewer' | 'office' | 'taskmanager' | 'tetris' | 'appstore' | 'soundsettings' | 'paint' | 'about' | 'controlpanel' | 'theme' | 'calculator' | 'calendar' | 'imageviewer';
+  type: 'terminal' | 'webgl' | 'folder' | 'browser' | 'texteditor' | 'pdfviewer' | 'office' | 'taskmanager' | 'tetris' | 'appstore' | 'soundsettings' | 'paint' | 'about' | 'controlpanel' | 'theme' | 'calculator' | 'calendar' | 'imageviewer' | 'wine';
   data?: any;
   x: number;
   y: number;
@@ -166,12 +167,19 @@ const DEFAULT_DESKTOP_ICONS: DesktopIcon[] = [
   { id: 'savia_doc', title: 'SaviaDoc', appType: 'office', iconType: 'doc', docData: 'nuevo documento.docx', x: 240, y: 220 },
   { id: 'savia_xls', title: 'SaviaXls', appType: 'office', iconType: 'xls', docData: 'nuevo documento.xlsx', x: 240, y: 320 },
   { id: 'savia_ppt', title: 'SaviaPpt', appType: 'office', iconType: 'ppt', docData: 'nuevo documento.pptx', x: 240, y: 420 },
+  { id: 'wine', title: 'Wine Subsystem', appType: 'wine', iconType: 'wine', x: 350, y: 20 },
+  { id: 'winmine', title: 'Buscaminas.exe', appType: 'wine', iconType: 'wine', docData: 'winmine', x: 350, y: 120 },
+  { id: 'pinball', title: '3D_Pinball.exe', appType: 'wine', iconType: 'wine', docData: 'pinball', x: 350, y: 220 },
+  { id: 'solitaire', title: 'Solitario.exe', appType: 'wine', iconType: 'wine', docData: 'solitaire', x: 350, y: 320 },
+  { id: 'putty', title: 'putty.exe', appType: 'wine', iconType: 'wine', docData: 'putty', x: 350, y: 420 },
+  { id: 'vlc_win32', title: 'vlc.exe', appType: 'wine', iconType: 'wine', docData: 'vlc_win32', x: 460, y: 20 },
 ];
 
 export default function DesktopEnvironment({ user, onExit }: { user: UserData, onExit: () => void }) {
   const [windows, setWindows] = useState<WindowData[]>([]);
   const [activeId, setActiveId] = useState<string>('');
   const [isStartMenuOpen, setIsStartMenuOpen] = useState(false);
+  const [startMenuSearch, setStartMenuSearch] = useState('');
   const [isSaviaMenuOpen, setIsSaviaMenuOpen] = useState(false);
   const [isControlCenterOpen, setIsControlCenterOpen] = useState(false);
   const [isVolumeMenuOpen, setIsVolumeMenuOpen] = useState(false);
@@ -287,6 +295,15 @@ export default function DesktopEnvironment({ user, onExit }: { user: UserData, o
     const handlePkgUpdate = () => {
       setInstalledPackages(getInstalledPackageIds());
     };
+
+    const handleIconsUpdated = () => {
+      try {
+        const saved = localStorage.getItem('savia_os_desktop_icons');
+        if (saved) setDesktopIcons(JSON.parse(saved));
+      } catch {}
+    };
+
+    window.addEventListener('savia_os_desktop_icons_updated', handleIconsUpdated);
 
     const handleThemeChange = (e: any) => {
       if (e.detail?.wallpaper) setWallpaper(e.detail.wallpaper);
@@ -496,6 +513,9 @@ export default function DesktopEnvironment({ user, onExit }: { user: UserData, o
     } else if (type === 'about') {
       defaultW = Math.min(940, Math.max(760, Math.floor(screenW * 0.75)));
       defaultH = Math.min(700, Math.max(580, Math.floor(screenH * 0.78)));
+    } else if (type === 'wine') {
+      defaultW = Math.min(1080, Math.max(780, Math.floor(screenW * 0.8)));
+      defaultH = Math.min(740, Math.max(540, Math.floor(screenH * 0.78)));
     }
 
     const windowCount = windows.length;
@@ -613,6 +633,13 @@ export default function DesktopEnvironment({ user, onExit }: { user: UserData, o
               </button>
               
               <div className="absolute left-full top-0 ml-1 hidden group-hover:flex flex-col w-56 bg-[#1C1C1F]/95 backdrop-blur-2xl border border-white/15 rounded-xl p-1.5 shadow-2xl">
+                <button
+                  onClick={() => { setCreateIconModalOpen(true); setNewIconTitle('Acceso Win32'); setNewIconAppType('wine'); setContextMenu(null); }}
+                  className="flex items-center gap-2.5 px-3 py-2 hover:bg-amber-600 rounded-lg text-left font-semibold text-amber-300"
+                >
+                  <Box className="w-4 h-4 text-amber-400" />
+                  <span>Ejecutable Win32 (.exe)...</span>
+                </button>
                 <button
                   onClick={() => { setCreateIconModalOpen(true); setNewIconTitle('Nuevo Acceso Directo'); setContextMenu(null); }}
                   className="flex items-center gap-2.5 px-3 py-2 hover:bg-blue-600 rounded-lg text-left font-semibold text-emerald-400"
@@ -819,6 +846,7 @@ export default function DesktopEnvironment({ user, onExit }: { user: UserData, o
             {icon.iconType === 'doc' && <FileText className="w-9 h-9 text-blue-500 drop-shadow-lg group-hover:scale-105 transition-transform" />}
             {icon.iconType === 'xls' && <Activity className="w-9 h-9 text-emerald-500 drop-shadow-lg group-hover:scale-105 transition-transform" />}
             {icon.iconType === 'ppt' && <Monitor className="w-9 h-9 text-amber-500 drop-shadow-lg group-hover:scale-105 transition-transform" />}
+            {icon.iconType === 'wine' && <Box className="w-9 h-9 text-amber-500 drop-shadow-lg group-hover:scale-105 transition-transform" />}
 
             <span className="text-white text-[11px] font-semibold drop-shadow-md text-center leading-tight">{icon.title}</span>
           </div>
@@ -875,6 +903,7 @@ export default function DesktopEnvironment({ user, onExit }: { user: UserData, o
                 {w.type === 'calculator' && <CalcIcon className="w-3.5 h-3.5 text-amber-400" />}
                 {w.type === 'calendar' && <CalendarIcon className="w-3.5 h-3.5 text-cyan-400" />}
                 {w.type === 'imageviewer' && <ImageIcon className="w-3.5 h-3.5 text-purple-400" />}
+                {w.type === 'wine' && <Box className="w-3.5 h-3.5 text-amber-400" />}
                 <span className="text-xs font-medium tracking-wide">{w.title}</span>
               </div>
               <div className="flex items-center gap-3">
@@ -903,6 +932,7 @@ export default function DesktopEnvironment({ user, onExit }: { user: UserData, o
               {w.type === 'calculator' && <CalculatorApp />}
               {w.type === 'calendar' && <CalendarClockApp />}
               {w.type === 'imageviewer' && <ImageViewerApp />}
+              {w.type === 'wine' && <WineRunnerApp initialFile={w.data} onOpenApp={(type, title, data) => openApp(type as any, title, data)} />}
             </div>
 
             {/* Window Resizing Handle */}
@@ -928,102 +958,211 @@ export default function DesktopEnvironment({ user, onExit }: { user: UserData, o
       {/* Start Menu */}
       {isStartMenuOpen && (
         <div 
-          className="absolute bottom-[56px] left-1/2 -translate-x-1/2 w-[340px] sm:w-[500px] h-[520px] bg-[#1C1C1F]/95 backdrop-blur-3xl rounded-2xl shadow-2xl border border-white/10 flex flex-col p-5 z-50 text-white"
+          className="absolute bottom-[56px] left-1/2 -translate-x-1/2 w-[340px] sm:w-[540px] h-[540px] bg-[#1C1C1F]/95 backdrop-blur-3xl rounded-2xl shadow-2xl border border-white/10 flex flex-col p-5 z-50 text-white animate-in zoom-in-95 duration-100"
           onClick={e => e.stopPropagation()}
         >
           {/* Search */}
-          <div className="relative mb-5">
-            <Search className="absolute left-3 top-2.5 w-4 h-4 text-gray-400" />
-            <input type="text" placeholder="Buscar aplicaciones, paquetes SAVIA-OS, comandos..." className="w-full bg-black/40 border border-white/10 focus:border-blue-500 px-10 py-2 rounded-full text-sm outline-none placeholder:text-gray-500 transition-colors shadow-sm text-white" />
-          </div>
-          
-          {/* Pinned Apps */}
-          <div className="mb-3 flex justify-between items-center px-1">
-            <h3 className="text-xs font-bold tracking-wide text-gray-300">Aplicaciones del Sistema SAVIA-OS</h3>
-            <span className="text-[10px] text-blue-400 font-mono">{installedPackages.length} Paquetes Listos</span>
-          </div>
-
-          <div className="grid grid-cols-4 sm:grid-cols-6 gap-y-4 gap-x-2 mb-6">
-            <div className="flex flex-col items-center gap-1.5 cursor-pointer hover:bg-white/10 p-2 rounded-lg transition-colors" onClick={() => openApp('about', 'Acerca de SAVIA-OS (Alberto Arce)')}>
-              <Info className="w-7 h-7 text-blue-400" />
-              <span className="text-[10px] font-medium text-center">Alberto Arce</span>
-            </div>
-            <div className="flex flex-col items-center gap-1.5 cursor-pointer hover:bg-white/10 p-2 rounded-lg transition-colors" onClick={() => openApp('controlpanel', 'Panel de Control SAVIA-OS')}>
-              <Settings className="w-7 h-7 text-emerald-400" />
-              <span className="text-[10px] font-medium text-center">Control Panel</span>
-            </div>
-            <div className="flex flex-col items-center gap-1.5 cursor-pointer hover:bg-white/10 p-2 rounded-lg transition-colors" onClick={() => openApp('appstore', 'Software Center')}>
-              <Box className="w-7 h-7 text-amber-400" />
-              <span className="text-[10px] font-medium text-center">App Store</span>
-            </div>
-            <div className="flex flex-col items-center gap-1.5 cursor-pointer hover:bg-white/10 p-2 rounded-lg transition-colors" onClick={() => openApp('terminal', 'Terminal')}>
-              <Terminal className="w-7 h-7 text-gray-200" />
-              <span className="text-[10px] font-medium text-center">Terminal</span>
-            </div>
-            <div className="flex flex-col items-center gap-1.5 cursor-pointer hover:bg-white/10 p-2 rounded-lg transition-colors" onClick={() => openApp('soundsettings', 'Sound Control')}>
-              <Radio className="w-7 h-7 text-pink-400" />
-              <span className="text-[10px] font-medium text-center">Audio Core</span>
-            </div>
-            <div className="flex flex-col items-center gap-1.5 cursor-pointer hover:bg-white/10 p-2 rounded-lg transition-colors" onClick={() => openApp('folder', 'File Explorer')}>
-              <Folder className="w-7 h-7 text-amber-400" fill="currentColor" />
-              <span className="text-[10px] font-medium text-center">Explorer</span>
-            </div>
-            <div className="flex flex-col items-center gap-1.5 cursor-pointer hover:bg-white/10 p-2 rounded-lg transition-colors" onClick={() => openApp('browser', 'Navegador Web')}>
-              <Globe className="w-7 h-7 text-blue-400" />
-              <span className="text-[10px] font-medium text-center">Browser</span>
-            </div>
-            <div className="flex flex-col items-center gap-1.5 cursor-pointer hover:bg-white/10 p-2 rounded-lg transition-colors" onClick={() => openApp('pdfviewer', 'PDF Studio')}>
-              <FileImage className="w-7 h-7 text-red-500" />
-              <span className="text-[10px] font-medium text-center">PDF Viewer</span>
-            </div>
-            <div className="flex flex-col items-center gap-1.5 cursor-pointer hover:bg-white/10 p-2 rounded-lg transition-colors" onClick={() => openApp('office', 'SaviaDoc', 'nuevo documento.docx')}>
-              <FileText className="w-7 h-7 text-blue-500" />
-              <span className="text-[10px] font-medium text-center">SaviaDoc</span>
-            </div>
-            <div className="flex flex-col items-center gap-1.5 cursor-pointer hover:bg-white/10 p-2 rounded-lg transition-colors" onClick={() => openApp('office', 'SaviaXls', 'nuevo documento.xlsx')}>
-              <Activity className="w-7 h-7 text-emerald-500" />
-              <span className="text-[10px] font-medium text-center">SaviaXls</span>
-            </div>
-            <div className="flex flex-col items-center gap-1.5 cursor-pointer hover:bg-white/10 p-2 rounded-lg transition-colors" onClick={() => openApp('office', 'SaviaPpt', 'nuevo documento.pptx')}>
-              <Monitor className="w-7 h-7 text-amber-500" />
-              <span className="text-[10px] font-medium text-center">SaviaPpt</span>
-            </div>
-            <div className="flex flex-col items-center gap-1.5 cursor-pointer hover:bg-white/10 p-2 rounded-lg transition-colors" onClick={() => openApp('calculator', 'Calculadora Científica')}>
-              <CalcIcon className="w-7 h-7 text-amber-400" />
-              <span className="text-[10px] font-medium text-center">Calculadora</span>
-            </div>
-            <div className="flex flex-col items-center gap-1.5 cursor-pointer hover:bg-white/10 p-2 rounded-lg transition-colors" onClick={() => openApp('calendar', 'Calendario y Reloj')}>
-              <CalendarIcon className="w-7 h-7 text-cyan-400" />
-              <span className="text-[10px] font-medium text-center">Calendario</span>
-            </div>
-            <div className="flex flex-col items-center gap-1.5 cursor-pointer hover:bg-white/10 p-2 rounded-lg transition-colors" onClick={() => openApp('imageviewer', 'Visor de Imágenes')}>
-              <ImageIcon className="w-7 h-7 text-purple-400" />
-              <span className="text-[10px] font-medium text-center">Galería</span>
-            </div>
+          <div className="relative mb-4">
+            <Search className="absolute left-3.5 top-2.5 w-4 h-4 text-gray-400" />
+            <input 
+              type="text" 
+              value={startMenuSearch}
+              onChange={e => setStartMenuSearch(e.target.value)}
+              placeholder="Buscar app Win32 (buscaminas, pinball, putty), comandos..." 
+              className="w-full bg-black/40 border border-white/10 focus:border-blue-500 px-10 py-2.5 rounded-2xl text-sm outline-none placeholder:text-gray-500 transition-colors shadow-sm text-white font-medium" 
+              autoFocus
+            />
+            {startMenuSearch && (
+              <button onClick={() => setStartMenuSearch('')} className="absolute right-3.5 top-2.5 text-gray-400 hover:text-white">
+                <X className="w-4 h-4" />
+              </button>
+            )}
           </div>
 
-          {/* Quick CLI Package Commands */}
-          <div className="mb-2 px-1">
-            <h3 className="text-xs font-bold tracking-wide text-gray-300">Paquetes Registrados en APT/NPM</h3>
-          </div>
-          <div className="grid grid-cols-2 gap-2 overflow-y-auto max-h-32 p-1">
-            {installedPackages.map(pkgId => {
-              const info = AVAILABLE_PACKAGES.find(p => p.id === pkgId);
-              return (
-                <div key={pkgId} className="flex items-center gap-2 p-2 bg-white/5 hover:bg-white/10 rounded-lg cursor-pointer transition-colors" onClick={() => openApp('terminal', 'Terminal')}>
-                  <Terminal className="w-4 h-4 text-emerald-400 shrink-0" />
-                  <div className="flex flex-col min-w-0">
-                    <span className="text-xs font-mono font-bold text-white truncate">{pkgId}</span>
-                    <span className="text-[10px] text-gray-400 truncate">{info?.name || 'CLI Package'}</span>
+          {startMenuSearch.trim().length > 0 ? (
+            /* SEARCH RESULTS VIEW */
+            <div className="flex-1 overflow-y-auto flex flex-col gap-2 pr-1">
+              <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider px-1">Resultados de Búsqueda</span>
+              
+              {/* Filtered Win32 Apps */}
+              {WIN32_APP_CATALOG.filter(a => 
+                a.name.toLowerCase().includes(startMenuSearch.toLowerCase()) || 
+                a.exeName.toLowerCase().includes(startMenuSearch.toLowerCase()) || 
+                a.description.toLowerCase().includes(startMenuSearch.toLowerCase())
+              ).map(winApp => (
+                <div 
+                  key={winApp.id}
+                  onClick={() => { openApp('wine', winApp.name, winApp.id); setIsStartMenuOpen(false); setStartMenuSearch(''); }}
+                  className="flex items-center justify-between p-2.5 bg-white/5 hover:bg-amber-600/20 border border-white/5 hover:border-amber-500/50 rounded-xl cursor-pointer transition-all group"
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="p-2 bg-amber-500/20 rounded-lg border border-amber-500/30">
+                      <Box className="w-5 h-5 text-amber-400 group-hover:scale-110 transition-transform" />
+                    </div>
+                    <div className="flex flex-col">
+                      <span className="text-xs font-bold text-white group-hover:text-amber-300">{winApp.name}</span>
+                      <span className="text-[10px] text-gray-400">{winApp.exeName} • {winApp.description}</span>
+                    </div>
+                  </div>
+                  <span className="text-[10px] font-mono px-2 py-0.5 bg-amber-500/20 text-amber-300 border border-amber-500/40 rounded-md">
+                    Win32
+                  </span>
+                </div>
+              ))}
+
+              {/* Filtered Packages */}
+              {AVAILABLE_PACKAGES.filter(p => 
+                p.id.toLowerCase().includes(startMenuSearch.toLowerCase()) || 
+                p.name.toLowerCase().includes(startMenuSearch.toLowerCase())
+              ).map(pkg => (
+                <div 
+                  key={pkg.id}
+                  onClick={() => { openApp('terminal', `Ejecutar ${pkg.id}`); setIsStartMenuOpen(false); setStartMenuSearch(''); }}
+                  className="flex items-center justify-between p-2.5 bg-white/5 hover:bg-blue-600/20 border border-white/5 hover:border-blue-500/50 rounded-xl cursor-pointer transition-all group"
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="p-2 bg-blue-500/20 rounded-lg border border-blue-500/30">
+                      <Terminal className="w-5 h-5 text-blue-400" />
+                    </div>
+                    <div className="flex flex-col">
+                      <span className="text-xs font-bold text-white">{pkg.name}</span>
+                      <span className="text-[10px] text-gray-400 font-mono">{pkg.id}</span>
+                    </div>
+                  </div>
+                  <span className="text-[10px] font-mono px-2 py-0.5 bg-blue-500/20 text-blue-300 border border-blue-500/40 rounded-md">
+                    APT / NPM
+                  </span>
+                </div>
+              ))}
+            </div>
+          ) : (
+            /* PINNED APPS VIEW */
+            <div className="flex-1 overflow-y-auto flex flex-col gap-4 pr-1">
+              {/* Native SAVIA-OS Apps */}
+              <div>
+                <div className="mb-2 flex justify-between items-center px-1">
+                  <h3 className="text-xs font-bold tracking-wide text-gray-300">Sistema SAVIA-OS</h3>
+                  <span className="text-[10px] text-blue-400 font-mono">{installedPackages.length} Paquetes</span>
+                </div>
+
+                <div className="grid grid-cols-4 sm:grid-cols-6 gap-2">
+                  <div className="flex flex-col items-center gap-1 cursor-pointer hover:bg-white/10 p-2 rounded-xl transition-colors" onClick={() => { openApp('about', 'Acerca de SAVIA-OS'); setIsStartMenuOpen(false); }}>
+                    <Info className="w-6 h-6 text-blue-400" />
+                    <span className="text-[10px] font-medium text-center">Alberto Arce</span>
+                  </div>
+                  <div className="flex flex-col items-center gap-1 cursor-pointer hover:bg-white/10 p-2 rounded-xl transition-colors" onClick={() => { openApp('controlpanel', 'Panel de Control'); setIsStartMenuOpen(false); }}>
+                    <Settings className="w-6 h-6 text-emerald-400" />
+                    <span className="text-[10px] font-medium text-center">Control Panel</span>
+                  </div>
+                  <div className="flex flex-col items-center gap-1 cursor-pointer hover:bg-white/10 p-2 rounded-xl transition-colors" onClick={() => { openApp('appstore', 'Software Center'); setIsStartMenuOpen(false); }}>
+                    <Box className="w-6 h-6 text-amber-400" />
+                    <span className="text-[10px] font-medium text-center">App Store</span>
+                  </div>
+                  <div className="flex flex-col items-center gap-1 cursor-pointer hover:bg-white/10 p-2 rounded-xl transition-colors" onClick={() => { openApp('terminal', 'Terminal'); setIsStartMenuOpen(false); }}>
+                    <Terminal className="w-6 h-6 text-gray-200" />
+                    <span className="text-[10px] font-medium text-center">Terminal</span>
+                  </div>
+                  <div className="flex flex-col items-center gap-1 cursor-pointer hover:bg-white/10 p-2 rounded-xl transition-colors" onClick={() => { openApp('folder', 'File Explorer'); setIsStartMenuOpen(false); }}>
+                    <Folder className="w-6 h-6 text-amber-400" fill="currentColor" />
+                    <span className="text-[10px] font-medium text-center">Explorer</span>
+                  </div>
+                  <div className="flex flex-col items-center gap-1 cursor-pointer hover:bg-white/10 p-2 rounded-xl transition-colors" onClick={() => { openApp('browser', 'Navegador Web'); setIsStartMenuOpen(false); }}>
+                    <Globe className="w-6 h-6 text-blue-400" />
+                    <span className="text-[10px] font-medium text-center">Browser</span>
+                  </div>
+                  <div className="flex flex-col items-center gap-1 cursor-pointer hover:bg-white/10 p-2 rounded-xl transition-colors" onClick={() => { openApp('pdfviewer', 'PDF Studio'); setIsStartMenuOpen(false); }}>
+                    <FileImage className="w-6 h-6 text-red-500" />
+                    <span className="text-[10px] font-medium text-center">PDF Viewer</span>
+                  </div>
+                  <div className="flex flex-col items-center gap-1 cursor-pointer hover:bg-white/10 p-2 rounded-xl transition-colors" onClick={() => { openApp('office', 'SaviaDoc', 'nuevo documento.docx'); setIsStartMenuOpen(false); }}>
+                    <FileText className="w-6 h-6 text-blue-500" />
+                    <span className="text-[10px] font-medium text-center">SaviaDoc</span>
+                  </div>
+                  <div className="flex flex-col items-center gap-1 cursor-pointer hover:bg-white/10 p-2 rounded-xl transition-colors" onClick={() => { openApp('calculator', 'Calculadora'); setIsStartMenuOpen(false); }}>
+                    <CalcIcon className="w-6 h-6 text-amber-400" />
+                    <span className="text-[10px] font-medium text-center">Calculadora</span>
+                  </div>
+                  <div className="flex flex-col items-center gap-1 cursor-pointer hover:bg-white/10 p-2 rounded-xl transition-colors" onClick={() => { openApp('calendar', 'Calendario'); setIsStartMenuOpen(false); }}>
+                    <CalendarIcon className="w-6 h-6 text-cyan-400" />
+                    <span className="text-[10px] font-medium text-center">Calendario</span>
+                  </div>
+                  <div className="flex flex-col items-center gap-1 cursor-pointer hover:bg-white/10 p-2 rounded-xl transition-colors" onClick={() => { openApp('imageviewer', 'Galería'); setIsStartMenuOpen(false); }}>
+                    <ImageIcon className="w-6 h-6 text-purple-400" />
+                    <span className="text-[10px] font-medium text-center">Galería</span>
+                  </div>
+                  <div className="flex flex-col items-center gap-1 cursor-pointer hover:bg-white/10 p-2 rounded-xl transition-colors" onClick={() => { openApp('soundsettings', 'Audio Core'); setIsStartMenuOpen(false); }}>
+                    <Radio className="w-6 h-6 text-pink-400" />
+                    <span className="text-[10px] font-medium text-center">Audio</span>
                   </div>
                 </div>
-              );
-            })}
-          </div>
+              </div>
+
+              {/* Integrated Wine Win32 Subsystem Apps */}
+              <div>
+                <div className="mb-2 flex justify-between items-center px-1">
+                  <h3 className="text-xs font-bold tracking-wide text-amber-300 flex items-center gap-1.5">
+                    <Box className="w-3.5 h-3.5 text-amber-400" />
+                    Aplicaciones Windows (Wine 9.0 Win32)
+                  </h3>
+                  <span className="text-[10px] text-amber-400/80 font-mono">Win32 Ready</span>
+                </div>
+
+                <div className="grid grid-cols-2 gap-2">
+                  <div onClick={() => { openApp('wine', 'Buscaminas Win32', 'winmine'); setIsStartMenuOpen(false); }} className="flex items-center gap-2.5 p-2 bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/20 rounded-xl cursor-pointer transition-colors">
+                    <Box className="w-5 h-5 text-amber-400 shrink-0" />
+                    <div className="flex flex-col min-w-0">
+                      <span className="text-xs font-bold text-white truncate">Buscaminas</span>
+                      <span className="text-[10px] text-gray-400 font-mono">winmine.exe</span>
+                    </div>
+                  </div>
+
+                  <div onClick={() => { openApp('wine', '3D Pinball Cadet', 'pinball'); setIsStartMenuOpen(false); }} className="flex items-center gap-2.5 p-2 bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/20 rounded-xl cursor-pointer transition-colors">
+                    <Box className="w-5 h-5 text-amber-400 shrink-0" />
+                    <div className="flex flex-col min-w-0">
+                      <span className="text-xs font-bold text-white truncate">3D Pinball Cadet</span>
+                      <span className="text-[10px] text-gray-400 font-mono">pinball.exe</span>
+                    </div>
+                  </div>
+
+                  <div onClick={() => { openApp('wine', 'Solitario Win32', 'solitaire'); setIsStartMenuOpen(false); }} className="flex items-center gap-2.5 p-2 bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/20 rounded-xl cursor-pointer transition-colors">
+                    <Box className="w-5 h-5 text-amber-400 shrink-0" />
+                    <div className="flex flex-col min-w-0">
+                      <span className="text-xs font-bold text-white truncate">Solitario Klondike</span>
+                      <span className="text-[10px] text-gray-400 font-mono">sol.exe</span>
+                    </div>
+                  </div>
+
+                  <div onClick={() => { openApp('wine', 'PuTTY SSH Client', 'putty'); setIsStartMenuOpen(false); }} className="flex items-center gap-2.5 p-2 bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/20 rounded-xl cursor-pointer transition-colors">
+                    <Box className="w-5 h-5 text-amber-400 shrink-0" />
+                    <div className="flex flex-col min-w-0">
+                      <span className="text-xs font-bold text-white truncate">PuTTY SSH</span>
+                      <span className="text-[10px] text-gray-400 font-mono">putty.exe</span>
+                    </div>
+                  </div>
+
+                  <div onClick={() => { openApp('wine', 'VLC Media Player', 'vlc_win32'); setIsStartMenuOpen(false); }} className="flex items-center gap-2.5 p-2 bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/20 rounded-xl cursor-pointer transition-colors">
+                    <Box className="w-5 h-5 text-amber-400 shrink-0" />
+                    <div className="flex flex-col min-w-0">
+                      <span className="text-xs font-bold text-white truncate">VLC Player</span>
+                      <span className="text-[10px] text-gray-400 font-mono">vlc.exe</span>
+                    </div>
+                  </div>
+
+                  <div onClick={() => { openApp('wine', 'Wine Runner Studio'); setIsStartMenuOpen(false); }} className="flex items-center gap-2.5 p-2 bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/20 rounded-xl cursor-pointer transition-colors">
+                    <Box className="w-5 h-5 text-amber-400 shrink-0" />
+                    <div className="flex flex-col min-w-0">
+                      <span className="text-xs font-bold text-white truncate">Wine Runner Studio</span>
+                      <span className="text-[10px] text-gray-400 font-mono">wineboot.exe</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* Bottom Profile & Power */}
           <div className="mt-auto pt-3 border-t border-white/10 flex justify-between items-center px-1">
-            <div className="flex items-center gap-3 hover:bg-white/10 p-1.5 rounded-md cursor-pointer transition-colors" onClick={() => openApp('about', 'Acerca de SAVIA-OS')}>
+            <div className="flex items-center gap-3 hover:bg-white/10 p-1.5 rounded-xl cursor-pointer transition-colors" onClick={() => { openApp('about', 'Acerca de SAVIA-OS'); setIsStartMenuOpen(false); }}>
               <div className={`w-8 h-8 rounded-full flex items-center justify-center ${user.avatar} text-white shadow-sm`}>
                 <User className="w-4 h-4" />
               </div>
@@ -1279,6 +1418,7 @@ export default function DesktopEnvironment({ user, onExit }: { user: UserData, o
               else if (newIconAppType === 'about') iconType = 'info';
               else if (newIconAppType === 'theme') iconType = 'theme';
               else if (newIconAppType === 'controlpanel') iconType = 'controlpanel';
+              else if (newIconAppType === 'wine') iconType = 'wine';
 
               createNewDesktopIcon(newIconTitle.trim(), newIconAppType, iconType, newIconDocData || undefined);
               setCreateIconModalOpen(false);
@@ -1302,6 +1442,7 @@ export default function DesktopEnvironment({ user, onExit }: { user: UserData, o
                   onChange={e => setNewIconAppType(e.target.value as any)}
                   className="bg-[#121214] border border-white/15 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-blue-500 font-medium"
                 >
+                  <option value="wine">Wine 9.0 Subsystem (Win32 / WASM)</option>
                   <option value="calculator">Calculadora Científica</option>
                   <option value="browser">Navegador Web</option>
                   <option value="terminal">Consola Terminal</option>

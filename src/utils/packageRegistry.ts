@@ -2,7 +2,7 @@
 
 import { soundEngine } from './soundEngine';
 
-export type PackageCategory = 'utilities' | 'development' | 'games' | 'media' | 'system';
+export type PackageCategory = 'utilities' | 'development' | 'games' | 'media' | 'system' | 'windows';
 
 export type PackageInfo = {
   id: string;
@@ -209,6 +209,78 @@ export const AVAILABLE_PACKAGES: PackageInfo[] = [
     icon: 'Volume2',
     type: 'terminal',
     installedByDefault: true
+  },
+  {
+    id: 'wine',
+    name: 'Wine 9.0 (Subsistema Windows Win32 / WASM)',
+    version: '9.0.0',
+    category: 'windows',
+    description: 'Capa de compatibilidad y emulador x86 WASM de código abierto para ejecutar binarios de Windows (.exe y .msi) en HTML5.',
+    size: '14.2 MB',
+    author: 'WineHQ / SaviaOS Core',
+    icon: 'Box',
+    type: 'gui',
+    installedByDefault: true
+  },
+  {
+    id: 'winmine',
+    name: 'Buscaminas Win32 (winmine.exe)',
+    version: '5.1.2600',
+    category: 'windows',
+    description: 'El clásico juego de lógica e inspección de minas de Windows XP/98 reconstruido en entorno nativo Win32.',
+    size: '120 KB',
+    author: 'Microsoft / WineHQ',
+    icon: 'Gamepad2',
+    type: 'gui',
+    installedByDefault: true
+  },
+  {
+    id: 'pinball',
+    name: '3D Pinball Space Cadet Win32',
+    version: '5.1.2600',
+    category: 'windows',
+    description: 'El clásico arcade 3D Pinball Space Cadet de Windows XP con física de flippers, luces y sonido.',
+    size: '1.4 MB',
+    author: 'Maxis / WineHQ',
+    icon: 'Gamepad2',
+    type: 'gui',
+    installedByDefault: true
+  },
+  {
+    id: 'putty',
+    name: 'PuTTY SSH Client Win32 (putty.exe)',
+    version: '0.81.0',
+    category: 'windows',
+    description: 'Cliente de emulación de consola SSH, Telnet y Rlogin para administración de servidores remotos.',
+    size: '3.2 MB',
+    author: 'Simon Tatham',
+    icon: 'Terminal',
+    type: 'gui',
+    installedByDefault: false
+  },
+  {
+    id: 'vlc_win32',
+    name: 'VLC Media Player Win32 (vlc.exe)',
+    version: '3.0.20',
+    category: 'windows',
+    description: 'Reproductor de medios multiplataforma de código abierto con códecs y ecualizador.',
+    size: '18.5 MB',
+    author: 'VideoLAN',
+    icon: 'Music',
+    type: 'gui',
+    installedByDefault: false
+  },
+  {
+    id: 'winrar',
+    name: 'WinRAR / 7-Zip Archiver Win32 (winrar.exe)',
+    version: '7.0.0',
+    category: 'windows',
+    description: 'Compresor y descompresor de archivos ZIP, RAR, 7Z y TAR con interfaz Win32.',
+    size: '3.5 MB',
+    author: 'RARLab',
+    icon: 'Box',
+    type: 'gui',
+    installedByDefault: false
   }
 ];
 
