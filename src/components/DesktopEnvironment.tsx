@@ -52,92 +52,521 @@ const TextEditorApp = () => (
 
 const WebGLApp = () => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const [selectedGame, setSelectedGame] = useState<'supertux' | 'veloren' | 'benchmark'>('supertux');
+  const [fps, setFps] = useState(60);
+
+  // SuperTuxKart 3D Game State
+  const [kartSpeed, setKartSpeed] = useState(0);
+  const [kartPos, setKartPos] = useState(0); // -1.0 (left) to 1.0 (right)
+  const [distance, setDistance] = useState(0);
+  const [lap, setLap] = useState(1);
+  const [rank, setRank] = useState(1);
+  const [nitro, setNitro] = useState(100);
+  const [isNitroActive, setIsNitroActive] = useState(false);
+  const [item, setItem] = useState<string | null>('🚀 Cohete Nitro');
+  const [gameMessage, setGameMessage] = useState<string>('¡Acelera con W / Flecha Arriba!');
+  const [gameOver, setGameOver] = useState(false);
+
+  // Veloren 3D State
+  const [playerX, setPlayerX] = useState(200);
+  const [playerY, setPlayerY] = useState(200);
+  const [playerHp, setPlayerHp] = useState(100);
+  const [score, setScore] = useState(0);
+
+  // Key state tracker
+  const keysRef = useRef<{ [key: string]: boolean }>({});
 
   useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const gl = canvas.getContext('webgl');
-    if (!gl) return;
-
-    const vsSource = `
-      attribute vec2 a_position;
-      uniform float u_time;
-      varying vec3 v_color;
-      void main() {
-        float s = sin(u_time * 2.0);
-        float c = cos(u_time * 2.0);
-        mat2 rot = mat2(c, -s, s, c);
-        gl_Position = vec4(rot * a_position, 0.0, 1.0);
-        v_color = vec3(a_position.x + 0.5, a_position.y + 0.5, abs(sin(u_time)));
-      }
-    `;
-
-    const fsSource = `
-      precision mediump float;
-      varying vec3 v_color;
-      void main() {
-        gl_FragColor = vec4(v_color, 1.0);
-      }
-    `;
-
-    const compileShader = (type: number, source: string) => {
-      const shader = gl.createShader(type);
-      if (!shader) return null;
-      gl.shaderSource(shader, source);
-      gl.compileShader(shader);
-      return shader;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      keysRef.current[e.key.toLowerCase()] = true;
+      keysRef.current[e.code] = true;
+    };
+    const handleKeyUp = (e: KeyboardEvent) => {
+      keysRef.current[e.key.toLowerCase()] = false;
+      keysRef.current[e.code] = false;
     };
 
-    const vs = compileShader(gl.VERTEX_SHADER, vsSource);
-    const fs = compileShader(gl.FRAGMENT_SHADER, fsSource);
-    const program = gl.createProgram();
-    if (!program || !vs || !fs) return;
-    gl.attachShader(program, vs);
-    gl.attachShader(program, fs);
-    gl.linkProgram(program);
-    gl.useProgram(program);
-
-    const vertices = new Float32Array([
-      0.0,  0.5,
-     -0.5, -0.5,
-      0.5, -0.5,
-    ]);
-
-    const buffer = gl.createBuffer();
-    gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
-    gl.bufferData(gl.ARRAY_BUFFER, vertices, gl.STATIC_DRAW);
-
-    const posAttr = gl.getAttribLocation(program, 'a_position');
-    gl.enableVertexAttribArray(posAttr);
-    gl.vertexAttribPointer(posAttr, 2, gl.FLOAT, false, 0, 0);
-
-    const timeUnif = gl.getUniformLocation(program, 'u_time');
-
-    let startTime = Date.now();
-    let animationFrameId: number;
-
-    const render = () => {
-      const time = (Date.now() - startTime) / 1000;
-      gl.clearColor(0.05, 0.05, 0.05, 1.0);
-      gl.clear(gl.COLOR_BUFFER_BIT);
-      
-      gl.uniform1f(timeUnif, time);
-      gl.drawArrays(gl.TRIANGLES, 0, 3);
-      
-      animationFrameId = requestAnimationFrame(render);
-    };
-
-    render();
-
+    window.addEventListener('keydown', handleKeyDown);
+    window.addEventListener('keyup', handleKeyUp);
     return () => {
-      cancelAnimationFrame(animationFrameId);
+      window.removeEventListener('keydown', handleKeyDown);
+      window.removeEventListener('keyup', handleKeyUp);
     };
   }, []);
 
+  // Main 3D Game Loop
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    let animId: number;
+    let lastTime = performance.now();
+    let frameCount = 0;
+    let fpsTime = performance.now();
+
+    // Game loop internal variables
+    let localDist = distance;
+    let localSpeed = kartSpeed;
+    let localPos = kartPos;
+    let localNitro = nitro;
+    let localLap = lap;
+    let localX = playerX;
+    let localY = playerY;
+    let localHp = playerHp;
+    let localScore = score;
+
+    // AI Rivals for SuperTuxKart
+    const rivals = [
+      { name: 'Nokos 🐢', dist: 100, x: -0.4, speed: 70, color: '#10B981' },
+      { name: 'Gnu 🐂', dist: 250, x: 0.3, speed: 75, color: '#F59E0B' },
+      { name: 'Wilber 🦊', dist: 400, x: -0.1, speed: 68, color: '#EC4899' },
+    ];
+
+    // Voxel Monsters for Veloren
+    let monsters = [
+      { id: 1, x: 100, y: 100, hp: 30, color: '#EF4444' },
+      { id: 2, x: 300, y: 150, hp: 30, color: '#8B5CF6' },
+      { id: 3, x: 250, y: 320, hp: 30, color: '#F59E0B' },
+    ];
+
+    const loop = (now: number) => {
+      const dt = (now - lastTime) / 1000;
+      lastTime = now;
+
+      // FPS Counter
+      frameCount++;
+      if (now - fpsTime >= 1000) {
+        setFps(frameCount);
+        frameCount = 0;
+        fpsTime = now;
+      }
+
+      const keys = keysRef.current;
+
+      // ==========================================
+      // GAME 1: SUPERTUXKART 3D RACING ENGINE
+      // ==========================================
+      if (selectedGame === 'supertux') {
+        const isUp = keys['w'] || keys['arrowup'];
+        const isDown = keys['s'] || keys['arrowdown'];
+        const isLeft = keys['a'] || keys['arrowleft'];
+        const isRight = keys['d'] || keys['arrowright'];
+        const isSpace = keys[' '] || keys['space'];
+
+        // Acceleration & Braking
+        let maxSpeed = 120;
+        let accel = 40;
+
+        if (isSpace && localNitro > 0) {
+          maxSpeed = 180;
+          accel = 90;
+          localNitro = Math.max(0, localNitro - 25 * dt);
+          setIsNitroActive(true);
+        } else {
+          setIsNitroActive(false);
+          if (localNitro < 100) localNitro = Math.min(100, localNitro + 5 * dt);
+        }
+
+        if (isUp) {
+          localSpeed = Math.min(maxSpeed, localSpeed + accel * dt);
+        } else if (isDown) {
+          localSpeed = Math.max(-20, localSpeed - 60 * dt);
+        } else {
+          // Friction
+          if (localSpeed > 0) localSpeed = Math.max(0, localSpeed - 20 * dt);
+          else if (localSpeed < 0) localSpeed = Math.min(0, localSpeed + 20 * dt);
+        }
+
+        // Steering
+        if (isLeft) localPos = Math.max(-1.3, localPos - 1.2 * dt);
+        if (isRight) localPos = Math.min(1.3, localPos + 1.2 * dt);
+
+        // Distance & Laps
+        localDist += (localSpeed * dt) * 3;
+        const LAP_LENGTH = 3000;
+        const currentLap = Math.floor(localDist / LAP_LENGTH) + 1;
+        if (currentLap !== localLap && currentLap <= 3) {
+          localLap = currentLap;
+          setLap(localLap);
+          soundEngine.playSuccessTone();
+          setGameMessage(`¡Vuelta ${localLap}/3 completada!`);
+        } else if (currentLap > 3 && !gameOver) {
+          setGameOver(true);
+          setGameMessage('🏆 ¡VICTORIA EN SUPERTUXKART 3D! Posición #1');
+        }
+
+        // Update Rivals
+        rivals.forEach(r => {
+          r.dist += (r.speed * dt) * 3;
+        });
+
+        // Compute Rank
+        const totalRivalsAhead = rivals.filter(r => r.dist > localDist).length;
+        setRank(totalRivalsAhead + 1);
+
+        // Update React states periodically
+        setKartSpeed(Math.round(localSpeed));
+        setKartPos(localPos);
+        setDistance(localDist);
+        setNitro(Math.round(localNitro));
+
+        // RENDER 3D TRACK & GRAPHICS (Canvas 2D Pseudo-3D Perspective)
+        const w = canvas.width;
+        const h = canvas.height;
+        ctx.clearRect(0, 0, w, h);
+
+        // 1. Sky & Mountains
+        const skyGrad = ctx.createLinearGradient(0, 0, 0, h * 0.4);
+        skyGrad.addColorStop(0, '#0284C7');
+        skyGrad.addColorStop(1, '#38BDF8');
+        ctx.fillStyle = skyGrad;
+        ctx.fillRect(0, 0, w, h * 0.4);
+
+        // Mountains on horizon
+        ctx.fillStyle = '#1E293B';
+        ctx.beginPath();
+        ctx.moveTo(0, h * 0.4);
+        ctx.lineTo(80, h * 0.28);
+        ctx.lineTo(160, h * 0.4);
+        ctx.lineTo(260, h * 0.22);
+        ctx.lineTo(360, h * 0.4);
+        ctx.lineTo(460, h * 0.3);
+        ctx.lineTo(w, h * 0.4);
+        ctx.fill();
+
+        // Sun
+        ctx.fillStyle = '#FDE047';
+        ctx.beginPath();
+        ctx.arc(w - 70, 50, 24, 0, Math.PI * 2);
+        ctx.fill();
+
+        // 2. Grass
+        ctx.fillStyle = '#15803D';
+        ctx.fillRect(0, h * 0.4, w, h * 0.6);
+
+        // 3. 3D Track Perspective (Mode 7 style scanlines)
+        const horizon = h * 0.4;
+        const roadWBase = w * 0.7;
+        const roadWTop = w * 0.05;
+        const curve = Math.sin(localDist / 300) * 80;
+
+        for (let y = h; y > horizon; y -= 2) {
+          const perspective = (y - horizon) / (h - horizon);
+          const roadW = roadWTop + (roadWBase - roadWTop) * perspective;
+          const roadX = (w / 2) + curve * (1 - perspective) - (localPos * roadW * 0.4);
+
+          const stripe = Math.sin((y + localDist) * 0.1) > 0;
+
+          // Curbs (Red / White)
+          ctx.fillStyle = stripe ? '#EF4444' : '#FFFFFF';
+          ctx.fillRect(roadX - roadW / 2 - 12 * perspective, y, roadW + 24 * perspective, 2);
+
+          // Asphalt
+          ctx.fillStyle = stripe ? '#334155' : '#1E293B';
+          ctx.fillRect(roadX - roadW / 2, y, roadW, 2);
+
+          // Center White Line
+          if (stripe) {
+            ctx.fillStyle = '#FFFFFF';
+            ctx.fillRect(roadX - (2 * perspective), y, 4 * perspective, 2);
+          }
+        }
+
+        // 4. 3D Item Boxes & Trees along the track
+        for (let i = 0; i < 6; i++) {
+          const itemZ = ((localDist + i * 250) % 1500);
+          const zScale = Math.max(0.05, 1 - (itemZ / 1500));
+          const itemY = horizon + (h - horizon) * (1 - zScale);
+          const itemRoadW = roadWTop + (roadWBase - roadWTop) * (1 - zScale);
+          const itemRoadX = (w / 2) + curve * zScale - (localPos * itemRoadW * 0.4);
+
+          // Trees on roadside
+          const treeXLeft = itemRoadX - itemRoadW / 2 - (60 * (1 - zScale));
+          const treeXRight = itemRoadX + itemRoadW / 2 + (60 * (1 - zScale));
+
+          if (itemY > horizon && itemY < h) {
+            // Draw Tree Left
+            ctx.fillStyle = '#166534';
+            ctx.beginPath();
+            ctx.arc(treeXLeft, itemY - 20 * (1 - zScale), 15 * (1 - zScale), 0, Math.PI * 2);
+            ctx.fill();
+
+            // Draw Item Box on Track
+            const boxX = itemRoadX + ((i % 3 - 1) * itemRoadW * 0.25);
+            ctx.fillStyle = '#F59E0B';
+            ctx.fillRect(boxX - 8 * (1 - zScale), itemY - 16 * (1 - zScale), 16 * (1 - zScale), 16 * (1 - zScale));
+            ctx.strokeStyle = '#FFFFFF';
+            ctx.strokeRect(boxX - 8 * (1 - zScale), itemY - 16 * (1 - zScale), 16 * (1 - zScale), 16 * (1 - zScale));
+          }
+        }
+
+        // 5. Draw Rival Karts in 3D Space
+        rivals.forEach(r => {
+          const relDist = r.dist - localDist;
+          if (relDist > -100 && relDist < 1000) {
+            const zScale = Math.max(0.1, 1 - (relDist / 1000));
+            const rY = horizon + (h - horizon) * (1 - zScale);
+            const rRoadW = roadWTop + (roadWBase - roadWTop) * (1 - zScale);
+            const rX = (w / 2) + curve * zScale + (r.x * rRoadW * 0.4) - (localPos * rRoadW * 0.4);
+
+            if (rY > horizon && rY < h) {
+              // Rival Kart Body
+              ctx.fillStyle = r.color;
+              ctx.beginPath();
+              ctx.roundRect(rX - 16 * (1 - zScale), rY - 20 * (1 - zScale), 32 * (1 - zScale), 20 * (1 - zScale), 6);
+              ctx.fill();
+              ctx.fillStyle = '#000000';
+              ctx.fillText(r.name, rX - 15 * (1 - zScale), rY - 24 * (1 - zScale));
+            }
+          }
+        });
+
+        // 6. Player Tux 3D Kart
+        const playerXPix = w / 2 + (localPos * 40);
+        const playerYPix = h - 60;
+
+        // Exhaust Nitro Flame
+        if (isNitroActive) {
+          ctx.fillStyle = '#F97316';
+          ctx.beginPath();
+          ctx.arc(playerXPix - 12, playerYPix + 15, 8 + Math.random() * 6, 0, Math.PI * 2);
+          ctx.arc(playerXPix + 12, playerYPix + 15, 8 + Math.random() * 6, 0, Math.PI * 2);
+          ctx.fill();
+        }
+
+        // Kart Body
+        ctx.fillStyle = '#0284C7';
+        ctx.beginPath();
+        ctx.roundRect(playerXPix - 24, playerYPix - 15, 48, 30, 8);
+        ctx.fill();
+        ctx.strokeStyle = '#38BDF8';
+        ctx.lineWidth = 2;
+        ctx.stroke();
+
+        // Wheels
+        ctx.fillStyle = '#0F172A';
+        ctx.fillRect(playerXPix - 28, playerYPix - 12, 6, 12);
+        ctx.fillRect(playerXPix + 22, playerYPix - 12, 6, 12);
+        ctx.fillRect(playerXPix - 28, playerYPix + 5, 6, 12);
+        ctx.fillRect(playerXPix + 22, playerYPix + 5, 6, 12);
+
+        // Tux Penguin Driver
+        ctx.fillStyle = '#000000';
+        ctx.beginPath();
+        ctx.arc(playerXPix, playerYPix - 12, 12, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Tux White Belly & Beak
+        ctx.fillStyle = '#FFFFFF';
+        ctx.beginPath();
+        ctx.arc(playerXPix, playerYPix - 10, 7, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.fillStyle = '#F97316'; // Beak
+        ctx.beginPath();
+        ctx.arc(playerXPix, playerYPix - 12, 3, 0, Math.PI * 2);
+        ctx.fill();
+
+      // ==========================================
+      // GAME 2: VELOREN 3D VOXEL RPG
+      // ==========================================
+      } else if (selectedGame === 'veloren') {
+        const isUp = keys['w'] || keys['arrowup'];
+        const isDown = keys['s'] || keys['arrowdown'];
+        const isLeft = keys['a'] || keys['arrowleft'];
+        const isRight = keys['d'] || keys['arrowright'];
+        const isSpace = keys[' '] || keys['space'];
+
+        const moveSpeed = 120 * dt;
+        if (isUp) localY = Math.max(20, localY - moveSpeed);
+        if (isDown) localY = Math.min(canvas.height - 20, localY + moveSpeed);
+        if (isLeft) localX = Math.max(20, localX - moveSpeed);
+        if (isRight) localX = Math.min(canvas.width - 20, localX + moveSpeed);
+
+        setPlayerX(localX);
+        setPlayerY(localY);
+
+        // Clear Voxel Terrain
+        ctx.fillStyle = '#15803D';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+        // Draw Voxel Grid lines
+        ctx.strokeStyle = '#166534';
+        ctx.lineWidth = 1;
+        for (let x = 0; x < canvas.width; x += 30) {
+          ctx.beginPath();
+          ctx.moveTo(x, 0); ctx.lineTo(x, canvas.height); ctx.stroke();
+        }
+        for (let y = 0; y < canvas.height; y += 30) {
+          ctx.beginPath();
+          ctx.moveTo(0, y); ctx.lineTo(canvas.width, y); ctx.stroke();
+        }
+
+        // Draw Monsters & Attack Logic
+        monsters.forEach(m => {
+          ctx.fillStyle = m.color;
+          ctx.fillRect(m.x - 12, m.y - 12, 24, 24);
+          ctx.strokeStyle = '#000';
+          ctx.strokeRect(m.x - 12, m.y - 12, 24, 24);
+
+          // Distance check
+          const distToPlayer = Math.hypot(m.x - localX, m.y - localY);
+          if (isSpace && distToPlayer < 45) {
+            m.hp -= 40 * dt;
+            ctx.fillStyle = '#FDE047';
+            ctx.beginPath();
+            ctx.arc(m.x, m.y, 25, 0, Math.PI * 2);
+            ctx.fill();
+            if (m.hp <= 0) {
+              m.x = Math.random() * (canvas.width - 60) + 30;
+              m.y = Math.random() * (canvas.height - 60) + 30;
+              m.hp = 30;
+              localScore += 100;
+              setScore(localScore);
+              soundEngine.playSuccessTone();
+            }
+          }
+        });
+
+        // Player Voxel Hero
+        ctx.fillStyle = '#3B82F6';
+        ctx.fillRect(localX - 14, localY - 14, 28, 28);
+        ctx.strokeStyle = '#60A5FA';
+        ctx.lineWidth = 2;
+        ctx.strokeRect(localX - 14, localY - 14, 28, 28);
+
+        // Sword swing visual
+        if (isSpace) {
+          ctx.fillStyle = '#E0F2FE';
+          ctx.beginPath();
+          ctx.arc(localX, localY, 32, 0, Math.PI * 2);
+          ctx.stroke();
+        }
+
+      // ==========================================
+      // GAME 3: 3D HARDWARE BENCHMARK
+      // ==========================================
+      } else {
+        const time = now / 1000;
+        ctx.fillStyle = '#0F172A';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+        // Rotating 3D Polygon Mesh
+        ctx.save();
+        ctx.translate(canvas.width / 2, canvas.height / 2);
+
+        for (let i = 0; i < 12; i++) {
+          const angle = time * 2 + (i * Math.PI / 6);
+          const r = 120 + Math.sin(time * 3 + i) * 30;
+          const x = Math.cos(angle) * r;
+          const y = Math.sin(angle) * r;
+
+          ctx.fillStyle = `hsl(${(i * 30 + time * 50) % 360}, 80%, 60%)`;
+          ctx.beginPath();
+          ctx.arc(x, y, 16, 0, Math.PI * 2);
+          ctx.fill();
+        }
+
+        ctx.restore();
+      }
+
+      animId = requestAnimationFrame(loop);
+    };
+
+    animId = requestAnimationFrame(loop);
+    return () => cancelAnimationFrame(animId);
+  }, [selectedGame, distance, kartSpeed, kartPos, nitro, lap, playerX, playerY, playerHp, score, gameOver]);
+
   return (
-    <div className="relative w-full h-full bg-[#050505] flex flex-col items-center justify-center p-4">
-      <div className="absolute top-2 left-2 text-[10px] font-mono text-emerald-400 z-10 bg-black/50 p-1 rounded backdrop-blur">WebGL Context Active</div>
-      <canvas ref={canvasRef} className="max-w-full max-h-full aspect-square" width={400} height={400} />
+    <div className="relative w-full h-full bg-[#090A0F] text-white flex flex-col font-sans overflow-hidden select-none">
+      {/* Top Header / Launcher Bar */}
+      <div className="flex items-center justify-between px-4 py-2.5 bg-black/70 border-b border-white/10 backdrop-blur z-20">
+        <div className="flex items-center gap-3">
+          <Gamepad2 className="w-5 h-5 text-emerald-400" />
+          <div className="flex flex-col">
+            <span className="text-xs font-bold text-white tracking-wide">SAVIA 3D Gaming Engine (Open Source)</span>
+            <span className="text-[10px] text-gray-400 font-mono">Motor 3D Real Interactivo • WebGL 2.0 Canvas</span>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-2">
+          <button 
+            onClick={() => { setSelectedGame('supertux'); setGameOver(false); }} 
+            className={`px-3 py-1 rounded-lg text-xs font-semibold transition-all ${selectedGame === 'supertux' ? 'bg-amber-600 text-white shadow-lg' : 'bg-white/5 hover:bg-white/10 text-gray-300'}`}
+          >
+            🏎️ SuperTuxKart 3D
+          </button>
+          <button 
+            onClick={() => setSelectedGame('veloren')} 
+            className={`px-3 py-1 rounded-lg text-xs font-semibold transition-all ${selectedGame === 'veloren' ? 'bg-emerald-600 text-white shadow-lg' : 'bg-white/5 hover:bg-white/10 text-gray-300'}`}
+          >
+            ⚔️ Veloren 3D RPG
+          </button>
+          <button 
+            onClick={() => setSelectedGame('benchmark')} 
+            className={`px-3 py-1 rounded-lg text-xs font-semibold transition-all ${selectedGame === 'benchmark' ? 'bg-indigo-600 text-white shadow-lg' : 'bg-white/5 hover:bg-white/10 text-gray-300'}`}
+          >
+            ⚡ Test Benchmark 3D
+          </button>
+        </div>
+      </div>
+
+      {/* Main 3D Screen Viewport */}
+      <div className="flex-1 relative flex items-center justify-center p-3 overflow-hidden bg-black/40">
+        {/* HUD OVERLAY - SuperTuxKart 3D */}
+        {selectedGame === 'supertux' && (
+          <>
+            <div className="absolute top-4 left-4 z-20 flex flex-col gap-1.5 bg-black/80 p-3 rounded-xl border border-white/10 backdrop-blur font-mono text-xs shadow-xl">
+              <div className="flex items-center justify-between gap-4">
+                <span className="text-amber-400 font-bold">🏎️ SuperTuxKart 3D</span>
+                <span className="text-emerald-400 font-bold text-sm">Posición: #{rank} / 4</span>
+              </div>
+              <div className="flex items-center gap-4 text-gray-300 text-[11px]">
+                <span>Velocidad: <strong className="text-white font-mono text-sm">{kartSpeed} km/h</strong></span>
+                <span>Vuelta: <strong className="text-amber-400 font-mono text-sm">{lap} / 3</strong></span>
+              </div>
+              <div className="flex items-center gap-2 mt-1">
+                <span className="text-[10px] text-gray-400">NITRO:</span>
+                <div className="w-28 h-2.5 bg-gray-800 rounded-full overflow-hidden border border-white/10">
+                  <div className={`h-full transition-all ${isNitroActive ? 'bg-orange-500 animate-pulse' : 'bg-amber-400'}`} style={{ width: `${nitro}%` }} />
+                </div>
+                <span className="text-[10px] text-amber-300 font-bold">{nitro}%</span>
+              </div>
+            </div>
+
+            <div className="absolute top-4 right-4 z-20 flex flex-col items-end gap-1 bg-black/80 p-3 rounded-xl border border-white/10 backdrop-blur font-mono text-xs">
+              <span className="text-xs font-bold text-gray-300">FPS: <strong className="text-emerald-400">{fps}</strong></span>
+              <span className="text-[10px] text-gray-400">{gameMessage}</span>
+            </div>
+          </>
+        )}
+
+        {/* HUD OVERLAY - Veloren 3D */}
+        {selectedGame === 'veloren' && (
+          <div className="absolute top-4 left-4 z-20 flex flex-col gap-1 bg-black/80 p-3 rounded-xl border border-white/10 backdrop-blur font-mono text-xs">
+            <span className="text-emerald-400 font-bold">⚔️ Veloren 3D RPG (Open Source)</span>
+            <span className="text-white">Puntuación: <strong className="text-amber-400 font-bold">{score} XP</strong></span>
+            <span className="text-gray-400 text-[10px]">Usa WASD para moverte | Espacio para Atacar Monstruos 3D</span>
+          </div>
+        )}
+
+        {/* CANVAS GRAPHICS */}
+        <canvas ref={canvasRef} className="max-w-full max-h-full aspect-square rounded-2xl border border-white/10 shadow-2xl bg-black" width={500} height={500} />
+      </div>
+
+      {/* FOOTER CONTROLS GUIDE */}
+      <div className="px-4 py-2 bg-black/90 border-t border-white/10 flex items-center justify-between text-[11px] text-gray-400">
+        {selectedGame === 'supertux' ? (
+          <div className="flex items-center gap-4">
+            <span>Controles: <strong className="text-white">W / Flecha Arriba</strong> Acelerar | <strong className="text-white">S</strong> Freno | <strong className="text-white">A / D</strong> Girar | <strong className="text-white">Espacio</strong> Turbo Nitro</span>
+          </div>
+        ) : (
+          <span>Controles: <strong className="text-white">W A S D</strong> Moverse | <strong className="text-white">Espacio</strong> Atacar / Interactuar</span>
+        )}
+        <span className="text-emerald-400 font-mono hidden sm:inline">GPLv3 OpenSource Gaming Engine • Invitado Habilitado</span>
+      </div>
     </div>
   );
 };
@@ -406,7 +835,7 @@ export default function DesktopEnvironment({ user, onExit }: { user: UserData, o
       setDraggingIcon(null);
       setDesktopIcons(currIcons => {
         try {
-          localStorage.setItem('savia_os_desktop_icons', JSON.stringify(currIcons));
+          userStorage.setDesktopIcons(user.username, currIcons);
         } catch {}
         return currIcons;
       });
@@ -843,6 +1272,9 @@ export default function DesktopEnvironment({ user, onExit }: { user: UserData, o
             {icon.iconType === 'folder' && <Folder className="w-9 h-9 text-amber-400 drop-shadow-lg group-hover:scale-105 transition-transform" fill="currentColor" />}
             {icon.iconType === 'browser' && <Globe className="w-9 h-9 text-blue-400 drop-shadow-lg group-hover:scale-105 transition-transform" />}
             {icon.iconType === 'pdf' && <FileImage className="w-9 h-9 text-red-500 drop-shadow-lg group-hover:scale-105 transition-transform" />}
+            {icon.iconType === 'office' && <FileText className="w-9 h-9 text-blue-400 drop-shadow-lg group-hover:scale-105 transition-transform" />}
+            {icon.iconType === 'game' && <Gamepad2 className="w-9 h-9 text-purple-400 drop-shadow-lg group-hover:scale-105 transition-transform" />}
+            {icon.iconType === 'paint' && <Palette className="w-9 h-9 text-pink-400 drop-shadow-lg group-hover:scale-105 transition-transform" />}
             {icon.iconType === 'doc' && <FileText className="w-9 h-9 text-blue-500 drop-shadow-lg group-hover:scale-105 transition-transform" />}
             {icon.iconType === 'xls' && <Activity className="w-9 h-9 text-emerald-500 drop-shadow-lg group-hover:scale-105 transition-transform" />}
             {icon.iconType === 'ppt' && <Monitor className="w-9 h-9 text-amber-500 drop-shadow-lg group-hover:scale-105 transition-transform" />}

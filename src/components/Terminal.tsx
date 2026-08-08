@@ -3,6 +3,7 @@ import type { UserData } from '../App';
 import { AVAILABLE_PACKAGES, getInstalledPackageIds, installPackage, uninstallPackage, isPackageInstalled } from '../utils/packageRegistry';
 import { soundEngine } from '../utils/soundEngine';
 import { securityEngine } from '../utils/securityEngine';
+import { verifyUserPassword } from '../utils/auth';
 
 type FileSystem = {
   [path: string]: {
@@ -52,6 +53,7 @@ export default function TerminalApp({ user, onOpenApp }: { user: UserData; onOpe
   const [isPasswordPrompt, setIsPasswordPrompt] = useState(false);
   const [passwordPromptType, setPasswordPromptType] = useState<'sudo' | 'su' | null>(null);
   const [pendingSudoCmd, setPendingSudoCmd] = useState<string | null>(null);
+  const [pendingSuTargetUser, setPendingSuTargetUser] = useState<string | null>(null);
 
   const [output, setOutput] = useState<string[]>([
     'SAVIA-OS Real Package Execution Kernel v2.4 (x86_64 WASM)',
@@ -414,7 +416,7 @@ export default function TerminalApp({ user, onOpenApp }: { user: UserData; onOpe
           } else {
             setIsPasswordPrompt(true);
             setPasswordPromptType('su');
-            setPendingSudoCmd('sudo su');
+            setPendingSuTargetUser('root');
           }
           break;
         }
@@ -434,6 +436,12 @@ export default function TerminalApp({ user, onOpenApp }: { user: UserData; onOpe
 
       case 'su':
         const targetSuUser = args[1] || 'root';
+        const VALID_USERS = ['root', 'user', 'guest'];
+        if (!VALID_USERS.includes(targetSuUser)) {
+          soundEngine.playError();
+          setOutput(prev => [...prev, `su: el usuario '${targetSuUser}' no existe.`]);
+          break;
+        }
         if (activeTerminalUser === targetSuUser) {
           setOutput(prev => [...prev, `Ya estás autenticado como '${targetSuUser}'.`]);
           break;
@@ -445,7 +453,7 @@ export default function TerminalApp({ user, onOpenApp }: { user: UserData; onOpe
         } else {
           setIsPasswordPrompt(true);
           setPasswordPromptType('su');
-          setPendingSudoCmd(`su ${targetSuUser}`);
+          setPendingSuTargetUser(targetSuUser);
         }
         break;
 
@@ -744,34 +752,56 @@ export default function TerminalApp({ user, onOpenApp }: { user: UserData; onOpe
       setInput('');
 
       if (isPasswordPrompt) {
-        setOutput(prev => [...prev, `[sudo] contraseña para ${user.username}: *******`]);
-        const res = securityEngine.elevateSudo(currentInput, user.username);
-        if (res.success) {
-          soundEngine.playButtonClick();
-          if (passwordPromptType === 'su') {
-            setActiveTerminalUser('root');
-            setCwd('/root');
-            setOutput(prev => [...prev, `[su] Autenticación correcta. Sesión cambiada a superusuario 'root' (#).`]);
-          } else if (pendingSudoCmd) {
-            setOutput(prev => [...prev, `[sudo] Elevación concedida. Ejecutando comando como root:`]);
-            const cmdToRun = pendingSudoCmd;
-            setIsPasswordPrompt(false);
-            setPasswordPromptType(null);
-            setPendingSudoCmd(null);
-            const saveUser = activeTerminalUser;
-            setActiveTerminalUser('root');
-            await handleCommand(cmdToRun);
-            setActiveTerminalUser(saveUser);
-            return;
+        if (passwordPromptType === 'su') {
+          const targetUser = pendingSuTargetUser || 'root';
+          setOutput(prev => [...prev, `[su] contraseña para ${targetUser}: *******`]);
+          
+          // Verify against target user's password
+          const isValid = verifyUserPassword(targetUser, currentInput);
+          if (isValid) {
+            soundEngine.playButtonClick();
+            setActiveTerminalUser(targetUser);
+            setCwd(targetUser === 'root' ? '/root' : `/home/${targetUser}`);
+            setOutput(prev => [...prev, `[su] Autenticación correcta. Sesión cambiada al usuario '${targetUser}' (${targetUser === 'root' ? '#' : '$'}).`]);
+          } else {
+            soundEngine.playError();
+            setOutput(prev => [...prev, `su: fallo de autenticación`]);
           }
-        } else {
-          soundEngine.playError();
-          setOutput(prev => [...prev, `sudo: 1 intento de contraseña incorrecto`]);
+          setIsPasswordPrompt(false);
+          setPasswordPromptType(null);
+          setPendingSudoCmd(null);
+          setPendingSuTargetUser(null);
+          return;
         }
-        setIsPasswordPrompt(false);
-        setPasswordPromptType(null);
-        setPendingSudoCmd(null);
-        return;
+
+        if (passwordPromptType === 'sudo') {
+          setOutput(prev => [...prev, `[sudo] contraseña para ${activeTerminalUser}: *******`]);
+          const res = securityEngine.elevateSudo(currentInput, activeTerminalUser);
+          if (res.success) {
+            soundEngine.playButtonClick();
+            if (pendingSudoCmd) {
+              setOutput(prev => [...prev, `[sudo] Elevación concedida. Ejecutando comando como root:`]);
+              const cmdToRun = pendingSudoCmd;
+              setIsPasswordPrompt(false);
+              setPasswordPromptType(null);
+              setPendingSudoCmd(null);
+              setPendingSuTargetUser(null);
+              const saveUser = activeTerminalUser;
+              setActiveTerminalUser('root');
+              await handleCommand(cmdToRun);
+              setActiveTerminalUser(saveUser);
+              return;
+            }
+          } else {
+            soundEngine.playError();
+            setOutput(prev => [...prev, res.reason || `sudo: 1 intento de contraseña incorrecto`]);
+          }
+          setIsPasswordPrompt(false);
+          setPasswordPromptType(null);
+          setPendingSudoCmd(null);
+          setPendingSuTargetUser(null);
+          return;
+        }
       }
 
       await handleCommand(currentInput);
@@ -798,7 +828,11 @@ export default function TerminalApp({ user, onOpenApp }: { user: UserData; onOpe
           ))}
           {isPasswordPrompt ? (
             <div className="flex">
-              <span className="shrink-0 text-amber-400 font-bold">[sudo] contraseña para {user.username}:&nbsp;</span>
+              <span className="shrink-0 text-amber-400 font-bold">
+                {passwordPromptType === 'su' 
+                  ? `[su] contraseña para ${pendingSuTargetUser || 'root'}: ` 
+                  : `[sudo] contraseña para ${activeTerminalUser}: `}&nbsp;
+              </span>
               <input
                 id="terminal-input"
                 type="password"

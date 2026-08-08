@@ -71,9 +71,15 @@ export const userStorage = {
       return [
         { id: 'browser', title: 'Navegador Web', appType: 'browser', iconType: 'browser', x: 20, y: 20 },
         { id: 'files', title: 'Archivos Invitado', appType: 'folder', iconType: 'folder', x: 20, y: 120 },
-        { id: 'paint', title: 'SAVIA Paint', appType: 'paint', iconType: 'paint', x: 20, y: 220 },
-        { id: 'calc', title: 'Calculadora', appType: 'calculator', iconType: 'calc', x: 20, y: 320 },
-        { id: 'tetris', title: 'Tetris', appType: 'tetris', iconType: 'game', x: 130, y: 20 },
+        { id: 'savia_doc', title: 'SaviaDoc (Procesador)', appType: 'office', iconType: 'doc', docData: 'Documento_Invitado.docx', x: 20, y: 220 },
+        { id: 'savia_xls', title: 'SaviaXls (Planilla)', appType: 'office', iconType: 'xls', docData: 'Presupuesto_Invitado.xlsx', x: 20, y: 320 },
+        { id: 'savia_ppt', title: 'SaviaPpt (Diapositivas)', appType: 'office', iconType: 'ppt', docData: 'Presentacion_Invitado.pptx', x: 20, y: 420 },
+        { id: 'office_suite', title: 'SaviaOffice Suite', appType: 'office', iconType: 'office', x: 130, y: 20 },
+        { id: 'veloren_3d', title: 'Veloren 3D (RPG OpenSource)', appType: 'webgl', iconType: 'game', x: 130, y: 120 },
+        { id: 'supertux_3d', title: 'SuperTuxKart 3D (Libre)', appType: 'webgl', iconType: 'game', x: 130, y: 220 },
+        { id: 'paint', title: 'SAVIA Paint', appType: 'paint', iconType: 'paint', x: 130, y: 320 },
+        { id: 'calc', title: 'Calculadora', appType: 'calculator', iconType: 'calc', x: 130, y: 420 },
+        { id: 'tetris', title: 'Tetris 2D', appType: 'tetris', iconType: 'game', x: 240, y: 20 },
       ];
     }
 

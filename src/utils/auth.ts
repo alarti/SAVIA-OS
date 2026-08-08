@@ -44,7 +44,9 @@ export function saveUserPassword(username: string, newPass: string): boolean {
 
 export function verifyUserPassword(username: string, passAttempt: string): boolean {
   const passes = getStoredPasswords();
-  if (username === 'guest') return true; // Guest does not require password
+  if (username === 'guest') {
+    return passAttempt === ''; // Guest password is strictly empty string
+  }
   const expected = passes[username] ?? 'password';
   return passAttempt === expected;
 }

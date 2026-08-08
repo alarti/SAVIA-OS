@@ -72,11 +72,13 @@ class SecurityEngine {
   private sudoUser: string | null = null;
 
   public isSudoActive(username?: string): boolean {
+    if (username === 'guest') return false; // Guest is never in sudoers
     if (Date.now() > this.sudoSessionEndTime) {
       this.sudoSessionEndTime = 0;
       this.sudoUser = null;
       return false;
     }
+    if (this.sudoUser === null) return false;
     if (username && this.sudoUser && this.sudoUser !== username && this.sudoUser !== 'root') {
       return false;
     }
@@ -93,12 +95,25 @@ class SecurityEngine {
   }
 
   public elevateSudo(password: string, requestingUser: string = 'user'): { success: boolean; reason?: string } {
+    if (requestingUser === 'guest') {
+      this.recordEvent({
+        source: 'KERNEL',
+        action: 'SUDO_ELEVATION_DENIED',
+        user: 'guest',
+        riskScore: 95,
+        level: 'CRITICAL',
+        details: `Intento de elevación de privilegios 'sudo' denegado para el usuario 'guest' (no sudoers).`,
+        blocked: true,
+      });
+      return { success: false, reason: 'El usuario guest no está en el archivo sudoers. Este incidente será reportado.' };
+    }
+
     const isRootValid = verifyUserPassword('root', password);
-    const isUserValid = verifyUserPassword(requestingUser, password);
+    const isUserValid = requestingUser === 'user' && verifyUserPassword('user', password);
 
     if (isRootValid || isUserValid) {
       this.sudoSessionEndTime = Date.now() + 15 * 60 * 1000; // 15 minutes
-      this.sudoUser = requestingUser === 'guest' ? 'root' : requestingUser;
+      this.sudoUser = requestingUser;
       
       this.recordEvent({
         source: 'KERNEL',
@@ -378,7 +393,13 @@ class SecurityEngine {
     }
 
     // 3. Sensitive commands / privilege escalation check
-    if (isGuest && (cmdTrim.startsWith('sudo') || cmdTrim.startsWith('rm -rf /') || cmdTrim.includes('chmod 777'))) {
+    if (isGuest && (
+      cmdTrim.startsWith('sudo') || 
+      cmdTrim.startsWith('su') || 
+      cmdTrim.startsWith('rm -rf') || 
+      cmdTrim.includes('chmod 777') ||
+      cmdTrim.startsWith('chown')
+    )) {
       this.recordEvent({
         source: 'TERMINAL',
         action: 'PRIVILEGE_ESCALATION_ATTEMPT',
