@@ -74,13 +74,13 @@ export default function AboutApp() {
         <div className="bg-[#1A1A1E] p-4 rounded-xl border border-white/10 flex flex-col gap-2">
           <Cpu className="w-6 h-6 text-blue-400" />
           <h3 className="text-xs font-bold text-white">Kernel & Execution</h3>
-          <p className="text-[11px] text-gray-400">RUST-SAVIA-OS Core WASM de 64-bits con aislamiento estricto de memoria.</p>
+          <p className="text-[11px] text-gray-400">Boxedwine, v86 & Wine 9.0 WASM Core x86 de 32/64-bits (inspirado en la arquitectura daedalOS).</p>
         </div>
 
         <div className="bg-[#1A1A1E] p-4 rounded-xl border border-white/10 flex flex-col gap-2">
           <Box className="w-6 h-6 text-emerald-400" />
-          <h3 className="text-xs font-bold text-white">APT / NPM Registry</h3>
-          <p className="text-[11px] text-gray-400">Instalación e integración real de paquetes executables en tiempo de ejecución.</p>
+          <h3 className="text-xs font-bold text-white">APT / ExeBrowser Repo</h3>
+          <p className="text-[11px] text-gray-400">Carga directa de ejecutables PE32 (.exe, .msi) y repositorio de software local / remoto.</p>
         </div>
 
         <div className="bg-[#1A1A1E] p-4 rounded-xl border border-white/10 flex flex-col gap-2">

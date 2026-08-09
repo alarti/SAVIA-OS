@@ -3,7 +3,7 @@ import { PRESET_WALLPAPERS } from '../components/ThemeCustomizerApp';
 export interface DesktopIcon {
   id: string;
   title: string;
-  appType: 'terminal' | 'webgl' | 'folder' | 'browser' | 'texteditor' | 'pdfviewer' | 'office' | 'taskmanager' | 'tetris' | 'appstore' | 'soundsettings' | 'paint' | 'about' | 'controlpanel' | 'theme' | 'calculator' | 'calendar' | 'imageviewer' | 'wine' | 'showcaseweb';
+  appType: 'terminal' | 'webgl' | 'folder' | 'browser' | 'texteditor' | 'pdfviewer' | 'office' | 'taskmanager' | 'tetris' | 'appstore' | 'soundsettings' | 'paint' | 'about' | 'controlpanel' | 'theme' | 'calculator' | 'calendar' | 'imageviewer' | 'wine' | 'trash';
   iconType: string;
   docData?: any;
   x: number;
@@ -26,6 +26,7 @@ const DEFAULT_DESKTOP_ICONS: DesktopIcon[] = [
   { id: 'files', title: 'Explorador de Archivos', appType: 'folder', iconType: 'folder', x: 20, y: 220 },
   { id: 'browser', title: 'Navegador Web', appType: 'browser', iconType: 'browser', x: 20, y: 320 },
   { id: 'office', title: 'Suite Ofimática', appType: 'office', iconType: 'office', x: 20, y: 420 },
+  { id: 'trash', title: 'Papelera de Reciclaje', appType: 'trash', iconType: 'trash', x: 350, y: 120 },
   { id: 'savia_doc', title: 'Savia Doc', appType: 'office', iconType: 'doc', docData: 'nuevo documento.docx', x: 130, y: 20 },
   { id: 'savia_xls', title: 'Savia Xls', appType: 'office', iconType: 'xls', docData: 'nuevo documento.xlsx', x: 130, y: 120 },
   { id: 'savia_ppt', title: 'Savia Ppt', appType: 'office', iconType: 'ppt', docData: 'nuevo documento.pptx', x: 130, y: 220 },
@@ -37,7 +38,6 @@ const DEFAULT_DESKTOP_ICONS: DesktopIcon[] = [
   { id: 'theme', title: 'Personalización', appType: 'theme', iconType: 'theme', x: 240, y: 320 },
   { id: 'taskmgr', title: 'Monitor de Sistema', appType: 'taskmanager', iconType: 'taskmanager', x: 240, y: 420 },
   { id: 'calc', title: 'Savia Calc', appType: 'calculator', iconType: 'calc', x: 350, y: 20 },
-  { id: 'showcase_web', title: 'Savia Web (GitHub Pages)', appType: 'showcaseweb', iconType: 'globe', x: 350, y: 120 },
 ];
 
 export const userStorage = {
@@ -65,6 +65,9 @@ export const userStorage = {
 
         if (!parsed.some(i => i.id === 'webgl_games' || i.appType === 'webgl')) {
           parsed.unshift({ id: 'webgl_games', title: 'Savia Games', appType: 'webgl', iconType: 'game', x: 20, y: 20 });
+        }
+        if (!parsed.some(i => i.id === 'trash' || i.appType === 'trash')) {
+          parsed.push({ id: 'trash', title: 'Papelera de Reciclaje', appType: 'trash', iconType: 'trash', x: 350, y: 120 });
         }
         return parsed;
       }

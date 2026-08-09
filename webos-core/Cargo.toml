@@ -5,5 +5,8 @@ members = [
     "core-security",
     "core-ipc",
     "core-api",
+    "windows-compat",
+    "dotnet-runtime",
+    "runtime-host",
 ]
 resolver = "2"

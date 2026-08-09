@@ -182,3 +182,128 @@ export const vfs = {
     return null;
   }
 };
+
+export function isSystemFileOrFolder(item: { name: string; owner?: string; permissions?: string; isSystem?: boolean }, currentPath: string): boolean {
+  const cleanCurrent = currentPath.replace(/\/+/g, '/').replace(/\/$/, '') || '/';
+  const fullPath = cleanCurrent === '/' ? `/${item.name}` : `${cleanCurrent}/${item.name}`;
+  const cleanPath = fullPath.toLowerCase();
+
+  // Root or root subfolders / system root directories
+  const systemRootPaths = [
+    '/',
+    '/bin',
+    '/usr',
+    '/etc',
+    '/root',
+    '/sys',
+    '/proc',
+    '/dev',
+    '/boot',
+    '/lib',
+    '/lib64',
+    '/var',
+    '/home',
+    '/home/root'
+  ];
+
+  if (systemRootPaths.includes(cleanPath)) {
+    return true;
+  }
+
+  // Files or folders inside system directories
+  const systemPrefixes = [
+    '/bin/',
+    '/usr/',
+    '/etc/',
+    '/root/',
+    '/sys/',
+    '/proc/',
+    '/dev/',
+    '/boot/',
+    '/lib/',
+    '/lib64/',
+    '/var/'
+  ];
+
+  if (systemPrefixes.some(p => cleanPath.startsWith(p))) {
+    return true;
+  }
+
+  // Core user system folders inside /home/user or /home/guest (Desktop, Documents, Downloads, Pictures, Music, Videos)
+  const coreFolders = ['desktop', 'documents', 'downloads', 'pictures', 'music', 'videos'];
+  const pathParts = cleanPath.split('/').filter(Boolean); // e.g. ['home', 'user', 'desktop']
+  if (pathParts.length === 3 && pathParts[0] === 'home' && coreFolders.includes(pathParts[2])) {
+    return true;
+  }
+
+  // User home directories themselves (/home/user, /home/guest)
+  if (pathParts.length === 2 && pathParts[0] === 'home') {
+    return true;
+  }
+
+  // Items owned by root
+  if (item.owner === 'root') {
+    return true;
+  }
+
+  if (item.isSystem) {
+    return true;
+  }
+
+  return false;
+}
+
+export function isSystemDesktopIcon(icon: { id: string; appType?: string; title: string }): boolean {
+  const systemIds = [
+    'trash',
+    'files',
+    'control',
+    'taskmgr',
+    'term',
+    'appstore',
+    'theme',
+    'browser',
+    'webgl_games'
+  ];
+
+  if (systemIds.includes(icon.id)) {
+    return true;
+  }
+
+  if (icon.appType) {
+    const systemAppTypes = [
+      'terminal',
+      'folder',
+      'browser',
+      'taskmanager',
+      'appstore',
+      'soundsettings',
+      'controlpanel',
+      'theme',
+      'trash',
+      'webgl'
+    ];
+
+    if (systemAppTypes.includes(icon.appType)) {
+      return true;
+    }
+  }
+
+  const systemTitles = [
+    'papelera de reciclaje',
+    'explorador de archivos',
+    'panel de control',
+    'monitor de sistema',
+    'terminal posix',
+    'centro de software apt',
+    'personalización',
+    'navegador web',
+    'savia games'
+  ];
+
+  if (systemTitles.includes(icon.title.toLowerCase())) {
+    return true;
+  }
+
+  return false;
+}

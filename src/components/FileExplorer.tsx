@@ -1,16 +1,20 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { 
   Folder, FileText, FileImage, Cpu, Terminal as TerminalIcon, 
   ChevronLeft, ChevronRight, ChevronUp, Copy, Trash2, Edit2, Info, 
   File, Play, ExternalLink, ShieldAlert, Plus, Upload, Clipboard, 
   Check, X, HardDrive, Box, Image as ImageIcon, Music, Film, Home, 
-  Monitor, Zap, Settings, RefreshCcw, ExternalLink as LinkIcon, Clock
+  Monitor, Zap, Settings, RefreshCcw, ExternalLink as LinkIcon, Clock,
+  Undo2, RotateCcw
 } from 'lucide-react';
 import type { UserData } from '../utils/auth';
 import { soundEngine } from '../utils/soundEngine';
 import { securityEngine } from '../utils/securityEngine';
 import { userStorage } from '../utils/userStorage';
+import { trashAndUndo } from '../utils/trashAndUndo';
+import { vfs, isSystemFileOrFolder } from '../utils/vfs';
 import SudoDialog from './SudoDialog';
+import { TrashApp } from './TrashApp';
 
 export type FileItem = {
   id: string;
@@ -167,6 +171,7 @@ export default function FileExplorer({ user, onOpenFile }: { user?: UserData; on
   const [currentPath, setCurrentPath] = useState(defaultHome);
   const [history, setHistory] = useState<string[]>([defaultHome]);
   const [historyIndex, setHistoryIndex] = useState(0);
+  const [systemNotice, setSystemNotice] = useState<string | null>(null);
 
   useEffect(() => {
     setCurrentPath(defaultHome);
@@ -180,22 +185,57 @@ export default function FileExplorer({ user, onOpenFile }: { user?: UserData; on
   }, [activeUsername]);
 
   useEffect(() => {
-    const handleGuestReset = () => {
+    const refreshVFSData = () => {
       try {
-        const saved = localStorage.getItem('savia_os_mock_fs');
-        if (saved) setFs(JSON.parse(saved));
-        else setFs(INITIAL_FS);
+        setFs(vfs.getVFS());
       } catch {}
     };
-    window.addEventListener('savia_os_guest_reset', handleGuestReset);
-    return () => window.removeEventListener('savia_os_guest_reset', handleGuestReset);
+    window.addEventListener('savia_os_vfs_updated', refreshVFSData);
+    window.addEventListener('savia_os_guest_reset', refreshVFSData);
+    window.addEventListener('savia_os_trash_updated', refreshVFSData);
+    window.addEventListener('savia_os_undo_updated', refreshVFSData);
+    return () => {
+      window.removeEventListener('savia_os_vfs_updated', refreshVFSData);
+      window.removeEventListener('savia_os_guest_reset', refreshVFSData);
+      window.removeEventListener('savia_os_trash_updated', refreshVFSData);
+      window.removeEventListener('savia_os_undo_updated', refreshVFSData);
+    };
   }, []);
   const [selectedItemId, setSelectedItemId] = useState<string | null>(null);
+  const [selectedItemIds, setSelectedItemIds] = useState<string[]>([]);
+  const gridContainerRef = useRef<HTMLDivElement>(null);
+  const [selectionBox, setSelectionBox] = useState<{ startX: number, startY: number, currentX: number, currentY: number } | null>(null);
   const [isTouch, setIsTouch] = useState(false);
   const [contextMenu, setContextMenu] = useState<{ x: number, y: number, item: FileItem | null } | null>(null);
   
   // Copy / Paste Clipboard
   const [clipboard, setClipboard] = useState<{ item: FileItem, sourcePath: string } | null>(null);
+  const [multiClipboard, setMultiClipboard] = useState<{ items: FileItem[], action: 'copy' | 'cut', sourcePath: string } | null>(null);
+
+  const lastItemClickRef = React.useRef<{ id: string; time: number }>({ id: '', time: 0 });
+
+  // Selection handler supporting Ctrl/Shift click for multi-select, and double click/tap to open
+  const handleItemSelect = (e: React.MouseEvent, item: FileItem) => {
+    e.stopPropagation();
+    const now = Date.now();
+    const isDoubleTap = (lastItemClickRef.current.id === item.id && (now - lastItemClickRef.current.time) < 400);
+
+    setSelectedItemId(item.id);
+    if (e.ctrlKey || e.metaKey || e.shiftKey) {
+      setSelectedItemIds(prev => 
+        prev.includes(item.id) ? prev.filter(id => id !== item.id) : [...prev, item.id]
+      );
+      lastItemClickRef.current = { id: '', time: 0 };
+    } else {
+      setSelectedItemIds([item.id]);
+      if (isDoubleTap) {
+        handleOpenItem(item);
+        lastItemClickRef.current = { id: '', time: 0 };
+      } else {
+        lastItemClickRef.current = { id: item.id, time: now };
+      }
+    }
+  };
 
   // Modals state
   const [newModal, setNewModal] = useState<{ type: 'file' | 'folder' | 'wine' } | null>(null);
@@ -307,11 +347,6 @@ export default function FileExplorer({ user, onOpenFile }: { user?: UserData; on
 
     saveFs(updated);
     soundEngine.playSuccessTone();
-  };
-
-  const handleItemSelect = (e: React.MouseEvent, item: FileItem) => {
-    e.stopPropagation();
-    setSelectedItemId(item.id);
   };
 
   const handleOpenItem = (item: FileItem) => {
@@ -432,10 +467,208 @@ export default function FileExplorer({ user, onOpenFile }: { user?: UserData; on
     e.preventDefault();
     e.stopPropagation();
     if (item) {
-      setSelectedItemId(item.id);
+      if (!selectedItemIds.includes(item.id)) {
+        setSelectedItemId(item.id);
+        setSelectedItemIds([item.id]);
+      }
     }
     setContextMenu({ x: e.clientX, y: e.clientY, item });
   };
+
+  // Batch Operations
+  const handleBatchCopy = () => {
+    const currentList = fs[currentPath] || [];
+    const selectedItems = currentList.filter(i => selectedItemIds.includes(i.id));
+    if (selectedItems.length > 0) {
+      setMultiClipboard({ items: selectedItems, action: 'copy', sourcePath: currentPath });
+      soundEngine.playButtonClick();
+    }
+  };
+
+  const handleBatchCut = () => {
+    const currentList = fs[currentPath] || [];
+    const selectedItems = currentList.filter(i => selectedItemIds.includes(i.id));
+    if (selectedItems.length > 0) {
+      setMultiClipboard({ items: selectedItems, action: 'cut', sourcePath: currentPath });
+      soundEngine.playButtonClick();
+    }
+  };
+
+  const handleBatchPaste = () => {
+    if (!multiClipboard || multiClipboard.items.length === 0) return;
+    const currentList = fs[currentPath] || [];
+    const updatedFs = { ...fs };
+    const newItems: FileItem[] = [];
+
+    multiClipboard.items.forEach(srcItem => {
+      let newName = srcItem.name;
+      let counter = 1;
+      while (currentList.some(i => i.name === newName)) {
+        const parts = srcItem.name.split('.');
+        if (parts.length > 1 && srcItem.type !== 'folder') {
+          const ext = parts.pop();
+          newName = `${parts.join('.')} (copia ${counter}).${ext}`;
+        } else {
+          newName = `${srcItem.name} (copia ${counter})`;
+        }
+        counter++;
+      }
+
+      const pastedItem: FileItem = {
+        ...srcItem,
+        id: 'item_' + Date.now() + '_' + Math.floor(Math.random() * 1000),
+        name: newName,
+        date: 'Ahora mismo'
+      };
+      newItems.push(pastedItem);
+    });
+
+    updatedFs[currentPath] = [...currentList, ...newItems];
+
+    if (multiClipboard.action === 'cut' && multiClipboard.sourcePath !== currentPath) {
+      const srcList = updatedFs[multiClipboard.sourcePath] || [];
+      const cutIds = multiClipboard.items.map(i => i.id);
+      updatedFs[multiClipboard.sourcePath] = srcList.filter(i => !cutIds.includes(i.id));
+      setMultiClipboard(null);
+    }
+
+    saveFs(updatedFs);
+    soundEngine.playSuccessTone();
+  };
+
+  const handleBatchDelete = () => {
+    if (selectedItemIds.length === 0) return;
+    const currentList = fs[currentPath] || [];
+    const selectedItems = currentList.filter(i => selectedItemIds.includes(i.id));
+    
+    const systemItems = selectedItems.filter(i => isSystemFileOrFolder(i, currentPath));
+    const allowedItems = selectedItems.filter(i => !isSystemFileOrFolder(i, currentPath));
+
+    if (systemItems.length > 0) {
+      soundEngine.playError();
+      if (allowedItems.length === 0) {
+        setSystemNotice(`⚠️ Protegido por el sistema: No se pueden eliminar archivos o carpetas del sistema.`);
+      } else {
+        setSystemNotice(`⚠️ Se omitieron ${systemItems.length} elementos de sistema protegidos.`);
+      }
+      setTimeout(() => setSystemNotice(null), 4000);
+    }
+
+    if (allowedItems.length > 0) {
+      trashAndUndo.moveToTrash(allowedItems, currentPath);
+      setSelectedItemId(null);
+      setSelectedItemIds([]);
+      soundEngine.playButtonClick();
+      setFs(vfs.getVFS());
+    }
+  };
+
+  const handleBatchOpen = () => {
+    const currentList = fs[currentPath] || [];
+    const selectedItems = currentList.filter(i => selectedItemIds.includes(i.id));
+    selectedItems.forEach(item => handleOpenItem(item));
+  };
+
+  // Keyboard Shortcuts in File Explorer
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const active = document.activeElement;
+      const isInput = active && (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA');
+      if (isInput) return;
+
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'a') {
+        e.preventDefault();
+        const currentList = fs[currentPath] || [];
+        setSelectedItemIds(currentList.map(i => i.id));
+        soundEngine.playButtonClick();
+      } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'c') {
+        if (selectedItemIds.length > 0) {
+          e.preventDefault();
+          handleBatchCopy();
+        }
+      } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'x') {
+        if (selectedItemIds.length > 0) {
+          e.preventDefault();
+          handleBatchCut();
+        }
+      } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'v') {
+        if (multiClipboard && multiClipboard.items.length > 0) {
+          e.preventDefault();
+          handleBatchPaste();
+        }
+      } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') {
+        e.preventDefault();
+        trashAndUndo.undo();
+        soundEngine.playButtonClick();
+        setFs(vfs.getVFS());
+      } else if (e.key === 'Delete' || e.key === 'Supr') {
+        if (selectedItemIds.length > 0) {
+          e.preventDefault();
+          handleBatchDelete();
+        }
+      } else if (e.key === 'Escape') {
+        setSelectedItemIds([]);
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [selectedItemIds, currentPath, fs, multiClipboard]);
+
+  // Marquee Drag Selection Box Effect in File Explorer
+  useEffect(() => {
+    if (!selectionBox) return;
+
+    const handleMouseMove = (e: MouseEvent | TouchEvent) => {
+      const clientX = 'touches' in e ? e.touches[0].clientX : (e as MouseEvent).clientX;
+      const clientY = 'touches' in e ? e.touches[0].clientY : (e as MouseEvent).clientY;
+
+      setSelectionBox(prev => prev ? { ...prev, currentX: clientX, currentY: clientY } : null);
+
+      const boxLeft = Math.min(selectionBox.startX, clientX);
+      const boxTop = Math.min(selectionBox.startY, clientY);
+      const boxRight = Math.max(selectionBox.startX, clientX);
+      const boxBottom = Math.max(selectionBox.startY, clientY);
+
+      if (gridContainerRef.current) {
+        const itemEls = gridContainerRef.current.querySelectorAll('[data-item-id]');
+        const intersected: string[] = [];
+        itemEls.forEach(el => {
+          const rect = el.getBoundingClientRect();
+          const isIntersecting = !(
+            rect.right < boxLeft ||
+            rect.left > boxRight ||
+            rect.bottom < boxTop ||
+            rect.top > boxBottom
+          );
+          if (isIntersecting) {
+            const id = el.getAttribute('data-item-id');
+            if (id) intersected.push(id);
+          }
+        });
+        setSelectedItemIds(intersected);
+        if (intersected.length > 0) {
+          setSelectedItemId(intersected[0]);
+        }
+      }
+    };
+
+    const handleMouseUp = () => {
+      setSelectionBox(null);
+    };
+
+    window.addEventListener('mousemove', handleMouseMove);
+    window.addEventListener('mouseup', handleMouseUp);
+    window.addEventListener('touchmove', handleMouseMove, { passive: false });
+    window.addEventListener('touchend', handleMouseUp);
+
+    return () => {
+      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('mouseup', handleMouseUp);
+      window.removeEventListener('touchmove', handleMouseMove);
+      window.removeEventListener('touchend', handleMouseUp);
+    };
+  }, [selectionBox]);
 
   // Actions
   const handleCopy = (item: FileItem) => {
@@ -524,6 +757,13 @@ export default function FileExplorer({ user, onOpenFile }: { user?: UserData; on
     }
 
     saveFs(updated);
+    trashAndUndo.pushUndoAction({
+      id: 'undo_' + Date.now(),
+      type: 'CREATE_ITEM',
+      description: `Eliminar "${newItem.name}"`,
+      timestamp: Date.now(),
+      data: { createdItems: [{ path: currentPath, name: newItem.name, isFolder: type === 'folder' }] }
+    });
     setNewModal(null);
     setNewItemName('');
     soundEngine.playSuccessTone();
@@ -562,28 +802,31 @@ export default function FileExplorer({ user, onOpenFile }: { user?: UserData; on
     }
 
     saveFs(updatedFs);
+    trashAndUndo.pushUndoAction({
+      id: 'undo_' + Date.now(),
+      type: 'RENAME_ITEM',
+      description: `Revertir nombre de "${newName}" a "${oldName}"`,
+      timestamp: Date.now(),
+      data: {
+        renameData: { path: currentPath, oldName, newName, isFolder: renameModal.type === 'folder' }
+      }
+    });
     setRenameModal(null);
     setRenameValue('');
     soundEngine.playSuccessTone();
   };
 
   const handleDelete = (item: FileItem) => {
-    const currentList = fs[currentPath] || [];
-    const updatedList = currentList.filter(i => i.id !== item.id);
-
-    const updatedFs = {
-      ...fs,
-      [currentPath]: updatedList
-    };
-
-    if (item.type === 'folder') {
-      const folderPath = currentPath === '/' ? `/${item.name}` : `${currentPath}/${item.name}`;
-      delete updatedFs[folderPath];
+    if (isSystemFileOrFolder(item, currentPath)) {
+      soundEngine.playError();
+      setSystemNotice(`⚠️ Elemento Protegido: "${item.name}" es un archivo o carpeta de sistema y no se puede eliminar.`);
+      setTimeout(() => setSystemNotice(null), 4000);
+      return;
     }
-
-    saveFs(updatedFs);
+    trashAndUndo.moveToTrash([item], currentPath);
     setSelectedItemId(null);
     soundEngine.playButtonClick();
+    setFs(vfs.getVFS());
   };
 
   const getIcon = (type: FileItem['iconType'], className = 'w-10 h-10') => {
@@ -612,6 +855,7 @@ export default function FileExplorer({ user, onOpenFile }: { user?: UserData; on
 
   const QUICK_BOOKMARKS = [
     { label: `Inicio (${activeUsername})`, path: userHomePath, icon: Home, color: 'text-blue-400' },
+    { label: 'Papelera de Reciclaje', path: '/trash', icon: Trash2, color: 'text-rose-400' },
     { label: 'Archivos Recientes', path: '/recents', icon: Clock, color: 'text-amber-300' },
     { label: 'Escritorio', path: `${userHomePath}/Desktop`, icon: Monitor, color: 'text-amber-400' },
     { label: 'Documentos', path: `${userHomePath}/Documents`, icon: FileText, color: 'text-emerald-400' },
@@ -630,6 +874,17 @@ export default function FileExplorer({ user, onOpenFile }: { user?: UserData; on
       onContextMenu={(e) => handleContextMenu(e, null)}
     >
       {/* Toolbar Navigation & Quick Actions */}
+      {systemNotice && (
+        <div className="bg-rose-950/90 border-b border-rose-500/40 px-3 py-2 text-xs text-rose-200 flex items-center justify-between animate-fadeIn z-20">
+          <div className="flex items-center gap-2">
+            <ShieldAlert className="w-4 h-4 text-rose-400 shrink-0" />
+            <span className="font-medium">{systemNotice}</span>
+          </div>
+          <button onClick={() => setSystemNotice(null)} className="p-0.5 hover:bg-rose-800/50 rounded text-rose-300">
+            <X className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      )}
       <div className={`flex items-center justify-between gap-2 bg-[#1C1C1F] border-b border-white/10 ${isTouch ? 'p-3' : 'p-2'}`}>
         <div className="flex items-center gap-1.5 flex-1">
           <button 
@@ -678,6 +933,24 @@ export default function FileExplorer({ user, onOpenFile }: { user?: UserData; on
 
           {!user?.isGuest && (
             <>
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  trashAndUndo.undo();
+                  soundEngine.playButtonClick();
+                  try {
+                    const saved = localStorage.getItem('savia_os_mock_fs');
+                    if (saved) setFs(JSON.parse(saved));
+                  } catch {}
+                }}
+                disabled={!trashAndUndo.canUndo()}
+                className="px-2.5 py-1.5 bg-blue-600/30 hover:bg-blue-600/50 disabled:opacity-30 disabled:pointer-events-none border border-blue-500/50 text-blue-300 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all"
+                title="Deshacer última acción (Ctrl+Z)"
+              >
+                <Undo2 className="w-3.5 h-3.5" />
+                <span className="hidden sm:inline">Deshacer</span>
+              </button>
+
               <button
                 onClick={(e) => { e.stopPropagation(); fileInputRef.current?.click(); }}
                 className="px-2.5 py-1.5 bg-emerald-600/30 hover:bg-emerald-600/50 border border-emerald-500/50 text-emerald-300 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all"
@@ -806,7 +1079,11 @@ export default function FileExplorer({ user, onOpenFile }: { user?: UserData; on
           )}
 
           {/* File Grid */}
-          {currentPath === '/recents' ? (
+          {currentPath === '/trash' ? (
+            <div className="flex-1 overflow-hidden">
+              <TrashApp onOpenFile={onOpenFile} />
+            </div>
+          ) : currentPath === '/recents' ? (
             <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-2">
               <span className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">
                 Archivos y documentos abiertos recientemente por {activeUsername}
@@ -841,12 +1118,50 @@ export default function FileExplorer({ user, onOpenFile }: { user?: UserData; on
               )}
             </div>
           ) : (
-            <div className={`flex-1 overflow-y-auto ${isTouch ? 'p-4 gap-6' : 'p-4 gap-4'} grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 content-start`}>
+            <div 
+              ref={gridContainerRef}
+              onMouseDown={(e) => {
+                if (e.target === e.currentTarget) {
+                  if (e.button === 0) {
+                    setSelectionBox({ startX: e.clientX, startY: e.clientY, currentX: e.clientX, currentY: e.clientY });
+                    if (!e.ctrlKey && !e.metaKey && !e.shiftKey) {
+                      setSelectedItemIds([]);
+                      setSelectedItemId(null);
+                    }
+                  }
+                }
+              }}
+              onTouchStart={(e) => {
+                if (e.target === e.currentTarget) {
+                  setSelectionBox({
+                    startX: e.touches[0].clientX,
+                    startY: e.touches[0].clientY,
+                    currentX: e.touches[0].clientX,
+                    currentY: e.touches[0].clientY
+                  });
+                }
+              }}
+              className={`flex-1 overflow-y-auto ${isTouch ? 'p-4 gap-6' : 'p-4 gap-4'} grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 content-start relative select-none`}
+            >
+              {/* Rubberband Cursor Marquee Selection Rectangle */}
+              {selectionBox && Math.abs(selectionBox.currentX - selectionBox.startX) > 2 && Math.abs(selectionBox.currentY - selectionBox.startY) > 2 && (
+                <div 
+                  className="fixed border-2 border-blue-400 bg-blue-500/20 rounded-lg pointer-events-none z-50 backdrop-blur-[1px] shadow-lg shadow-blue-500/20"
+                  style={{
+                    left: Math.min(selectionBox.startX, selectionBox.currentX),
+                    top: Math.min(selectionBox.startY, selectionBox.currentY),
+                    width: Math.abs(selectionBox.currentX - selectionBox.startX),
+                    height: Math.abs(selectionBox.currentY - selectionBox.startY)
+                  }}
+                />
+              )}
+
               {currentItems.map(item => {
-                const isSelected = selectedItemId === item.id;
+                const isSelected = selectedItemIds.includes(item.id);
                 return (
                   <div 
                     key={item.id}
+                    data-item-id={item.id}
                     onClick={(e) => handleItemSelect(e, item)}
                     onDoubleClick={(e) => { e.stopPropagation(); handleOpenItem(item); }}
                     onContextMenu={(e) => handleContextMenu(e, item)}
@@ -884,7 +1199,39 @@ export default function FileExplorer({ user, onOpenFile }: { user?: UserData; on
           }}
           onClick={(e) => e.stopPropagation()}
         >
-          {contextMenu.item ? (
+          {selectedItemIds.length > 1 ? (
+            <>
+              <div className="px-3 py-2 border-b border-white/10 text-amber-300 font-semibold truncate flex items-center justify-between">
+                <span>{selectedItemIds.length} elementos seleccionados</span>
+              </div>
+              <button 
+                onClick={() => { setContextMenu(null); handleBatchOpen(); }} 
+                className="w-full text-left px-4 py-2 hover:bg-blue-600 hover:text-white flex items-center gap-2.5 transition-colors"
+              >
+                <Play className="w-4 h-4 text-emerald-400" /> Abrir Seleccionados
+              </button>
+              <button 
+                onClick={() => { setContextMenu(null); handleBatchCopy(); }} 
+                className="w-full text-left px-4 py-2 hover:bg-blue-600 hover:text-white flex items-center gap-2.5 transition-colors"
+              >
+                <Copy className="w-4 h-4 text-blue-400" /> Copiar Seleccionados (Ctrl+C)
+              </button>
+              <button 
+                onClick={() => { setContextMenu(null); handleBatchCut(); }} 
+                className="w-full text-left px-4 py-2 hover:bg-blue-600 hover:text-white flex items-center gap-2.5 transition-colors"
+              >
+                <Clipboard className="w-4 h-4 text-purple-400" /> Cortar Seleccionados (Ctrl+X)
+              </button>
+              {!user?.isGuest && (
+                <button 
+                  onClick={() => { setContextMenu(null); handleBatchDelete(); }} 
+                  className="w-full text-left px-4 py-2 hover:bg-rose-600 hover:text-white flex items-center gap-2.5 transition-colors text-rose-400"
+                >
+                  <Trash2 className="w-4 h-4" /> Eliminar Seleccionados (Supr)
+                </button>
+              )}
+            </>
+          ) : contextMenu.item ? (
             <>
               <div className="px-3 py-2 border-b border-white/10 text-gray-400 truncate flex items-center gap-2">
                  {getIcon(contextMenu.item.iconType, 'w-4 h-4')}
@@ -901,7 +1248,7 @@ export default function FileExplorer({ user, onOpenFile }: { user?: UserData; on
                   onClick={() => { setContextMenu(null); handleOpenItem(contextMenu.item!); }} 
                   className="w-full text-left px-4 py-2 hover:bg-blue-600 hover:text-white flex items-center gap-2.5 transition-colors font-semibold text-amber-300"
                 >
-                  <Box className="w-4 h-4 text-amber-400" /> Ejecutar con Wine 9.0 (Win32)
+                  <Box className="w-4 h-4 text-amber-400" /> Ejecutar con Savia WinEmu (x86)
                 </button>
               )}
               <button 

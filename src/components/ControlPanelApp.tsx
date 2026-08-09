@@ -118,7 +118,9 @@ export default function ControlPanelApp({ user, onOpenApp }: { user?: UserData; 
     setSelectedTheme(presetName);
     userStorage.setWallpaper(activeUsername, url);
     soundEngine.playNotification();
-    window.dispatchEvent(new Event('storage'));
+    window.dispatchEvent(new CustomEvent('savia_os_theme_changed', {
+      detail: { wallpaper: url }
+    }));
   };
 
   const applyCustomWallpaper = () => {
@@ -126,7 +128,9 @@ export default function ControlPanelApp({ user, onOpenApp }: { user?: UserData; 
     userStorage.setWallpaper(activeUsername, customBgUrl.trim());
     setSelectedTheme('Personalizado');
     soundEngine.playNotification();
-    window.dispatchEvent(new Event('storage'));
+    window.dispatchEvent(new CustomEvent('savia_os_theme_changed', {
+      detail: { wallpaper: customBgUrl.trim() }
+    }));
   };
 
   // --- SOUND STATE ---

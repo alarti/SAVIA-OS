@@ -174,6 +174,14 @@ export const soundEngine = {
     soundEngine.playTone(180, 0.2, 'sawtooth', 0.1);
   },
 
+  playErrorBeep: () => {
+    soundEngine.playError();
+  },
+
+  playKeyClick: () => {
+    soundEngine.playTone(1000, 0.015, 'sine', 0.04);
+  },
+
   playSuccessTone: () => {
     if (isMuted || masterVolume <= 0) return;
     soundEngine.playTone(523.25, 0.1, 'sine', 0.12); // C5

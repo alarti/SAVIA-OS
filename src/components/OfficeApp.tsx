@@ -356,13 +356,13 @@ export default function OfficeApp({ initialFile, user }: { initialFile?: string;
               }
             });
           });
-          setSheets([{ id: '1', name: 'Hoja Importada', data: newData }]);
+          setSheets([{ name: 'Hoja Importada', data: newData }]);
         } else {
           try {
             const parsed = JSON.parse(text);
             if (Array.isArray(parsed)) setSheets(parsed);
           } catch {
-            setSheets([{ id: '1', name: 'Datos Local', data: { 'A1': fileName, 'A2': text.slice(0, 200) } }]);
+            setSheets([{ name: 'Datos Local', data: { 'A1': fileName, 'A2': text.slice(0, 200) } }]);
           }
         }
         setMode('calc');

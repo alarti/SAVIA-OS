@@ -144,7 +144,7 @@ export default function BrowserApp({ user }: { user?: UserData }) {
         {/* Omnibox */}
         <div className="flex-1 max-w-4xl flex items-center bg-[#F1F3F4] rounded-full px-4 h-8 border border-transparent focus-within:border-blue-300 focus-within:bg-white focus-within:shadow-sm transition-all">
           {user?.isGuest ? (
-            <ShieldAlert className="w-3.5 h-3.5 text-amber-600 mr-2 shrink-0" title="Modo Navegación Controlada (Invitado)" />
+            <span title="Modo Navegación Controlada (Invitado)"><ShieldAlert className="w-3.5 h-3.5 text-amber-600 mr-2 shrink-0" /></span>
           ) : (
             <Lock className="w-3.5 h-3.5 text-gray-500 mr-2 shrink-0" />
           )}

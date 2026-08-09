@@ -18,13 +18,16 @@
     "@types/three": "^0.185.4",
     "@vitejs/plugin-react": "^5.0.4",
     "dotenv": "^17.2.3",
+    "emulators": "^8.4.1",
     "express": "^4.21.2",
+    "js-dos": "^8.4.1",
     "lucide-react": "^1.29.0",
     "motion": "^12.23.24",
     "react": "^19.0.1",
     "react-dom": "^19.0.1",
     "react-tetris": "^0.4.0",
     "three": "^0.185.1",
+    "v86": "^0.5.432",
     "vite": "^6.2.3"
   },
   "devDependencies": {

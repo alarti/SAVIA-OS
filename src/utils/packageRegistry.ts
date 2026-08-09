@@ -212,12 +212,12 @@ export const AVAILABLE_PACKAGES: PackageInfo[] = [
   },
   {
     id: 'wine',
-    name: 'Wine 9.0 (Subsistema Windows Win32 / WASM)',
-    version: '9.0.0',
+    name: 'Savia WinEmu (Emulador x86 / Binarios Windows)',
+    version: '2.4.0',
     category: 'windows',
-    description: 'Capa de compatibilidad y emulador x86 WASM de código abierto para ejecutar binarios de Windows (.exe y .msi) en HTML5.',
+    description: 'Motor de emulación x86 y ejecución de binarios de Windows (.exe y .msi) sobre WebAssembly v86 Core.',
     size: '14.2 MB',
-    author: 'WineHQ / SaviaOS Core',
+    author: 'SaviaOS Core / v86 Open Source',
     icon: 'Box',
     type: 'gui',
     installedByDefault: true

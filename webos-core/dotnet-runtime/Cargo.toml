@@ -1,0 +1,9 @@
+[package]
+name = "dotnet-runtime"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+core-api = { path = "../core-api" }
+windows-compat = { path = "../windows-compat" }
+serde = { version = "1.0", features = ["derive"] }

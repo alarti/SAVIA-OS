@@ -80,6 +80,17 @@ export default function ThemeCustomizerApp({ user }: { user?: UserData }) {
 
   const [customUrlInput, setCustomUrlInput] = useState('');
 
+  useEffect(() => {
+    const handleSync = (e: any) => {
+      if (e.detail?.wallpaper) setCurrentWallpaper(e.detail.wallpaper);
+      if (e.detail?.theme) setCurrentTheme(e.detail.theme);
+      if (e.detail?.accent) setCurrentAccent(e.detail.accent);
+      if (e.detail?.opacity !== undefined) setDarkOverlayOpacity(e.detail.opacity);
+    };
+    window.addEventListener('savia_os_theme_changed', handleSync as any);
+    return () => window.removeEventListener('savia_os_theme_changed', handleSync as any);
+  }, []);
+
   const applyChanges = (newWallpaper?: string, newTheme?: string, newAccent?: string, newOpacity?: number) => {
     const wp = newWallpaper !== undefined ? newWallpaper : currentWallpaper;
     const th = newTheme !== undefined ? newTheme : currentTheme;

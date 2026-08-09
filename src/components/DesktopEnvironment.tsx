@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Terminal, Folder, Globe, Cpu, X, Square, Minus, Zap, User, Monitor, Search, FileText, FileImage, Power, Activity, Gamepad2, Volume2, VolumeX, Box, Radio, Palette, Download, Sliders, ShieldCheck, Info, Settings, Wifi, Battery, CheckCircle, Image as ImageIcon, Calculator as CalcIcon, Calendar as CalendarIcon, Move, Maximize2, Minimize2, RefreshCcw, Plus, Trash2, Edit2, Play, ChevronRight, ChevronLeft, Grid, Sparkles, Trophy, Rocket, FileCode } from 'lucide-react';
+import { Terminal, Folder, Globe, Cpu, X, Square, Minus, Zap, User, Monitor, Search, FileText, FileImage, Power, Activity, Gamepad2, Volume2, VolumeX, Box, Radio, Palette, Download, Sliders, ShieldCheck, ShieldAlert, Info, Settings, Wifi, Battery, CheckCircle, Image as ImageIcon, Calculator as CalcIcon, Calendar as CalendarIcon, Move, Maximize2, Minimize2, RefreshCcw, Plus, Trash2, Edit2, Play, ChevronRight, ChevronLeft, Grid, Sparkles, Trophy, Rocket, FileCode } from 'lucide-react';
 import Editor from '@monaco-editor/react';
 import type { UserData } from '../utils/auth';
 import TerminalApp from './Terminal';
@@ -21,15 +21,17 @@ import CalendarClockApp from './CalendarClockApp';
 import ImageViewerApp from './ImageViewerApp';
 import WineRunnerApp, { WIN32_APP_CATALOG } from './WineRunnerApp';
 import ThreeGamesApp from './ThreeGamesApp';
-import ShowcaseWebSiteApp from './ShowcaseWebSiteApp';
+import { TrashApp } from './TrashApp';
 import { soundEngine } from '../utils/soundEngine';
 import { getInstalledPackageIds, AVAILABLE_PACKAGES } from '../utils/packageRegistry';
 import { userStorage } from '../utils/userStorage';
+import { trashAndUndo } from '../utils/trashAndUndo';
+import { isSystemDesktopIcon } from '../utils/vfs';
 
 type WindowData = {
   id: string;
   title: string;
-  type: 'terminal' | 'webgl' | 'folder' | 'browser' | 'texteditor' | 'pdfviewer' | 'office' | 'taskmanager' | 'tetris' | 'appstore' | 'soundsettings' | 'paint' | 'about' | 'controlpanel' | 'theme' | 'calculator' | 'calendar' | 'imageviewer' | 'wine' | 'showcaseweb';
+  type: 'terminal' | 'webgl' | 'folder' | 'browser' | 'texteditor' | 'pdfviewer' | 'office' | 'taskmanager' | 'tetris' | 'appstore' | 'soundsettings' | 'paint' | 'about' | 'controlpanel' | 'theme' | 'calculator' | 'calendar' | 'imageviewer' | 'wine' | 'trash';
   data?: any;
   x: number;
   y: number;
@@ -77,8 +79,236 @@ const DEFAULT_DESKTOP_ICONS: DesktopIcon[] = [
   { id: 'savia_xls', title: 'Savia Xls', appType: 'office', iconType: 'xls', docData: 'nuevo documento.xlsx', x: 350, y: 20 },
   { id: 'savia_ppt', title: 'Savia Ppt', appType: 'office', iconType: 'ppt', docData: 'nuevo documento.pptx', x: 350, y: 120 },
   { id: 'paint', title: 'Savia Paint', appType: 'paint', iconType: 'paint', x: 350, y: 220 },
-  { id: 'showcase_web', title: 'Savia Web Portal', appType: 'showcaseweb', iconType: 'globe', x: 350, y: 320 },
 ];
+
+export interface AccentThemeConfig {
+  id: string;
+  name: string;
+  hex: string;
+  bg: string;
+  bgHover: string;
+  bgSubtle: string;
+  bgSubtleHover: string;
+  border: string;
+  borderSubtle: string;
+  text: string;
+  textHover: string;
+  textAccent: string;
+  ring: string;
+  glow: string;
+  activeIndicator: string;
+  startZapText: string;
+  startZapFill: string;
+}
+
+export const ACCENT_THEMES: Record<string, AccentThemeConfig> = {
+  blue: {
+    id: 'blue',
+    name: 'Azul SAVIA',
+    hex: '#3B82F6',
+    bg: 'bg-blue-600',
+    bgHover: 'hover:bg-blue-500',
+    bgSubtle: 'bg-blue-500/20',
+    bgSubtleHover: 'hover:bg-blue-500/30',
+    border: 'border-blue-500',
+    borderSubtle: 'border-blue-500/30',
+    text: 'text-blue-400',
+    textHover: 'hover:text-blue-300',
+    textAccent: 'text-blue-300',
+    ring: 'ring-blue-500',
+    glow: 'shadow-[0_0_15px_rgba(59,130,246,0.4)]',
+    activeIndicator: 'bg-blue-400 shadow-[0_0_10px_rgba(96,165,250,0.8)]',
+    startZapText: 'text-blue-400',
+    startZapFill: 'fill-blue-400/20 group-hover:fill-blue-400',
+  },
+  emerald: {
+    id: 'emerald',
+    name: 'Esmeralda',
+    hex: '#10B981',
+    bg: 'bg-emerald-600',
+    bgHover: 'hover:bg-emerald-500',
+    bgSubtle: 'bg-emerald-500/20',
+    bgSubtleHover: 'hover:bg-emerald-500/30',
+    border: 'border-emerald-500',
+    borderSubtle: 'border-emerald-500/30',
+    text: 'text-emerald-400',
+    textHover: 'hover:text-emerald-300',
+    textAccent: 'text-emerald-300',
+    ring: 'ring-emerald-500',
+    glow: 'shadow-[0_0_15px_rgba(16,185,129,0.4)]',
+    activeIndicator: 'bg-emerald-400 shadow-[0_0_10px_rgba(52,211,153,0.8)]',
+    startZapText: 'text-emerald-400',
+    startZapFill: 'fill-emerald-400/20 group-hover:fill-emerald-400',
+  },
+  purple: {
+    id: 'purple',
+    name: 'Violeta Neón',
+    hex: '#8B5CF6',
+    bg: 'bg-purple-600',
+    bgHover: 'hover:bg-purple-500',
+    bgSubtle: 'bg-purple-500/20',
+    bgSubtleHover: 'hover:bg-purple-500/30',
+    border: 'border-purple-500',
+    borderSubtle: 'border-purple-500/30',
+    text: 'text-purple-400',
+    textHover: 'hover:text-purple-300',
+    textAccent: 'text-purple-300',
+    ring: 'ring-purple-500',
+    glow: 'shadow-[0_0_15px_rgba(139,92,246,0.4)]',
+    activeIndicator: 'bg-purple-400 shadow-[0_0_10px_rgba(192,132,252,0.8)]',
+    startZapText: 'text-purple-400',
+    startZapFill: 'fill-purple-400/20 group-hover:fill-purple-400',
+  },
+  rose: {
+    id: 'rose',
+    name: 'Rosa Carmín',
+    hex: '#F43F5E',
+    bg: 'bg-rose-600',
+    bgHover: 'hover:bg-rose-500',
+    bgSubtle: 'bg-rose-500/20',
+    bgSubtleHover: 'hover:bg-rose-500/30',
+    border: 'border-rose-500',
+    borderSubtle: 'border-rose-500/30',
+    text: 'text-rose-400',
+    textHover: 'hover:text-rose-300',
+    textAccent: 'text-rose-300',
+    ring: 'ring-rose-500',
+    glow: 'shadow-[0_0_15px_rgba(244,63,94,0.4)]',
+    activeIndicator: 'bg-rose-400 shadow-[0_0_10px_rgba(251,113,133,0.8)]',
+    startZapText: 'text-rose-400',
+    startZapFill: 'fill-rose-400/20 group-hover:fill-rose-400',
+  },
+  amber: {
+    id: 'amber',
+    name: 'Ámbar Dorado',
+    hex: '#F59E0B',
+    bg: 'bg-amber-600',
+    bgHover: 'hover:bg-amber-500',
+    bgSubtle: 'bg-amber-500/20',
+    bgSubtleHover: 'hover:bg-amber-500/30',
+    border: 'border-amber-500',
+    borderSubtle: 'border-amber-500/30',
+    text: 'text-amber-400',
+    textHover: 'hover:text-amber-300',
+    textAccent: 'text-amber-300',
+    ring: 'ring-amber-500',
+    glow: 'shadow-[0_0_15px_rgba(245,158,11,0.4)]',
+    activeIndicator: 'bg-amber-400 shadow-[0_0_10px_rgba(251,191,36,0.8)]',
+    startZapText: 'text-amber-400',
+    startZapFill: 'fill-amber-400/20 group-hover:fill-amber-400',
+  },
+  cyan: {
+    id: 'cyan',
+    name: 'Cian Turquesa',
+    hex: '#06B6D4',
+    bg: 'bg-cyan-600',
+    bgHover: 'hover:bg-cyan-500',
+    bgSubtle: 'bg-cyan-500/20',
+    bgSubtleHover: 'hover:bg-cyan-500/30',
+    border: 'border-cyan-500',
+    borderSubtle: 'border-cyan-500/30',
+    text: 'text-cyan-400',
+    textHover: 'hover:text-cyan-300',
+    textAccent: 'text-cyan-300',
+    ring: 'ring-cyan-500',
+    glow: 'shadow-[0_0_15px_rgba(6,182,212,0.4)]',
+    activeIndicator: 'bg-cyan-400 shadow-[0_0_10px_rgba(34,211,238,0.8)]',
+    startZapText: 'text-cyan-400',
+    startZapFill: 'fill-cyan-400/20 group-hover:fill-cyan-400',
+  },
+};
+
+export interface DesktopThemeStyle {
+  id: string;
+  name: string;
+  isLight: boolean;
+  iconCardHover: string;
+  iconCardSelected: string;
+  iconTitleStyle: string;
+  iconContainerExtra?: string;
+  taskbarBg: string;
+  taskbarText: string;
+  startMenuBg: string;
+  startMenuText: string;
+  startMenuBorder: string;
+  windowBg: string;
+  windowHeaderBg: string;
+  windowText: string;
+  windowBorder: string;
+}
+
+export const DESKTOP_THEME_STYLES: Record<string, DesktopThemeStyle> = {
+  'dark-glass': {
+    id: 'dark-glass',
+    name: 'SAVIA Dark Glass',
+    isLight: false,
+    iconCardHover: 'hover:bg-white/10 hover:border-white/20',
+    iconCardSelected: 'bg-white/20 border-white/30 shadow-lg',
+    iconTitleStyle: 'text-white font-semibold drop-shadow-[0_1px_3px_rgba(0,0,0,0.9)] text-[11px] text-center leading-tight',
+    taskbarBg: 'bg-[#16161A]/92 backdrop-blur-2xl border-white/15',
+    taskbarText: 'text-white',
+    startMenuBg: 'bg-[#1C1C1F]/95 backdrop-blur-3xl border-white/10',
+    startMenuText: 'text-white',
+    startMenuBorder: 'border-white/10',
+    windowBg: 'bg-[#121214]',
+    windowHeaderBg: 'bg-[#1C1C20] border-b border-white/10',
+    windowText: 'text-white',
+    windowBorder: 'border-[#3F3F46]',
+  },
+  'neon-cyber': {
+    id: 'neon-cyber',
+    name: 'Cyberpunk Neon',
+    isLight: false,
+    iconCardHover: 'hover:bg-cyan-950/40 hover:border-cyan-500/50 hover:shadow-[0_0_12px_rgba(6,182,212,0.4)]',
+    iconCardSelected: 'bg-cyan-950/70 border-2 border-cyan-400 shadow-[0_0_20px_rgba(6,182,212,0.6)] ring-1 ring-pink-500/50',
+    iconTitleStyle: 'text-cyan-200 font-mono font-bold drop-shadow-[0_0_6px_rgba(6,182,212,0.9)] text-[11px] text-center leading-tight',
+    iconContainerExtra: 'border border-cyan-500/20 bg-black/40 backdrop-blur-sm',
+    taskbarBg: 'bg-[#0a0814]/95 backdrop-blur-2xl border-cyan-500/40 shadow-[0_0_25px_rgba(6,182,212,0.25)]',
+    taskbarText: 'text-cyan-100',
+    startMenuBg: 'bg-[#0a0814]/98 backdrop-blur-3xl border-cyan-500/50 shadow-[0_0_35px_rgba(6,182,212,0.2)]',
+    startMenuText: 'text-cyan-50',
+    startMenuBorder: 'border-cyan-500/40',
+    windowBg: 'bg-[#080812]',
+    windowHeaderBg: 'bg-[#0e0c1e] border-b border-cyan-500/40',
+    windowText: 'text-cyan-100',
+    windowBorder: 'border-cyan-500/50 shadow-[0_0_20px_rgba(6,182,212,0.2)]',
+  },
+  'emerald-sonoma': {
+    id: 'emerald-sonoma',
+    name: 'Emerald Sonoma',
+    isLight: false,
+    iconCardHover: 'hover:bg-emerald-900/30 hover:border-emerald-500/40 hover:shadow-[0_0_12px_rgba(16,185,129,0.3)]',
+    iconCardSelected: 'bg-emerald-950/70 border-2 border-emerald-400 shadow-[0_0_20px_rgba(16,185,129,0.5)]',
+    iconTitleStyle: 'text-emerald-100 font-semibold drop-shadow-[0_1px_4px_rgba(0,0,0,0.9)] text-[11px] text-center leading-tight',
+    iconContainerExtra: 'border border-emerald-500/20 bg-[#041a14]/40 backdrop-blur-sm',
+    taskbarBg: 'bg-[#041a14]/92 backdrop-blur-2xl border-emerald-500/30 shadow-[0_8px_32px_rgba(4,26,20,0.6)]',
+    taskbarText: 'text-emerald-50',
+    startMenuBg: 'bg-[#041a14]/98 backdrop-blur-3xl border-emerald-500/40 shadow-[0_8px_32px_rgba(4,26,20,0.8)]',
+    startMenuText: 'text-emerald-50',
+    startMenuBorder: 'border-emerald-500/30',
+    windowBg: 'bg-[#062019]',
+    windowHeaderBg: 'bg-[#072c23] border-b border-emerald-500/30',
+    windowText: 'text-emerald-50',
+    windowBorder: 'border-emerald-500/40 shadow-[0_0_20px_rgba(16,185,129,0.15)]',
+  },
+  'minimal-light': {
+    id: 'minimal-light',
+    name: 'Nordic Clean Light',
+    isLight: true,
+    iconCardHover: 'hover:bg-white/80 hover:border-slate-300 shadow-md',
+    iconCardSelected: 'bg-white/95 border-2 border-slate-400 shadow-xl ring-2 ring-slate-400/30',
+    iconTitleStyle: 'bg-white/90 text-slate-900 font-bold text-[11px] px-2 py-0.5 rounded-lg border border-slate-300/80 shadow-md backdrop-blur-md text-center leading-tight',
+    taskbarBg: 'bg-slate-100/95 backdrop-blur-2xl border-slate-300/80 shadow-2xl',
+    taskbarText: 'text-slate-800',
+    startMenuBg: 'bg-slate-50/98 backdrop-blur-3xl border-slate-300 shadow-2xl',
+    startMenuText: 'text-slate-900',
+    startMenuBorder: 'border-slate-300',
+    windowBg: 'bg-white',
+    windowHeaderBg: 'bg-slate-100 border-b border-slate-200',
+    windowText: 'text-slate-900',
+    windowBorder: 'border-slate-300 shadow-2xl',
+  },
+};
 
 export default function DesktopEnvironment({ user, onExit }: { user: UserData, onExit: () => void }) {
   const [windows, setWindows] = useState<WindowData[]>([]);
@@ -104,12 +334,69 @@ export default function DesktopEnvironment({ user, onExit }: { user: UserData, o
   });
   const [draggingIcon, setDraggingIcon] = useState<{ id: string, startX: number, startY: number, initialX: number, initialY: number, isMoved: boolean } | null>(null);
   const [selectedIconId, setSelectedIconId] = useState<string | null>(null);
+  const [selectedIconIds, setSelectedIconIds] = useState<string[]>([]);
+  const lastIconClickRef = useRef<{ id: string; time: number }>({ id: '', time: 0 });
+  const desktopAreaRef = useRef<HTMLDivElement>(null);
+  const [desktopSelectionBox, setDesktopSelectionBox] = useState<{ startX: number, startY: number, currentX: number, currentY: number } | null>(null);
+  const [systemToast, setSystemToast] = useState<string | null>(null);
+
+  const triggerSystemToast = (msg: string) => {
+    soundEngine.playError();
+    setSystemToast(msg);
+    setTimeout(() => setSystemToast(null), 4000);
+  };
+
+  // Desktop Keyboard Shortcuts (Ctrl+A select all icons, Supr delete selected icons)
+  useEffect(() => {
+    const handleDesktopKeyDown = (e: KeyboardEvent) => {
+      const active = document.activeElement;
+      const isInput = active && (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA');
+      if (isInput) return;
+
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'a') {
+        // Select all desktop icons
+        e.preventDefault();
+        setSelectedIconIds(desktopIcons.map(i => i.id));
+        soundEngine.playButtonClick();
+      } else if (e.key === 'Delete' || e.key === 'Supr') {
+        if (selectedIconIds.length > 0) {
+          e.preventDefault();
+          const iconsToDelete = desktopIcons.filter(i => selectedIconIds.includes(i.id));
+          const systemIcons = iconsToDelete.filter(i => isSystemDesktopIcon(i));
+          const allowedIcons = iconsToDelete.filter(i => !isSystemDesktopIcon(i));
+
+          if (systemIcons.length > 0) {
+            if (allowedIcons.length === 0) {
+              triggerSystemToast(`⚠️ Protección del Sistema: Los componentes seleccionados forman parte del sistema y no se pueden eliminar.`);
+            } else {
+              triggerSystemToast(`⚠️ Se omitieron ${systemIcons.length} accesos directos de sistema protegidos.`);
+            }
+          }
+
+          if (allowedIcons.length > 0) {
+            trashAndUndo.moveDesktopIconsToTrash(user.username, allowedIcons);
+            soundEngine.playButtonClick();
+          }
+          setSelectedIconId(null);
+          setSelectedIconIds([]);
+        }
+      } else if (e.key === 'Escape') {
+        setSelectedIconIds([]);
+        setSelectedIconId(null);
+      }
+    };
+
+    window.addEventListener('keydown', handleDesktopKeyDown);
+    return () => window.removeEventListener('keydown', handleDesktopKeyDown);
+  }, [desktopIcons, selectedIconIds, user.username]);
 
   // Sync icons and theme when user changes
   useEffect(() => {
     setDesktopIcons(userStorage.getDesktopIcons(user.username));
     setWallpaper(userStorage.getWallpaper(user.username));
     setOverlayOpacity(userStorage.getOverlayOpacity(user.username));
+    setCurrentTheme(userStorage.getTheme(user.username));
+    setCurrentAccent(userStorage.getAccent(user.username));
   }, [user.username]);
 
   // Desktop Icon Context Menu & Creation Modals State
@@ -160,12 +447,22 @@ export default function DesktopEnvironment({ user, onExit }: { user: UserData, o
   };
 
   const deleteDesktopIcon = (id: string) => {
-    setDesktopIcons(prev => {
-      const updated = prev.filter(i => i.id !== id);
-      userStorage.setDesktopIcons(user.username, updated);
-      return updated;
-    });
-    soundEngine.playButtonClick();
+    const iconToDelete = desktopIcons.find(i => i.id === id);
+    if (iconToDelete) {
+      if (isSystemDesktopIcon(iconToDelete)) {
+        triggerSystemToast(`⚠️ Componente del Sistema: "${iconToDelete.title}" es un acceso directo protegido y no se puede eliminar.`);
+        return;
+      }
+      trashAndUndo.moveDesktopIconsToTrash(user.username, [iconToDelete]);
+      soundEngine.playButtonClick();
+    } else {
+      setDesktopIcons(prev => {
+        const updated = prev.filter(i => i.id !== id);
+        userStorage.setDesktopIcons(user.username, updated);
+        return updated;
+      });
+      soundEngine.playButtonClick();
+    }
   };
 
   const renameDesktopIcon = (id: string, newTitle: string) => {
@@ -181,6 +478,26 @@ export default function DesktopEnvironment({ user, onExit }: { user: UserData, o
   // Desktop Wallpaper & Theme State
   const [wallpaper, setWallpaper] = useState<string>(() => userStorage.getWallpaper(user.username));
   const [overlayOpacity, setOverlayOpacity] = useState<number>(() => userStorage.getOverlayOpacity(user.username));
+  const [currentTheme, setCurrentTheme] = useState<string>(() => userStorage.getTheme(user.username));
+  const [currentAccent, setCurrentAccent] = useState<string>(() => userStorage.getAccent(user.username));
+
+  // Sync CSS variables and dark/light classes on document root
+  useEffect(() => {
+    const accentObj = ACCENT_THEMES[currentAccent] || ACCENT_THEMES.blue;
+    const themeObj = DESKTOP_THEME_STYLES[currentTheme] || DESKTOP_THEME_STYLES['dark-glass'];
+
+    document.documentElement.style.setProperty('--savia-accent-hex', accentObj.hex);
+    document.documentElement.style.setProperty('--savia-accent-bg', accentObj.bg);
+    document.documentElement.style.setProperty('--savia-accent-text', accentObj.text);
+
+    if (themeObj.isLight) {
+      document.documentElement.classList.add('savia-theme-light');
+      document.documentElement.classList.remove('savia-theme-dark');
+    } else {
+      document.documentElement.classList.add('savia-theme-dark');
+      document.documentElement.classList.remove('savia-theme-light');
+    }
+  }, [currentAccent, currentTheme]);
 
   // Sound & Desktop init
   useEffect(() => {
@@ -204,12 +521,25 @@ export default function DesktopEnvironment({ user, onExit }: { user: UserData, o
       setDesktopIcons(userStorage.getDesktopIcons(user.username));
       setWallpaper(userStorage.getWallpaper(user.username));
       setOverlayOpacity(userStorage.getOverlayOpacity(user.username));
+      setCurrentTheme(userStorage.getTheme(user.username));
+      setCurrentAccent(userStorage.getAccent(user.username));
     };
 
     window.addEventListener('savia_os_desktop_icons_updated', handleIconsUpdated);
     window.addEventListener('savia_os_guest_reset', handleGuestResetEvent);
 
     const handleGlobalTaskManagerKey = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') {
+        const active = document.activeElement;
+        const isInput = active && (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA');
+        if (!isInput) {
+          e.preventDefault();
+          trashAndUndo.undo();
+          soundEngine.playButtonClick();
+          return;
+        }
+      }
+
       if (
         (e.ctrlKey && e.shiftKey && (e.key === 'Escape' || e.key === 'Esc')) ||
         (e.ctrlKey && e.altKey && (e.key === 'Delete' || e.key === 'Del' || e.key === 't' || e.key === 'T'))
@@ -229,6 +559,8 @@ export default function DesktopEnvironment({ user, onExit }: { user: UserData, o
     const handleThemeChange = (e: any) => {
       if (e.detail?.wallpaper) setWallpaper(e.detail.wallpaper);
       if (e.detail?.opacity !== undefined) setOverlayOpacity(e.detail.opacity);
+      if (e.detail?.theme) setCurrentTheme(e.detail.theme);
+      if (e.detail?.accent) setCurrentAccent(e.detail.accent);
     };
 
     const closeWindowCtxMenu = () => {
@@ -357,6 +689,61 @@ export default function DesktopEnvironment({ user, onExit }: { user: UserData, o
       window.removeEventListener('touchend', handleMouseUp);
     };
   }, [draggingIcon]);
+
+  // Rubberband Cursor Marquee Drag-Selection for Desktop Icons
+  useEffect(() => {
+    if (!desktopSelectionBox) return;
+
+    const handleMouseMove = (e: MouseEvent | TouchEvent) => {
+      const clientX = 'touches' in e ? e.touches[0].clientX : (e as MouseEvent).clientX;
+      const clientY = 'touches' in e ? e.touches[0].clientY : (e as MouseEvent).clientY;
+
+      setDesktopSelectionBox(prev => prev ? { ...prev, currentX: clientX, currentY: clientY } : null);
+
+      const boxLeft = Math.min(desktopSelectionBox.startX, clientX);
+      const boxTop = Math.min(desktopSelectionBox.startY, clientY);
+      const boxRight = Math.max(desktopSelectionBox.startX, clientX);
+      const boxBottom = Math.max(desktopSelectionBox.startY, clientY);
+
+      if (desktopAreaRef.current) {
+        const iconEls = desktopAreaRef.current.querySelectorAll('[data-desktop-icon-id]');
+        const intersected: string[] = [];
+        iconEls.forEach(el => {
+          const rect = el.getBoundingClientRect();
+          const isIntersecting = !(
+            rect.right < boxLeft ||
+            rect.left > boxRight ||
+            rect.bottom < boxTop ||
+            rect.top > boxBottom
+          );
+          if (isIntersecting) {
+            const id = el.getAttribute('data-desktop-icon-id');
+            if (id) intersected.push(id);
+          }
+        });
+        setSelectedIconIds(intersected);
+        if (intersected.length > 0) {
+          setSelectedIconId(intersected[0]);
+        }
+      }
+    };
+
+    const handleMouseUp = () => {
+      setDesktopSelectionBox(null);
+    };
+
+    window.addEventListener('mousemove', handleMouseMove);
+    window.addEventListener('mouseup', handleMouseUp);
+    window.addEventListener('touchmove', handleMouseMove, { passive: false });
+    window.addEventListener('touchend', handleMouseUp);
+
+    return () => {
+      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('mouseup', handleMouseUp);
+      window.removeEventListener('touchmove', handleMouseMove);
+      window.removeEventListener('touchend', handleMouseUp);
+    };
+  }, [desktopSelectionBox]);
 
   const alignIconsGrid = () => {
     const GRID_X = 110;
@@ -492,6 +879,9 @@ export default function DesktopEnvironment({ user, onExit }: { user: UserData, o
     setWindows(ws => ws.map(w => w.id === id ? { ...w, minimized: !w.minimized } : w));
   };
 
+  const activeAccent = ACCENT_THEMES[currentAccent] || ACCENT_THEMES.blue;
+  const activeThemeStyle = DESKTOP_THEME_STYLES[currentTheme] || DESKTOP_THEME_STYLES['dark-glass'];
+
   return (
     <div 
       className="w-full h-[100dvh] bg-[#0A0B10] overflow-hidden flex flex-col font-sans relative select-none" 
@@ -499,10 +889,32 @@ export default function DesktopEnvironment({ user, onExit }: { user: UserData, o
     >
       {/* Desktop Background / Area */}
       <div 
+        ref={desktopAreaRef}
         className="flex-1 relative bg-cover bg-center overflow-hidden"
         style={{
           backgroundImage: wallpaper === 'gradient-oled' ? 'none' : `url('${wallpaper}')`,
           backgroundColor: wallpaper === 'gradient-oled' ? '#050508' : '#0A0B10'
+        }}
+        onMouseDown={(e) => {
+          if (e.target === e.currentTarget || (e.target as HTMLElement).classList.contains('absolute')) {
+            if (e.button === 0) {
+              setDesktopSelectionBox({ startX: e.clientX, startY: e.clientY, currentX: e.clientX, currentY: e.clientY });
+              if (!e.ctrlKey && !e.metaKey && !e.shiftKey) {
+                setSelectedIconIds([]);
+                setSelectedIconId(null);
+              }
+            }
+          }
+        }}
+        onTouchStart={(e) => {
+          if (e.target === e.currentTarget) {
+            setDesktopSelectionBox({ 
+              startX: e.touches[0].clientX, 
+              startY: e.touches[0].clientY, 
+              currentX: e.touches[0].clientX, 
+              currentY: e.touches[0].clientY 
+            });
+          }
         }}
         onClick={() => {
           setIsStartMenuOpen(false);
@@ -652,13 +1064,7 @@ export default function DesktopEnvironment({ user, onExit }: { user: UserData, o
               <span>Administrador de Tareas (Ctrl+Shift+Esc)</span>
             </button>
 
-            <button
-              onClick={() => { openApp('showcaseweb', 'Savia Web Portal'); setContextMenu(null); }}
-              className="flex items-center gap-2.5 px-3 py-2 hover:bg-blue-600 rounded-xl text-left font-semibold text-sky-300"
-            >
-              <Globe className="w-4 h-4 text-sky-400" />
-              <span>Portal Web & GitHub Pages...</span>
-            </button>
+
 
             <button
               onClick={() => { alignIconsGrid(); setContextMenu(null); }}
@@ -720,54 +1126,94 @@ export default function DesktopEnvironment({ user, onExit }: { user: UserData, o
           </div>
         )}
         
-        {/* Desktop Icons (Draggable, Drag-to-Reorganize & Interactive) */}
-        {desktopIcons.map(icon => (
-          <div
-            key={icon.id}
-            style={{ left: icon.x, top: icon.y }}
-            className={`absolute flex flex-col items-center gap-1 cursor-grab active:cursor-grabbing p-2 rounded-xl w-24 select-none transition-all group z-0 ${selectedIconId === icon.id ? 'bg-white/20 border border-white/30 shadow-lg' : 'hover:bg-white/10'}`}
-            onContextMenu={(e) => {
-              e.preventDefault();
-              e.stopPropagation();
-              setSelectedIconId(icon.id);
-              setIconContextMenu({ icon, x: e.clientX, y: e.clientY });
+        {/* Rubberband Cursor Marquee Drag-Selection Rectangle */}
+        {desktopSelectionBox && Math.abs(desktopSelectionBox.currentX - desktopSelectionBox.startX) > 2 && Math.abs(desktopSelectionBox.currentY - desktopSelectionBox.startY) > 2 && (
+          <div 
+            className="fixed border-2 border-blue-400 bg-blue-500/20 rounded-lg pointer-events-none z-40 backdrop-blur-[1px] shadow-lg shadow-blue-500/20"
+            style={{
+              left: Math.min(desktopSelectionBox.startX, desktopSelectionBox.currentX),
+              top: Math.min(desktopSelectionBox.startY, desktopSelectionBox.currentY),
+              width: Math.abs(desktopSelectionBox.currentX - desktopSelectionBox.startX),
+              height: Math.abs(desktopSelectionBox.currentY - desktopSelectionBox.startY)
             }}
-            onClick={(e) => {
-              e.stopPropagation();
-              setSelectedIconId(icon.id);
-              if (isTouch && (!draggingIcon || !draggingIcon.isMoved)) {
+          />
+        )}
+
+        {/* Desktop Icons (Draggable, Multi-Selectable & Interactive) */}
+        {desktopIcons.map(icon => {
+          const isIconSelected = selectedIconIds.includes(icon.id) || selectedIconId === icon.id;
+          return (
+            <div
+              key={icon.id}
+              data-desktop-icon-id={icon.id}
+              style={{ left: icon.x, top: icon.y }}
+              className={`absolute flex flex-col items-center gap-1 cursor-grab active:cursor-grabbing p-2 rounded-xl w-24 select-none transition-all group z-0 ${isIconSelected ? `${activeAccent.bgSubtle} border-2 ${activeAccent.border} ${activeAccent.glow}` : `${activeThemeStyle.iconCardHover} ${activeThemeStyle.iconContainerExtra || ''}`}`}
+              onContextMenu={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                if (!selectedIconIds.includes(icon.id)) {
+                  setSelectedIconId(icon.id);
+                  setSelectedIconIds([icon.id]);
+                }
+                setIconContextMenu({ icon, x: e.clientX, y: e.clientY });
+              }}
+              onClick={(e) => {
+                e.stopPropagation();
+                const now = Date.now();
+                const isDoubleTap = (lastIconClickRef.current.id === icon.id && (now - lastIconClickRef.current.time) < 400);
+
+                if (e.ctrlKey || e.metaKey || e.shiftKey) {
+                  setSelectedIconIds(prev => 
+                    prev.includes(icon.id) ? prev.filter(id => id !== icon.id) : [...prev, icon.id]
+                  );
+                  lastIconClickRef.current = { id: '', time: 0 };
+                } else {
+                  setSelectedIconId(icon.id);
+                  setSelectedIconIds([icon.id]);
+
+                  if (isDoubleTap && (!draggingIcon || !draggingIcon.isMoved)) {
+                    openApp(icon.appType, icon.title, icon.docData);
+                    lastIconClickRef.current = { id: '', time: 0 };
+                  } else {
+                    lastIconClickRef.current = { id: icon.id, time: now };
+                  }
+                }
+              }}
+              onDoubleClick={(e) => {
+                e.stopPropagation();
                 openApp(icon.appType, icon.title, icon.docData);
-              }
-            }}
-            onDoubleClick={(e) => {
-              e.stopPropagation();
-              openApp(icon.appType, icon.title, icon.docData);
-            }}
-            onMouseDown={(e) => {
-              e.stopPropagation();
-              setSelectedIconId(icon.id);
-              setDraggingIcon({
-                id: icon.id,
-                startX: e.clientX,
-                startY: e.clientY,
-                initialX: icon.x,
-                initialY: icon.y,
-                isMoved: false,
-              });
-            }}
-            onTouchStart={(e) => {
-              e.stopPropagation();
-              setSelectedIconId(icon.id);
-              setDraggingIcon({
-                id: icon.id,
-                startX: e.touches[0].clientX,
-                startY: e.touches[0].clientY,
-                initialX: icon.x,
-                initialY: icon.y,
-                isMoved: false,
-              });
-            }}
-          >
+              }}
+              onMouseDown={(e) => {
+                e.stopPropagation();
+                if (!e.ctrlKey && !e.metaKey && !e.shiftKey && !selectedIconIds.includes(icon.id)) {
+                  setSelectedIconId(icon.id);
+                  setSelectedIconIds([icon.id]);
+                }
+                setDraggingIcon({
+                  id: icon.id,
+                  startX: e.clientX,
+                  startY: e.clientY,
+                  initialX: icon.x,
+                  initialY: icon.y,
+                  isMoved: false,
+                });
+              }}
+              onTouchStart={(e) => {
+                e.stopPropagation();
+                if (!selectedIconIds.includes(icon.id)) {
+                  setSelectedIconId(icon.id);
+                  setSelectedIconIds([icon.id]);
+                }
+                setDraggingIcon({
+                  id: icon.id,
+                  startX: e.touches[0].clientX,
+                  startY: e.touches[0].clientY,
+                  initialX: icon.x,
+                  initialY: icon.y,
+                  isMoved: false,
+                });
+              }}
+            >
             {icon.iconType === 'info' && (
               <div className="p-2 bg-gradient-to-tr from-blue-600 to-indigo-500 rounded-2xl shadow-xl border border-white/20 group-hover:scale-105 transition-transform">
                 <Info className="w-7 h-7 text-white" />
@@ -800,17 +1246,23 @@ export default function DesktopEnvironment({ user, onExit }: { user: UserData, o
             {icon.iconType === 'xls' && <Activity className="w-9 h-9 text-emerald-500 drop-shadow-lg group-hover:scale-105 transition-transform" />}
             {icon.iconType === 'ppt' && <Monitor className="w-9 h-9 text-amber-500 drop-shadow-lg group-hover:scale-105 transition-transform" />}
             {icon.iconType === 'wine' && <Box className="w-9 h-9 text-amber-500 drop-shadow-lg group-hover:scale-105 transition-transform" />}
+            {(icon.iconType === 'trash' || icon.appType === 'trash') && <Trash2 className="w-9 h-9 text-rose-400 drop-shadow-lg group-hover:scale-105 transition-transform" />}
 
-            <span className="text-white text-[11px] font-semibold drop-shadow-md text-center leading-tight">{icon.title}</span>
+            <span className={activeThemeStyle.iconTitleStyle}>{icon.title}</span>
           </div>
-        ))}
+        );
+        })}
 
         {/* Windows */}
         {windows.map(w => (
           <div
             key={w.id}
             onMouseDown={(e) => { e.stopPropagation(); focusWindow(w.id); }}
-            className={`absolute border border-[#3F3F46] bg-[#121214] shadow-2xl flex flex-col overflow-hidden transition-all duration-200 ${w.minimized ? 'opacity-0 pointer-events-none scale-95' : 'opacity-100 scale-100'} ${w.maximized ? 'inset-0 w-full h-full rounded-none' : 'rounded-2xl'}`}
+            className={`absolute shadow-2xl flex flex-col overflow-hidden transition-all duration-200 ${
+              activeId === w.id
+                ? `${activeThemeStyle.windowBg} border-2 ${activeAccent.border} ${activeAccent.glow}`
+                : `${activeThemeStyle.windowBg} border ${activeThemeStyle.windowBorder} opacity-98`
+            } ${w.minimized ? 'opacity-0 pointer-events-none scale-95' : 'scale-100'} ${w.maximized ? 'inset-0 w-full h-full rounded-none' : 'rounded-2xl'}`}
             style={{
               transform: 'translate3d(0,0,0)',
               left: w.maximized ? 0 : w.x,
@@ -822,7 +1274,9 @@ export default function DesktopEnvironment({ user, onExit }: { user: UserData, o
           >
             {/* Window Header */}
             <div 
-              className={`${isTouch ? 'h-11' : 'h-9'} flex items-center justify-between px-3 cursor-default select-none transition-colors ${activeId === w.id ? 'bg-[#2A2A2E] text-white' : 'bg-[#18181B] text-[#A1A1AA]'}`}
+              className={`${isTouch ? 'h-11' : 'h-9'} flex items-center justify-between px-3 cursor-default select-none transition-colors ${
+                activeId === w.id ? `${activeThemeStyle.windowHeaderBg} ${activeAccent.bgSubtle} ${activeThemeStyle.windowText}` : `${activeThemeStyle.windowHeaderBg} opacity-85 ${activeThemeStyle.windowText}`
+              }`}
               onDoubleClick={(e) => { e.stopPropagation(); toggleMaximize(w.id); }}
               onContextMenu={(e) => {
                 e.preventDefault();
@@ -849,7 +1303,6 @@ export default function DesktopEnvironment({ user, onExit }: { user: UserData, o
                 {w.type === 'webgl' && <Cpu className="w-3.5 h-3.5" />}
                 {w.type === 'folder' && <Folder className="w-3.5 h-3.5" />}
                 {w.type === 'browser' && <Globe className="w-3.5 h-3.5" />}
-                {w.type === 'showcaseweb' && <Globe className="w-3.5 h-3.5 text-blue-400" />}
                 {w.type === 'texteditor' && <FileCode className="w-3.5 h-3.5 text-emerald-400" />}
                 {w.type === 'pdfviewer' && <FileImage className="w-3.5 h-3.5 text-red-500" />}
                 {w.type === 'taskmanager' && <Activity className="w-3.5 h-3.5 text-emerald-400" />}
@@ -858,6 +1311,7 @@ export default function DesktopEnvironment({ user, onExit }: { user: UserData, o
                 {w.type === 'calendar' && <CalendarIcon className="w-3.5 h-3.5 text-cyan-400" />}
                 {w.type === 'imageviewer' && <ImageIcon className="w-3.5 h-3.5 text-purple-400" />}
                 {w.type === 'wine' && <Box className="w-3.5 h-3.5 text-amber-400" />}
+                {w.type === 'trash' && <Trash2 className="w-3.5 h-3.5 text-rose-400" />}
                 <span className="text-xs font-medium tracking-wide">{w.title}</span>
               </div>
               <div className="flex items-center gap-3">
@@ -878,7 +1332,6 @@ export default function DesktopEnvironment({ user, onExit }: { user: UserData, o
               {w.type === 'webgl' && <WebGLApp />}
               {w.type === 'folder' && <FileExplorer user={user} onOpenFile={(type, title) => openApp(type as any, title)} />}
               {w.type === 'browser' && <BrowserApp user={user} />}
-              {w.type === 'showcaseweb' && <ShowcaseWebSiteApp />}
               {w.type === 'texteditor' && <TextEditorApp data={w.data} user={user} />}
               {w.type === 'pdfviewer' && <PdfViewerApp user={user} initialFile={w.data} />}
               {w.type === 'office' && <OfficeApp user={user} initialFile={w.data} />}
@@ -888,6 +1341,7 @@ export default function DesktopEnvironment({ user, onExit }: { user: UserData, o
               {w.type === 'calendar' && <CalendarClockApp />}
               {w.type === 'imageviewer' && <ImageViewerApp />}
               {w.type === 'wine' && <WineRunnerApp user={user} initialFile={w.data} onOpenApp={(type, title, data) => openApp(type as any, title, data)} />}
+              {w.type === 'trash' && <TrashApp onOpenFile={(type, title, data) => openApp(type as any, title, data)} />}
             </div>
 
             {/* Window Resizing Handle */}
@@ -1154,18 +1608,7 @@ export default function DesktopEnvironment({ user, onExit }: { user: UserData, o
                     </div>
                   </div>
 
-                  <div 
-                    onClick={() => { openApp('showcaseweb', 'Savia Web Portal'); setIsStartMenuOpen(false); }}
-                    className="flex items-center gap-3 p-2.5 bg-sky-500/10 hover:bg-sky-500/20 border border-sky-500/20 rounded-xl cursor-pointer transition-all group"
-                  >
-                    <div className="p-2 bg-sky-500/20 rounded-lg border border-sky-500/30">
-                      <Globe className="w-5 h-5 text-sky-400" />
-                    </div>
-                    <div className="flex flex-col min-w-0">
-                      <span className="text-xs font-bold text-white">Savia Web Portal</span>
-                      <span className="text-[10px] text-gray-400 truncate">Web promocional y GitHub Pages</span>
-                    </div>
-                  </div>
+
                 </div>
               </div>
 
@@ -1429,14 +1872,14 @@ export default function DesktopEnvironment({ user, onExit }: { user: UserData, o
                 </div>
               </div>
 
-              {/* Integrated Wine Win32 Subsystem Apps */}
+              {/* Integrated Savia WinEmu Subsystem Apps */}
               <div>
                 <div className="mb-2 flex justify-between items-center px-1">
                   <h3 className="text-xs font-bold tracking-wide text-amber-300 flex items-center gap-1.5">
                     <Box className="w-3.5 h-3.5 text-amber-400" />
-                    Aplicaciones Windows (Wine 9.0 Win32)
+                    Aplicaciones Windows (Savia WinEmu x86)
                   </h3>
-                  <span className="text-[10px] text-amber-400/80 font-mono">Win32 Ready</span>
+                  <span className="text-[10px] text-amber-400/80 font-mono">v86 WASM Core</span>
                 </div>
 
                 <div className="grid grid-cols-2 gap-2">
@@ -1480,11 +1923,11 @@ export default function DesktopEnvironment({ user, onExit }: { user: UserData, o
                     </div>
                   </div>
 
-                  <div onClick={() => { openApp('wine', 'Wine Runner Studio'); setIsStartMenuOpen(false); }} className="flex items-center gap-2.5 p-2 bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/20 rounded-xl cursor-pointer transition-colors">
+                  <div onClick={() => { openApp('wine', 'Savia WinEmu Studio'); setIsStartMenuOpen(false); }} className="flex items-center gap-2.5 p-2 bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/20 rounded-xl cursor-pointer transition-colors">
                     <Box className="w-5 h-5 text-amber-400 shrink-0" />
                     <div className="flex flex-col min-w-0">
-                      <span className="text-xs font-bold text-white truncate">Wine Runner Studio</span>
-                      <span className="text-[10px] text-gray-400 font-mono">wineboot.exe</span>
+                      <span className="text-xs font-bold text-white truncate">Savia WinEmu Studio</span>
+                      <span className="text-[10px] text-gray-400 font-mono">winemu.exe</span>
                     </div>
                   </div>
                 </div>
@@ -1543,9 +1986,9 @@ export default function DesktopEnvironment({ user, onExit }: { user: UserData, o
       )}
 
       {/* Floating Extended Taskbar */}
-      <footer className="absolute bottom-3 left-1/2 -translate-x-1/2 h-15 bg-[#16161A]/92 backdrop-blur-2xl border border-white/15 rounded-2xl flex items-center px-4 z-40 shadow-[0_16px_48px_rgba(0,0,0,0.7)] gap-1.5" onClick={e => e.stopPropagation()}>
-        <button onClick={() => { setIsStartMenuOpen(!isStartMenuOpen); setIsVolumeMenuOpen(false); }} className="flex items-center justify-center p-2.5 hover:bg-blue-600/20 active:scale-95 text-blue-400 hover:text-blue-300 rounded-xl transition-all mx-0.5 group relative" title="Menú de Inicio SaviaOS">
-          <Zap className="w-5 h-5 text-blue-400 fill-blue-400/20 group-hover:fill-blue-400 transition-all" />
+      <footer className={`absolute bottom-3 left-1/2 -translate-x-1/2 h-15 ${activeThemeStyle.taskbarBg} border ${activeThemeStyle.taskbarText} rounded-2xl flex items-center px-4 z-40 shadow-[0_16px_48px_rgba(0,0,0,0.7)] gap-1.5`} onClick={e => e.stopPropagation()}>
+        <button onClick={() => { setIsStartMenuOpen(!isStartMenuOpen); setIsVolumeMenuOpen(false); }} className={`flex items-center justify-center p-2.5 ${activeAccent.bgSubtleHover} active:scale-95 ${activeAccent.text} ${activeAccent.textHover} rounded-xl transition-all mx-0.5 group relative`} title="Menú de Inicio SaviaOS">
+          <Zap className={`w-5 h-5 ${activeAccent.startZapText} ${activeAccent.startZapFill} transition-all`} />
           <span className="sr-only">Start</span>
         </button>
         <div className="h-7 w-px bg-white/15 mx-1.5"></div>
@@ -1559,7 +2002,7 @@ export default function DesktopEnvironment({ user, onExit }: { user: UserData, o
                 e.stopPropagation();
                 setWindowContextMenu({ id: w.id, x: e.clientX, y: e.clientY });
               }}
-              className={`flex items-center gap-2 px-3 py-2 rounded-xl transition-all relative group shrink-0 ${activeId === w.id && !w.minimized ? 'bg-white/15 shadow-inner border border-white/10' : 'hover:bg-white/10'}`}
+              className={`flex items-center gap-2 px-3 py-2 rounded-xl transition-all relative group shrink-0 ${activeId === w.id && !w.minimized ? `${activeAccent.bgSubtle} shadow-inner border ${activeAccent.borderSubtle}` : 'hover:bg-white/10'}`}
               title={w.title}
             >
               {w.type === 'about' && <Info className="w-5 h-5 shrink-0 text-blue-400" />}
@@ -1586,7 +2029,7 @@ export default function DesktopEnvironment({ user, onExit }: { user: UserData, o
               <span className="hidden lg:inline text-xs font-medium text-gray-200 truncate max-w-[120px]">{w.title}</span>
 
               {/* Active Indicator */}
-              <div className={`absolute -bottom-1.5 left-1/2 -translate-x-1/2 rounded-full transition-all ${activeId === w.id && !w.minimized ? 'w-5 h-1 bg-blue-400 shadow-[0_0_8px_rgba(96,165,250,0.8)]' : 'w-1.5 h-1.5 bg-gray-500 opacity-0 group-hover:opacity-100'}`} />
+              <div className={`absolute -bottom-1.5 left-1/2 -translate-x-1/2 rounded-full transition-all ${activeId === w.id && !w.minimized ? `w-5 h-1 ${activeAccent.activeIndicator}` : 'w-1.5 h-1.5 bg-gray-500 opacity-0 group-hover:opacity-100'}`} />
             </button>
           ))}
         </div>
@@ -1681,41 +2124,90 @@ export default function DesktopEnvironment({ user, onExit }: { user: UserData, o
           style={{ left: Math.min(iconContextMenu.x, window.innerWidth - 220), top: Math.min(iconContextMenu.y, window.innerHeight - 160) }}
           onClick={(e) => e.stopPropagation()}
         >
-          <div className="px-3 py-1.5 border-b border-white/10 text-gray-400 truncate font-semibold text-[11px]">
-            {iconContextMenu.icon.title}
-          </div>
-          <button
-            onClick={() => {
-              openApp(iconContextMenu.icon.appType, iconContextMenu.icon.title, iconContextMenu.icon.docData);
-              setIconContextMenu(null);
-            }}
-            className="flex items-center gap-2.5 px-3 py-2 hover:bg-blue-600 rounded-xl text-left font-medium"
-          >
-            <Play className="w-4 h-4 text-emerald-400" />
-            <span>Abrir</span>
-          </button>
-          <button
-            onClick={() => {
-              setRenameIconModal(iconContextMenu.icon);
-              setRenameIconValue(iconContextMenu.icon.title);
-              setIconContextMenu(null);
-            }}
-            className="flex items-center gap-2.5 px-3 py-2 hover:bg-blue-600 rounded-xl text-left font-medium"
-          >
-            <Edit2 className="w-4 h-4 text-amber-400" />
-            <span>Renombrar Icono</span>
-          </button>
-          <div className="h-px bg-white/10 my-0.5 w-full" />
-          <button
-            onClick={() => {
-              deleteDesktopIcon(iconContextMenu.icon.id);
-              setIconContextMenu(null);
-            }}
-            className="flex items-center gap-2.5 px-3 py-2 hover:bg-rose-600 rounded-xl text-left font-medium text-rose-400 hover:text-white"
-          >
-            <Trash2 className="w-4 h-4" />
-            <span>Eliminar del Escritorio</span>
-          </button>
+          {selectedIconIds.length > 1 ? (
+            <>
+              <div className="px-3 py-1.5 border-b border-white/10 text-amber-300 truncate font-semibold text-[11px]">
+                {selectedIconIds.length} iconos seleccionados
+              </div>
+              <button
+                onClick={() => {
+                  const items = desktopIcons.filter(i => selectedIconIds.includes(i.id));
+                  items.forEach(i => openApp(i.appType, i.title, i.docData));
+                  setIconContextMenu(null);
+                }}
+                className="flex items-center gap-2.5 px-3 py-2 hover:bg-blue-600 rounded-xl text-left font-medium"
+              >
+                <Play className="w-4 h-4 text-emerald-400" />
+                <span>Abrir Seleccionados</span>
+              </button>
+              <div className="h-px bg-white/10 my-0.5 w-full" />
+              <button
+                onClick={() => {
+                  const iconsToDelete = desktopIcons.filter(i => selectedIconIds.includes(i.id));
+                  const systemIcons = iconsToDelete.filter(i => isSystemDesktopIcon(i));
+                  const allowedIcons = iconsToDelete.filter(i => !isSystemDesktopIcon(i));
+
+                  if (systemIcons.length > 0) {
+                    if (allowedIcons.length === 0) {
+                      triggerSystemToast(`⚠️ Protección del Sistema: Los componentes seleccionados forman parte del sistema y no se pueden eliminar.`);
+                    } else {
+                      triggerSystemToast(`⚠️ Se omitieron ${systemIcons.length} accesos directos de sistema protegidos.`);
+                    }
+                  }
+
+                  if (allowedIcons.length > 0) {
+                    trashAndUndo.moveDesktopIconsToTrash(user.username, allowedIcons);
+                    soundEngine.playButtonClick();
+                  }
+                  setSelectedIconId(null);
+                  setSelectedIconIds([]);
+                  setIconContextMenu(null);
+                }}
+                className="flex items-center gap-2.5 px-3 py-2 hover:bg-rose-600 rounded-xl text-left font-medium text-rose-400 hover:text-white"
+              >
+                <Trash2 className="w-4 h-4" />
+                <span>Eliminar Seleccionados (Supr)</span>
+              </button>
+            </>
+          ) : (
+            <>
+              <div className="px-3 py-1.5 border-b border-white/10 text-gray-400 truncate font-semibold text-[11px]">
+                {iconContextMenu.icon.title}
+              </div>
+              <button
+                onClick={() => {
+                  openApp(iconContextMenu.icon.appType, iconContextMenu.icon.title, iconContextMenu.icon.docData);
+                  setIconContextMenu(null);
+                }}
+                className="flex items-center gap-2.5 px-3 py-2 hover:bg-blue-600 rounded-xl text-left font-medium"
+              >
+                <Play className="w-4 h-4 text-emerald-400" />
+                <span>Abrir</span>
+              </button>
+              <button
+                onClick={() => {
+                  setRenameIconModal(iconContextMenu.icon);
+                  setRenameIconValue(iconContextMenu.icon.title);
+                  setIconContextMenu(null);
+                }}
+                className="flex items-center gap-2.5 px-3 py-2 hover:bg-blue-600 rounded-xl text-left font-medium"
+              >
+                <Edit2 className="w-4 h-4 text-amber-400" />
+                <span>Renombrar Icono</span>
+              </button>
+              <div className="h-px bg-white/10 my-0.5 w-full" />
+              <button
+                onClick={() => {
+                  deleteDesktopIcon(iconContextMenu.icon.id);
+                  setIconContextMenu(null);
+                }}
+                className="flex items-center gap-2.5 px-3 py-2 hover:bg-rose-600 rounded-xl text-left font-medium text-rose-400 hover:text-white"
+              >
+                <Trash2 className="w-4 h-4" />
+                <span>Eliminar del Escritorio</span>
+              </button>
+            </>
+          )}
         </div>
       )}
 
@@ -1860,6 +2352,16 @@ export default function DesktopEnvironment({ user, onExit }: { user: UserData, o
               </div>
             </form>
           </div>
+        </div>
+      )}
+      {/* System Protection Floating Toast Banner */}
+      {systemToast && (
+        <div className="fixed top-5 right-5 z-[10000] bg-[#1C1C1F]/95 text-rose-200 border border-rose-500/40 px-4 py-3 rounded-2xl shadow-2xl flex items-center gap-3 backdrop-blur-md animate-in fade-in slide-in-from-top-4 duration-200 max-w-md">
+          <ShieldAlert className="w-5 h-5 text-rose-400 shrink-0" />
+          <span className="text-xs font-medium leading-relaxed">{systemToast}</span>
+          <button onClick={() => setSystemToast(null)} className="p-1 hover:bg-white/10 rounded-lg text-rose-300 ml-auto">
+            <X className="w-4 h-4" />
+          </button>
         </div>
       )}
     </div>
