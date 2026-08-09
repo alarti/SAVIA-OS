@@ -21,6 +21,7 @@ export type FileItem = {
   date?: string;
   permissions?: string;
   owner?: string;
+  content?: string;
 };
 
 const INITIAL_FS: Record<string, FileItem[]> = {
@@ -73,13 +74,9 @@ const INITIAL_FS: Record<string, FileItem[]> = {
     { id: 'u_bench', name: 'System_Bench.sh', type: 'executable', iconType: 'terminal', size: '12 KB', date: 'Oct 15 10:00', permissions: '-rwxr-xr-x', owner: 'user' },
   ],
   '/home/user/Desktop': [
-    { id: 'dt_winmine', name: 'Buscaminas.exe', type: 'executable', iconType: 'wine', size: '120 KB', date: 'Hoy 09:00', permissions: '-rwxr-xr-x', owner: 'user' },
-    { id: 'dt_pinball', name: '3D_Pinball.exe', type: 'executable', iconType: 'wine', size: '1.4 MB', date: 'Hoy 09:00', permissions: '-rwxr-xr-x', owner: 'user' },
-    { id: 'dt_sol', name: 'Solitario.exe', type: 'executable', iconType: 'wine', size: '210 KB', date: 'Hoy 09:00', permissions: '-rwxr-xr-x', owner: 'user' },
-    { id: 'dt_putty', name: 'putty.exe', type: 'executable', iconType: 'wine', size: '3.2 MB', date: 'Hoy 09:00', permissions: '-rwxr-xr-x', owner: 'user' },
-    { id: 'dt_vlc', name: 'vlc.exe', type: 'executable', iconType: 'wine', size: '18.5 MB', date: 'Hoy 09:00', permissions: '-rwxr-xr-x', owner: 'user' },
-    { id: 'dt_readme', name: 'Leeme_SaviaOS.txt', type: 'file', iconType: 'text', size: '1 KB', date: 'Hoy 09:00', permissions: '-rw-r--r--', owner: 'user' },
+    { id: 'dt_readme', name: 'Leeme_SaviaOS.txt', type: 'file', iconType: 'text', size: '1 KB', date: 'Hoy 09:00', permissions: '-rw-r--r--', owner: 'user', content: 'Bienvenido a SAVIA-OS. Suite de productividad con SaviaDoc, SaviaXls, SaviaPpt, SaviaPdf, SAVIA Paint y Savia Nano.' },
     { id: 'dt_doc', name: 'Documento_Ejemplo.docx', type: 'file', iconType: 'text', size: '12 KB', date: 'Hoy 09:00', permissions: '-rw-r--r--', owner: 'user' },
+    { id: 'dt_script', name: 'script_ejemplo.ts', type: 'file', iconType: 'text', size: '1 KB', date: 'Hoy 09:00', permissions: '-rw-r--r--', owner: 'user', content: '// Código de ejemplo en Savia Nano\nconsole.log("Hola desde Savia Nano");' },
   ],
   '/home/user/Documents': [
     { id: 'doc1', name: 'nuevo documento.docx', type: 'file', iconType: 'text', size: '12 KB', date: 'Hoy 10:00', permissions: '-rw-r--r--', owner: 'user' },

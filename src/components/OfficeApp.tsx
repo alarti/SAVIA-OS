@@ -10,6 +10,8 @@ import {
 
 import { userStorage } from '../utils/userStorage';
 import type { UserData } from '../utils/auth';
+import { vfs } from '../utils/vfs';
+import SaveFileDialogModal from './SaveFileDialogModal';
 
 type SuiteMode = 'writer' | 'calc' | 'impress';
 type ActiveTab = 'archivo' | 'inicio' | 'insertar' | 'diseno' | 'formulas' | 'ver' | 'ayuda';
@@ -80,6 +82,8 @@ export default function OfficeApp({ initialFile, user }: { initialFile?: string;
   const [activeSlideIdx, setActiveSlideIdx] = useState(0);
   const [isFullscreenSlideshow, setIsFullscreenSlideshow] = useState(false);
   const [isPrintModalOpen, setIsPrintModalOpen] = useState(false);
+  const [isSaveModalOpen, setIsSaveModalOpen] = useState(false);
+  const [saveLocationPath, setSaveLocationPath] = useState<string>(`/home/${username}/Documents`);
 
   // Status message
   const [statusMsg, setStatusMsg] = useState('Listo');
@@ -248,27 +252,80 @@ export default function OfficeApp({ initialFile, user }: { initialFile?: string;
     setCellValue(selectedCell, val);
   };
 
+  const getDocumentContent = (): string => {
+    if (mode === 'writer') return writerEditorRef.current?.innerHTML || '';
+    if (mode === 'calc') return JSON.stringify(sheets);
+    if (mode === 'impress') return JSON.stringify(slides);
+    return '';
+  };
+
   // Save to SAVIA-OS Virtual Storage
   const handleSaveDocument = () => {
-    try {
-      let contentToSave = '';
-      if (mode === 'writer') contentToSave = writerEditorRef.current?.innerHTML || '';
-      else if (mode === 'calc') contentToSave = JSON.stringify(sheets);
-      else if (mode === 'impress') contentToSave = JSON.stringify(slides);
+    // If title starts with default 'nuevo documento', ask for filename and folder location via modal
+    if (docTitle.toLowerCase().startsWith('nuevo documento')) {
+      setIsSaveModalOpen(true);
+      return;
+    }
 
-      const savedDocsKey = `savia_office_documents_${username}`;
-      const existingStr = localStorage.getItem(savedDocsKey) || '{}';
-      const existing = JSON.parse(existingStr);
-      existing[docTitle] = {
+    try {
+      const contentToSave = getDocumentContent();
+      const folderPath = saveLocationPath || `/home/${username}/Documents`;
+
+      vfs.saveFile(folderPath, docTitle, contentToSave, {
+        iconType: mode === 'writer' ? 'text' : mode === 'calc' ? 'text' : 'text',
+        owner: username
+      });
+
+      userStorage.saveOfficeDoc(username, docTitle, {
         mode,
         title: docTitle,
-        updatedAt: new Date().toISOString(),
         content: contentToSave
-      };
-      localStorage.setItem(savedDocsKey, JSON.stringify(existing));
-      flashStatus(`Documento "${docTitle}" guardado exitosamente.`);
+      });
+
+      userStorage.addRecent(username, {
+        name: docTitle,
+        path: `${folderPath}/${docTitle}`,
+        appType: 'office',
+        iconType: mode === 'writer' ? 'doc' : mode === 'calc' ? 'xls' : 'ppt'
+      });
+
+      flashStatus(`Documento "${docTitle}" guardado en ${folderPath}`);
     } catch {
       flashStatus('Error al guardar en memoria.');
+    }
+  };
+
+  const handleSaveAsClick = () => {
+    setIsSaveModalOpen(true);
+  };
+
+  const handleConfirmSaveModal = (savedFileName: string, folderPath: string) => {
+    try {
+      const contentToSave = getDocumentContent();
+      setDocTitle(savedFileName);
+      setSaveLocationPath(folderPath);
+
+      const { fullPath } = vfs.saveFile(folderPath, savedFileName, contentToSave, {
+        iconType: mode === 'writer' ? 'text' : mode === 'calc' ? 'text' : 'text',
+        owner: username
+      });
+
+      userStorage.saveOfficeDoc(username, savedFileName, {
+        mode,
+        title: savedFileName,
+        content: contentToSave
+      });
+
+      userStorage.addRecent(username, {
+        name: savedFileName,
+        path: fullPath,
+        appType: 'office',
+        iconType: mode === 'writer' ? 'doc' : mode === 'calc' ? 'xls' : 'ppt'
+      });
+
+      flashStatus(`Documento guardado como "${savedFileName}" en ${folderPath}`);
+    } catch (e) {
+      flashStatus('Error al guardar archivo.');
     }
   };
 
@@ -684,6 +741,15 @@ export default function OfficeApp({ initialFile, user }: { initialFile?: string;
           >
             <Save className="w-3.5 h-3.5" />
             <span>Guardar</span>
+          </button>
+
+          <button
+            onClick={handleSaveAsClick}
+            className="flex items-center gap-1 px-2.5 py-1 bg-indigo-600 hover:bg-indigo-500 text-white rounded-md text-xs font-medium shadow transition-colors"
+            title="Guardar como (Elegir nombre y carpeta)"
+          >
+            <Download className="w-3.5 h-3.5 text-emerald-300" />
+            <span>Guardar como...</span>
           </button>
 
           <button
@@ -1545,6 +1611,17 @@ export default function OfficeApp({ initialFile, user }: { initialFile?: string;
           </div>
         </div>
       )}
+
+      {/* Save File Dialog Modal */}
+      <SaveFileDialogModal
+        isOpen={isSaveModalOpen}
+        onClose={() => setIsSaveModalOpen(false)}
+        onSave={handleConfirmSaveModal}
+        defaultFileName={docTitle}
+        defaultFolder={saveLocationPath}
+        username={username}
+        title={`Guardar Fichero - ${mode === 'writer' ? 'SaviaDoc' : mode === 'calc' ? 'SaviaXls' : 'SaviaPpt'}`}
+      />
     </div>
   );
 }

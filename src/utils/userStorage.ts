@@ -3,7 +3,7 @@ import { PRESET_WALLPAPERS } from '../components/ThemeCustomizerApp';
 export interface DesktopIcon {
   id: string;
   title: string;
-  appType: 'terminal' | 'webgl' | 'folder' | 'browser' | 'texteditor' | 'pdfviewer' | 'office' | 'taskmanager' | 'tetris' | 'appstore' | 'soundsettings' | 'paint' | 'about' | 'controlpanel' | 'theme' | 'calculator' | 'calendar' | 'imageviewer' | 'wine';
+  appType: 'terminal' | 'webgl' | 'folder' | 'browser' | 'texteditor' | 'pdfviewer' | 'office' | 'taskmanager' | 'tetris' | 'appstore' | 'soundsettings' | 'paint' | 'about' | 'controlpanel' | 'theme' | 'calculator' | 'calendar' | 'imageviewer' | 'wine' | 'showcaseweb';
   iconType: string;
   docData?: any;
   x: number;
@@ -21,18 +21,23 @@ export interface RecentItem {
 }
 
 const DEFAULT_DESKTOP_ICONS: DesktopIcon[] = [
-  { id: 'term', title: 'Terminal POSIX', appType: 'terminal', iconType: 'terminal', x: 20, y: 20 },
-  { id: 'files', title: 'Explorador de Archivos', appType: 'folder', iconType: 'folder', x: 20, y: 120 },
-  { id: 'browser', title: 'Navegador Web', appType: 'browser', iconType: 'browser', x: 20, y: 220 },
-  { id: 'office', title: 'Suite Ofimática', appType: 'office', iconType: 'office', x: 20, y: 320 },
-  { id: 'control', title: 'Panel de Control', appType: 'controlpanel', iconType: 'controlpanel', x: 20, y: 420 },
-  { id: 'paint', title: 'SAVIA Paint', appType: 'paint', iconType: 'paint', x: 130, y: 20 },
-  { id: 'appstore', title: 'Centro de Software APT', appType: 'appstore', iconType: 'appstore', x: 130, y: 120 },
-  { id: 'theme', title: 'Personalización', appType: 'theme', iconType: 'theme', x: 130, y: 220 },
-  { id: 'taskmgr', title: 'Monitor de Sistema', appType: 'taskmanager', iconType: 'taskmanager', x: 130, y: 320 },
-  { id: 'calc', title: 'Calculadora', appType: 'calculator', iconType: 'calc', x: 130, y: 420 },
-  { id: 'wine', title: 'Subsistema Wine Win32', appType: 'wine', iconType: 'wine', x: 240, y: 20 },
-  { id: 'tetris', title: 'Juego Tetris', appType: 'tetris', iconType: 'game', x: 240, y: 120 },
+  { id: 'webgl_games', title: 'Savia Games', appType: 'webgl', iconType: 'game', x: 20, y: 20 },
+  { id: 'term', title: 'Terminal POSIX', appType: 'terminal', iconType: 'terminal', x: 20, y: 120 },
+  { id: 'files', title: 'Explorador de Archivos', appType: 'folder', iconType: 'folder', x: 20, y: 220 },
+  { id: 'browser', title: 'Navegador Web', appType: 'browser', iconType: 'browser', x: 20, y: 320 },
+  { id: 'office', title: 'Suite Ofimática', appType: 'office', iconType: 'office', x: 20, y: 420 },
+  { id: 'savia_doc', title: 'Savia Doc', appType: 'office', iconType: 'doc', docData: 'nuevo documento.docx', x: 130, y: 20 },
+  { id: 'savia_xls', title: 'Savia Xls', appType: 'office', iconType: 'xls', docData: 'nuevo documento.xlsx', x: 130, y: 120 },
+  { id: 'savia_ppt', title: 'Savia Ppt', appType: 'office', iconType: 'ppt', docData: 'nuevo documento.pptx', x: 130, y: 220 },
+  { id: 'pdfviewer', title: 'Savia Pdf', appType: 'pdfviewer', iconType: 'pdf', x: 130, y: 320 },
+  { id: 'savia_nano', title: 'Savia Nano', appType: 'texteditor', iconType: 'editor', x: 130, y: 420 },
+  { id: 'paint', title: 'Savia Paint', appType: 'paint', iconType: 'paint', x: 240, y: 20 },
+  { id: 'control', title: 'Panel de Control', appType: 'controlpanel', iconType: 'controlpanel', x: 240, y: 120 },
+  { id: 'appstore', title: 'Centro de Software APT', appType: 'appstore', iconType: 'appstore', x: 240, y: 220 },
+  { id: 'theme', title: 'Personalización', appType: 'theme', iconType: 'theme', x: 240, y: 320 },
+  { id: 'taskmgr', title: 'Monitor de Sistema', appType: 'taskmanager', iconType: 'taskmanager', x: 240, y: 420 },
+  { id: 'calc', title: 'Savia Calc', appType: 'calculator', iconType: 'calc', x: 350, y: 20 },
+  { id: 'showcase_web', title: 'Savia Web (GitHub Pages)', appType: 'showcaseweb', iconType: 'globe', x: 350, y: 120 },
 ];
 
 export const userStorage = {
@@ -41,16 +46,27 @@ export const userStorage = {
     const key = `savia_os_desktop_icons_${username}`;
     try {
       const saved = localStorage.getItem(key);
-      if (saved) return JSON.parse(saved);
+      if (saved) {
+        let parsed: DesktopIcon[] = JSON.parse(saved);
+        // Filter out standalone games from saved desktop icons
+        const gameIdsToRemove = ['winmine', 'pinball', 'solitaire', 'tetris', 'veloren_3d', 'supertux_3d'];
+        parsed = parsed.filter(ic => !gameIdsToRemove.includes(ic.id) && !ic.title.toLowerCase().includes('.exe'));
+        
+        // Ensure webgl games title is updated to Savia Games
+        parsed = parsed.map(ic => {
+          if (ic.id === 'webgl_games' || ic.appType === 'webgl') {
+            return { ...ic, title: 'Savia Games' };
+          }
+          if (ic.id === 'pdfviewer' || ic.appType === 'pdfviewer') {
+            return { ...ic, title: 'SaviaPdf' };
+          }
+          return ic;
+        });
 
-      // Check legacy single key for migration if user is 'user'
-      if (username === 'user') {
-        const legacy = localStorage.getItem('savia_os_desktop_icons');
-        if (legacy) {
-          const parsed = JSON.parse(legacy);
-          localStorage.setItem(key, JSON.stringify(parsed));
-          return parsed;
+        if (!parsed.some(i => i.id === 'webgl_games' || i.appType === 'webgl')) {
+          parsed.unshift({ id: 'webgl_games', title: 'Savia Games', appType: 'webgl', iconType: 'game', x: 20, y: 20 });
         }
+        return parsed;
       }
     } catch (e) {
       console.error('Error loading desktop icons for ' + username, e);
@@ -63,7 +79,6 @@ export const userStorage = {
         { id: 'control', title: 'Centro de Seguridad Kernel', appType: 'controlpanel', iconType: 'controlpanel', x: 20, y: 120 },
         { id: 'files', title: 'Sistema de Archivos Root', appType: 'folder', iconType: 'folder', x: 20, y: 220 },
         { id: 'taskmgr', title: 'Monitor de Sistema Root', appType: 'taskmanager', iconType: 'taskmanager', x: 20, y: 320 },
-        { id: 'wine', title: 'Entorno Wine Win32', appType: 'wine', iconType: 'wine', x: 130, y: 20 },
       ];
     }
 
@@ -71,15 +86,14 @@ export const userStorage = {
       return [
         { id: 'browser', title: 'Navegador Web', appType: 'browser', iconType: 'browser', x: 20, y: 20 },
         { id: 'files', title: 'Archivos Invitado', appType: 'folder', iconType: 'folder', x: 20, y: 120 },
-        { id: 'savia_doc', title: 'SaviaDoc (Procesador)', appType: 'office', iconType: 'doc', docData: 'Documento_Invitado.docx', x: 20, y: 220 },
-        { id: 'savia_xls', title: 'SaviaXls (Planilla)', appType: 'office', iconType: 'xls', docData: 'Presupuesto_Invitado.xlsx', x: 20, y: 320 },
-        { id: 'savia_ppt', title: 'SaviaPpt (Diapositivas)', appType: 'office', iconType: 'ppt', docData: 'Presentacion_Invitado.pptx', x: 20, y: 420 },
-        { id: 'office_suite', title: 'SaviaOffice Suite', appType: 'office', iconType: 'office', x: 130, y: 20 },
-        { id: 'veloren_3d', title: 'Veloren 3D (RPG OpenSource)', appType: 'webgl', iconType: 'game', x: 130, y: 120 },
-        { id: 'supertux_3d', title: 'SuperTuxKart 3D (Libre)', appType: 'webgl', iconType: 'game', x: 130, y: 220 },
+        { id: 'savia_doc', title: 'SaviaDoc', appType: 'office', iconType: 'doc', docData: 'Documento_Invitado.docx', x: 20, y: 220 },
+        { id: 'savia_xls', title: 'SaviaXls', appType: 'office', iconType: 'xls', docData: 'Presupuesto_Invitado.xlsx', x: 20, y: 320 },
+        { id: 'savia_ppt', title: 'SaviaPpt', appType: 'office', iconType: 'ppt', docData: 'Presentacion_Invitado.pptx', x: 20, y: 420 },
+        { id: 'pdfviewer', title: 'SaviaPdf', appType: 'pdfviewer', iconType: 'pdf', x: 130, y: 20 },
+        { id: 'savia_nano', title: 'Savia Nano', appType: 'texteditor', iconType: 'text', x: 130, y: 120 },
+        { id: 'savia_games', title: 'Savia Games', appType: 'webgl', iconType: 'game', x: 130, y: 220 },
         { id: 'paint', title: 'SAVIA Paint', appType: 'paint', iconType: 'paint', x: 130, y: 320 },
         { id: 'calc', title: 'Calculadora', appType: 'calculator', iconType: 'calc', x: 130, y: 420 },
-        { id: 'tetris', title: 'Tetris 2D', appType: 'tetris', iconType: 'game', x: 240, y: 20 },
       ];
     }
 

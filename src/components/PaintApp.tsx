@@ -1,13 +1,25 @@
 import React, { useRef, useState, useEffect } from 'react';
-import { Palette, Download, Trash2, Eraser, Brush, Undo } from 'lucide-react';
+import { Palette, Download, Trash2, Eraser, Brush, Save } from 'lucide-react';
 import { soundEngine } from '../utils/soundEngine';
+import SaveFileDialogModal from './SaveFileDialogModal';
+import { vfs } from '../utils/vfs';
+import { userStorage } from '../utils/userStorage';
+import type { UserData } from '../utils/auth';
 
-export default function PaintApp() {
+interface PaintAppProps {
+  user?: UserData;
+}
+
+export default function PaintApp({ user }: PaintAppProps) {
+  const activeUsername = user?.username || 'user';
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [color, setColor] = useState('#3b82f6');
   const [brushSize, setBrushSize] = useState(6);
   const [isDrawing, setIsDrawing] = useState(false);
   const [isEraser, setIsEraser] = useState(false);
+  const [fileName, setFileName] = useState('MiDibujo.png');
+  const [isSaveModalOpen, setIsSaveModalOpen] = useState(false);
+  const [statusMsg, setStatusMsg] = useState('Listo');
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -18,6 +30,11 @@ export default function PaintApp() {
     ctx.fillStyle = '#ffffff';
     ctx.fillRect(0, 0, canvas.width, canvas.height);
   }, []);
+
+  const flashStatus = (msg: string) => {
+    setStatusMsg(msg);
+    setTimeout(() => setStatusMsg('Listo'), 3000);
+  };
 
   const getCanvasCoords = (e: React.MouseEvent<HTMLCanvasElement> | React.TouchEvent<HTMLCanvasElement>) => {
     const canvas = canvasRef.current;
@@ -86,17 +103,40 @@ export default function PaintApp() {
     if (!ctx) return;
     ctx.fillStyle = '#ffffff';
     ctx.fillRect(0, 0, canvas.width, canvas.height);
+    flashStatus('Lienzo limpiado');
   };
 
-  const downloadCanvas = () => {
+  const handleSaveClick = () => {
+    setIsSaveModalOpen(true);
+  };
+
+  const handleConfirmSaveModal = (savedFileName: string, folderPath: string) => {
     soundEngine.playNotification();
     const canvas = canvasRef.current;
     if (!canvas) return;
-    const image = canvas.toDataURL('image/png');
+
+    const imageDataUrl = canvas.toDataURL('image/png');
+    setFileName(savedFileName);
+
+    const { fullPath } = vfs.saveFile(folderPath, savedFileName, imageDataUrl, {
+      iconType: 'image',
+      owner: activeUsername
+    });
+
+    userStorage.addRecent(activeUsername, {
+      name: savedFileName,
+      path: fullPath,
+      appType: 'paint',
+      iconType: 'paint'
+    });
+
+    // Also trigger browser download
     const link = document.createElement('a');
-    link.href = image;
-    link.download = 'savia_os_drawing.png';
+    link.href = imageDataUrl;
+    link.download = savedFileName;
     link.click();
+
+    flashStatus(`SAVIA Paint: Guardado como ${fullPath}`);
   };
 
   const colors = ['#000000', '#ef4444', '#f97316', '#eab308', '#22c55e', '#3b82f6', '#a855f7', '#ec4899', '#ffffff'];
@@ -107,7 +147,7 @@ export default function PaintApp() {
       <div className="bg-[#2A2A2E] border-b border-[#3F3F46] p-2 sm:p-3 flex items-center justify-between gap-3 shrink-0 flex-wrap">
         <div className="flex items-center gap-2">
           <Palette className="w-5 h-5 text-purple-400" />
-          <span className="font-bold text-sm">Pixel Paint Studio</span>
+          <span className="font-bold text-sm">SAVIA Paint</span>
         </div>
 
         {/* Tools */}
@@ -129,14 +169,14 @@ export default function PaintApp() {
             <button
               onClick={() => setIsEraser(false)}
               className={`p-1.5 rounded ${!isEraser ? 'bg-blue-600 text-white' : 'text-gray-400 hover:text-white'}`}
-              title="Brush Tool"
+              title="Herramienta Pincel"
             >
               <Brush className="w-4 h-4" />
             </button>
             <button
               onClick={() => setIsEraser(true)}
               className={`p-1.5 rounded ${isEraser ? 'bg-blue-600 text-white' : 'text-gray-400 hover:text-white'}`}
-              title="Eraser Tool"
+              title="Herramienta Borrador"
             >
               <Eraser className="w-4 h-4" />
             </button>
@@ -144,7 +184,7 @@ export default function PaintApp() {
 
           {/* Size */}
           <div className="flex items-center gap-2 bg-[#18181B] px-3 py-1 rounded-lg border border-[#3F3F46] text-xs">
-            <span className="text-gray-400">Size:</span>
+            <span className="text-gray-400">Grosor:</span>
             <input
               type="range"
               min="2"
@@ -159,11 +199,14 @@ export default function PaintApp() {
 
         {/* Actions */}
         <div className="flex items-center gap-2">
-          <button onClick={clearCanvas} className="p-1.5 bg-red-600/20 hover:bg-red-600 text-red-400 hover:text-white rounded-lg transition-colors flex items-center gap-1 text-xs">
-            <Trash2 className="w-4 h-4" /> Clear
+          <button onClick={clearCanvas} className="p-1.5 bg-red-600/20 hover:bg-red-600 text-red-400 hover:text-white rounded-lg transition-colors flex items-center gap-1 text-xs cursor-pointer">
+            <Trash2 className="w-4 h-4" /> Limpiar
           </button>
-          <button onClick={downloadCanvas} className="p-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg transition-colors flex items-center gap-1 text-xs font-semibold">
-            <Download className="w-4 h-4" /> Save PNG
+          <button onClick={handleSaveClick} className="p-1.5 bg-blue-600 hover:bg-blue-500 text-white rounded-lg transition-colors flex items-center gap-1 text-xs font-semibold cursor-pointer">
+            <Save className="w-4 h-4" /> Guardar
+          </button>
+          <button onClick={handleSaveClick} className="p-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg transition-colors flex items-center gap-1 text-xs font-semibold cursor-pointer">
+            <Download className="w-4 h-4" /> Guardar como...
           </button>
         </div>
       </div>
@@ -184,6 +227,23 @@ export default function PaintApp() {
           className="bg-white rounded-lg shadow-2xl cursor-crosshair max-w-full max-h-full touch-none"
         />
       </div>
+
+      {/* Status Bar */}
+      <div className="bg-[#18181b] px-3 py-1 text-[11px] text-gray-400 font-mono flex items-center justify-between border-t border-[#3f3f46]">
+        <span>SAVIA Paint Studio</span>
+        <span>{statusMsg}</span>
+      </div>
+
+      {/* Save File Dialog Modal */}
+      <SaveFileDialogModal
+        isOpen={isSaveModalOpen}
+        onClose={() => setIsSaveModalOpen(false)}
+        onSave={handleConfirmSaveModal}
+        defaultFileName={fileName}
+        defaultFolder={`/home/${activeUsername}/Pictures`}
+        username={activeUsername}
+        title="Guardar Fichero - SAVIA Paint"
+      />
     </div>
   );
 }

@@ -274,8 +274,8 @@ export default function TerminalApp({ user, onOpenApp }: { user: UserData; onOpe
       case 'nano':
       case 'gedit':
         if (onOpenApp) {
-          onOpenApp('texteditor', 'Editor de Código / Texto');
-          setOutput(prev => [...prev, 'Opened Text Editor window.']);
+          onOpenApp('texteditor', 'Savia Nano');
+          setOutput(prev => [...prev, 'Iniciando Savia Nano Editor de Código...']);
         }
         break;
 

@@ -184,5 +184,9 @@ export const soundEngine = {
 
   playTerminalBell: () => {
     soundEngine.playTone(880, 0.08, 'sine', 0.15);
+  },
+
+  playPopSound: () => {
+    soundEngine.playTone(600, 0.04, 'sine', 0.1);
   }
 };

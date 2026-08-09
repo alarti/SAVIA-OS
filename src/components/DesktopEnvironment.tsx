@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Terminal, Folder, Globe, Cpu, X, Square, Minus, Zap, User, Monitor, Search, FileText, FileImage, Power, Activity, Gamepad2, Volume2, VolumeX, Box, Radio, Palette, Download, Sliders, ShieldCheck, Info, Settings, Wifi, Battery, CheckCircle, Image as ImageIcon, Calculator as CalcIcon, Calendar as CalendarIcon, Move, Maximize2, Minimize2, RefreshCcw, Plus, Trash2, Edit2, Play } from 'lucide-react';
+import { Terminal, Folder, Globe, Cpu, X, Square, Minus, Zap, User, Monitor, Search, FileText, FileImage, Power, Activity, Gamepad2, Volume2, VolumeX, Box, Radio, Palette, Download, Sliders, ShieldCheck, Info, Settings, Wifi, Battery, CheckCircle, Image as ImageIcon, Calculator as CalcIcon, Calendar as CalendarIcon, Move, Maximize2, Minimize2, RefreshCcw, Plus, Trash2, Edit2, Play, ChevronRight, ChevronLeft, Grid, Sparkles, Trophy, Rocket, FileCode } from 'lucide-react';
 import Editor from '@monaco-editor/react';
 import type { UserData } from '../utils/auth';
 import TerminalApp from './Terminal';
@@ -20,6 +20,8 @@ import CalculatorApp from './CalculatorApp';
 import CalendarClockApp from './CalendarClockApp';
 import ImageViewerApp from './ImageViewerApp';
 import WineRunnerApp, { WIN32_APP_CATALOG } from './WineRunnerApp';
+import ThreeGamesApp from './ThreeGamesApp';
+import ShowcaseWebSiteApp from './ShowcaseWebSiteApp';
 import { soundEngine } from '../utils/soundEngine';
 import { getInstalledPackageIds, AVAILABLE_PACKAGES } from '../utils/packageRegistry';
 import { userStorage } from '../utils/userStorage';
@@ -27,7 +29,7 @@ import { userStorage } from '../utils/userStorage';
 type WindowData = {
   id: string;
   title: string;
-  type: 'terminal' | 'webgl' | 'folder' | 'browser' | 'texteditor' | 'pdfviewer' | 'office' | 'taskmanager' | 'tetris' | 'appstore' | 'soundsettings' | 'paint' | 'about' | 'controlpanel' | 'theme' | 'calculator' | 'calendar' | 'imageviewer' | 'wine';
+  type: 'terminal' | 'webgl' | 'folder' | 'browser' | 'texteditor' | 'pdfviewer' | 'office' | 'taskmanager' | 'tetris' | 'appstore' | 'soundsettings' | 'paint' | 'about' | 'controlpanel' | 'theme' | 'calculator' | 'calendar' | 'imageviewer' | 'wine' | 'showcaseweb';
   data?: any;
   x: number;
   y: number;
@@ -38,538 +40,13 @@ type WindowData = {
   maximized: boolean;
 };
 
-const TextEditorApp = () => (
-  <div className="w-full h-full bg-[#1E1E1E]">
-    <Editor
-      height="100%"
-      defaultLanguage="typescript"
-      defaultValue="// Write your code here...&#10;console.log('Hello from SAVIA-OS Real Execution System!');"
-      theme="vs-dark"
-      options={{ minimap: { enabled: false }, fontSize: 13 }}
-    />
-  </div>
+import SaviaNanoApp from './SaviaNanoApp';
+
+const TextEditorApp = ({ data, user }: { data?: string; user?: any }) => (
+  <SaviaNanoApp initialFilePath={data} user={user} />
 );
 
-const WebGLApp = () => {
-  const canvasRef = useRef<HTMLCanvasElement>(null);
-  const [selectedGame, setSelectedGame] = useState<'supertux' | 'veloren' | 'benchmark'>('supertux');
-  const [fps, setFps] = useState(60);
-
-  // SuperTuxKart 3D Game State
-  const [kartSpeed, setKartSpeed] = useState(0);
-  const [kartPos, setKartPos] = useState(0); // -1.0 (left) to 1.0 (right)
-  const [distance, setDistance] = useState(0);
-  const [lap, setLap] = useState(1);
-  const [rank, setRank] = useState(1);
-  const [nitro, setNitro] = useState(100);
-  const [isNitroActive, setIsNitroActive] = useState(false);
-  const [item, setItem] = useState<string | null>('🚀 Cohete Nitro');
-  const [gameMessage, setGameMessage] = useState<string>('¡Acelera con W / Flecha Arriba!');
-  const [gameOver, setGameOver] = useState(false);
-
-  // Veloren 3D State
-  const [playerX, setPlayerX] = useState(200);
-  const [playerY, setPlayerY] = useState(200);
-  const [playerHp, setPlayerHp] = useState(100);
-  const [score, setScore] = useState(0);
-
-  // Key state tracker
-  const keysRef = useRef<{ [key: string]: boolean }>({});
-
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      keysRef.current[e.key.toLowerCase()] = true;
-      keysRef.current[e.code] = true;
-    };
-    const handleKeyUp = (e: KeyboardEvent) => {
-      keysRef.current[e.key.toLowerCase()] = false;
-      keysRef.current[e.code] = false;
-    };
-
-    window.addEventListener('keydown', handleKeyDown);
-    window.addEventListener('keyup', handleKeyUp);
-    return () => {
-      window.removeEventListener('keydown', handleKeyDown);
-      window.removeEventListener('keyup', handleKeyUp);
-    };
-  }, []);
-
-  // Main 3D Game Loop
-  useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
-
-    let animId: number;
-    let lastTime = performance.now();
-    let frameCount = 0;
-    let fpsTime = performance.now();
-
-    // Game loop internal variables
-    let localDist = distance;
-    let localSpeed = kartSpeed;
-    let localPos = kartPos;
-    let localNitro = nitro;
-    let localLap = lap;
-    let localX = playerX;
-    let localY = playerY;
-    let localHp = playerHp;
-    let localScore = score;
-
-    // AI Rivals for SuperTuxKart
-    const rivals = [
-      { name: 'Nokos 🐢', dist: 100, x: -0.4, speed: 70, color: '#10B981' },
-      { name: 'Gnu 🐂', dist: 250, x: 0.3, speed: 75, color: '#F59E0B' },
-      { name: 'Wilber 🦊', dist: 400, x: -0.1, speed: 68, color: '#EC4899' },
-    ];
-
-    // Voxel Monsters for Veloren
-    let monsters = [
-      { id: 1, x: 100, y: 100, hp: 30, color: '#EF4444' },
-      { id: 2, x: 300, y: 150, hp: 30, color: '#8B5CF6' },
-      { id: 3, x: 250, y: 320, hp: 30, color: '#F59E0B' },
-    ];
-
-    const loop = (now: number) => {
-      const dt = (now - lastTime) / 1000;
-      lastTime = now;
-
-      // FPS Counter
-      frameCount++;
-      if (now - fpsTime >= 1000) {
-        setFps(frameCount);
-        frameCount = 0;
-        fpsTime = now;
-      }
-
-      const keys = keysRef.current;
-
-      // ==========================================
-      // GAME 1: SUPERTUXKART 3D RACING ENGINE
-      // ==========================================
-      if (selectedGame === 'supertux') {
-        const isUp = keys['w'] || keys['arrowup'];
-        const isDown = keys['s'] || keys['arrowdown'];
-        const isLeft = keys['a'] || keys['arrowleft'];
-        const isRight = keys['d'] || keys['arrowright'];
-        const isSpace = keys[' '] || keys['space'];
-
-        // Acceleration & Braking
-        let maxSpeed = 120;
-        let accel = 40;
-
-        if (isSpace && localNitro > 0) {
-          maxSpeed = 180;
-          accel = 90;
-          localNitro = Math.max(0, localNitro - 25 * dt);
-          setIsNitroActive(true);
-        } else {
-          setIsNitroActive(false);
-          if (localNitro < 100) localNitro = Math.min(100, localNitro + 5 * dt);
-        }
-
-        if (isUp) {
-          localSpeed = Math.min(maxSpeed, localSpeed + accel * dt);
-        } else if (isDown) {
-          localSpeed = Math.max(-20, localSpeed - 60 * dt);
-        } else {
-          // Friction
-          if (localSpeed > 0) localSpeed = Math.max(0, localSpeed - 20 * dt);
-          else if (localSpeed < 0) localSpeed = Math.min(0, localSpeed + 20 * dt);
-        }
-
-        // Steering
-        if (isLeft) localPos = Math.max(-1.3, localPos - 1.2 * dt);
-        if (isRight) localPos = Math.min(1.3, localPos + 1.2 * dt);
-
-        // Distance & Laps
-        localDist += (localSpeed * dt) * 3;
-        const LAP_LENGTH = 3000;
-        const currentLap = Math.floor(localDist / LAP_LENGTH) + 1;
-        if (currentLap !== localLap && currentLap <= 3) {
-          localLap = currentLap;
-          setLap(localLap);
-          soundEngine.playSuccessTone();
-          setGameMessage(`¡Vuelta ${localLap}/3 completada!`);
-        } else if (currentLap > 3 && !gameOver) {
-          setGameOver(true);
-          setGameMessage('🏆 ¡VICTORIA EN SUPERTUXKART 3D! Posición #1');
-        }
-
-        // Update Rivals
-        rivals.forEach(r => {
-          r.dist += (r.speed * dt) * 3;
-        });
-
-        // Compute Rank
-        const totalRivalsAhead = rivals.filter(r => r.dist > localDist).length;
-        setRank(totalRivalsAhead + 1);
-
-        // Update React states periodically
-        setKartSpeed(Math.round(localSpeed));
-        setKartPos(localPos);
-        setDistance(localDist);
-        setNitro(Math.round(localNitro));
-
-        // RENDER 3D TRACK & GRAPHICS (Canvas 2D Pseudo-3D Perspective)
-        const w = canvas.width;
-        const h = canvas.height;
-        ctx.clearRect(0, 0, w, h);
-
-        // 1. Sky & Mountains
-        const skyGrad = ctx.createLinearGradient(0, 0, 0, h * 0.4);
-        skyGrad.addColorStop(0, '#0284C7');
-        skyGrad.addColorStop(1, '#38BDF8');
-        ctx.fillStyle = skyGrad;
-        ctx.fillRect(0, 0, w, h * 0.4);
-
-        // Mountains on horizon
-        ctx.fillStyle = '#1E293B';
-        ctx.beginPath();
-        ctx.moveTo(0, h * 0.4);
-        ctx.lineTo(80, h * 0.28);
-        ctx.lineTo(160, h * 0.4);
-        ctx.lineTo(260, h * 0.22);
-        ctx.lineTo(360, h * 0.4);
-        ctx.lineTo(460, h * 0.3);
-        ctx.lineTo(w, h * 0.4);
-        ctx.fill();
-
-        // Sun
-        ctx.fillStyle = '#FDE047';
-        ctx.beginPath();
-        ctx.arc(w - 70, 50, 24, 0, Math.PI * 2);
-        ctx.fill();
-
-        // 2. Grass
-        ctx.fillStyle = '#15803D';
-        ctx.fillRect(0, h * 0.4, w, h * 0.6);
-
-        // 3. 3D Track Perspective (Mode 7 style scanlines)
-        const horizon = h * 0.4;
-        const roadWBase = w * 0.7;
-        const roadWTop = w * 0.05;
-        const curve = Math.sin(localDist / 300) * 80;
-
-        for (let y = h; y > horizon; y -= 2) {
-          const perspective = (y - horizon) / (h - horizon);
-          const roadW = roadWTop + (roadWBase - roadWTop) * perspective;
-          const roadX = (w / 2) + curve * (1 - perspective) - (localPos * roadW * 0.4);
-
-          const stripe = Math.sin((y + localDist) * 0.1) > 0;
-
-          // Curbs (Red / White)
-          ctx.fillStyle = stripe ? '#EF4444' : '#FFFFFF';
-          ctx.fillRect(roadX - roadW / 2 - 12 * perspective, y, roadW + 24 * perspective, 2);
-
-          // Asphalt
-          ctx.fillStyle = stripe ? '#334155' : '#1E293B';
-          ctx.fillRect(roadX - roadW / 2, y, roadW, 2);
-
-          // Center White Line
-          if (stripe) {
-            ctx.fillStyle = '#FFFFFF';
-            ctx.fillRect(roadX - (2 * perspective), y, 4 * perspective, 2);
-          }
-        }
-
-        // 4. 3D Item Boxes & Trees along the track
-        for (let i = 0; i < 6; i++) {
-          const itemZ = ((localDist + i * 250) % 1500);
-          const zScale = Math.max(0.05, 1 - (itemZ / 1500));
-          const itemY = horizon + (h - horizon) * (1 - zScale);
-          const itemRoadW = roadWTop + (roadWBase - roadWTop) * (1 - zScale);
-          const itemRoadX = (w / 2) + curve * zScale - (localPos * itemRoadW * 0.4);
-
-          // Trees on roadside
-          const treeXLeft = itemRoadX - itemRoadW / 2 - (60 * (1 - zScale));
-          const treeXRight = itemRoadX + itemRoadW / 2 + (60 * (1 - zScale));
-
-          if (itemY > horizon && itemY < h) {
-            // Draw Tree Left
-            ctx.fillStyle = '#166534';
-            ctx.beginPath();
-            ctx.arc(treeXLeft, itemY - 20 * (1 - zScale), 15 * (1 - zScale), 0, Math.PI * 2);
-            ctx.fill();
-
-            // Draw Item Box on Track
-            const boxX = itemRoadX + ((i % 3 - 1) * itemRoadW * 0.25);
-            ctx.fillStyle = '#F59E0B';
-            ctx.fillRect(boxX - 8 * (1 - zScale), itemY - 16 * (1 - zScale), 16 * (1 - zScale), 16 * (1 - zScale));
-            ctx.strokeStyle = '#FFFFFF';
-            ctx.strokeRect(boxX - 8 * (1 - zScale), itemY - 16 * (1 - zScale), 16 * (1 - zScale), 16 * (1 - zScale));
-          }
-        }
-
-        // 5. Draw Rival Karts in 3D Space
-        rivals.forEach(r => {
-          const relDist = r.dist - localDist;
-          if (relDist > -100 && relDist < 1000) {
-            const zScale = Math.max(0.1, 1 - (relDist / 1000));
-            const rY = horizon + (h - horizon) * (1 - zScale);
-            const rRoadW = roadWTop + (roadWBase - roadWTop) * (1 - zScale);
-            const rX = (w / 2) + curve * zScale + (r.x * rRoadW * 0.4) - (localPos * rRoadW * 0.4);
-
-            if (rY > horizon && rY < h) {
-              // Rival Kart Body
-              ctx.fillStyle = r.color;
-              ctx.beginPath();
-              ctx.roundRect(rX - 16 * (1 - zScale), rY - 20 * (1 - zScale), 32 * (1 - zScale), 20 * (1 - zScale), 6);
-              ctx.fill();
-              ctx.fillStyle = '#000000';
-              ctx.fillText(r.name, rX - 15 * (1 - zScale), rY - 24 * (1 - zScale));
-            }
-          }
-        });
-
-        // 6. Player Tux 3D Kart
-        const playerXPix = w / 2 + (localPos * 40);
-        const playerYPix = h - 60;
-
-        // Exhaust Nitro Flame
-        if (isNitroActive) {
-          ctx.fillStyle = '#F97316';
-          ctx.beginPath();
-          ctx.arc(playerXPix - 12, playerYPix + 15, 8 + Math.random() * 6, 0, Math.PI * 2);
-          ctx.arc(playerXPix + 12, playerYPix + 15, 8 + Math.random() * 6, 0, Math.PI * 2);
-          ctx.fill();
-        }
-
-        // Kart Body
-        ctx.fillStyle = '#0284C7';
-        ctx.beginPath();
-        ctx.roundRect(playerXPix - 24, playerYPix - 15, 48, 30, 8);
-        ctx.fill();
-        ctx.strokeStyle = '#38BDF8';
-        ctx.lineWidth = 2;
-        ctx.stroke();
-
-        // Wheels
-        ctx.fillStyle = '#0F172A';
-        ctx.fillRect(playerXPix - 28, playerYPix - 12, 6, 12);
-        ctx.fillRect(playerXPix + 22, playerYPix - 12, 6, 12);
-        ctx.fillRect(playerXPix - 28, playerYPix + 5, 6, 12);
-        ctx.fillRect(playerXPix + 22, playerYPix + 5, 6, 12);
-
-        // Tux Penguin Driver
-        ctx.fillStyle = '#000000';
-        ctx.beginPath();
-        ctx.arc(playerXPix, playerYPix - 12, 12, 0, Math.PI * 2);
-        ctx.fill();
-
-        // Tux White Belly & Beak
-        ctx.fillStyle = '#FFFFFF';
-        ctx.beginPath();
-        ctx.arc(playerXPix, playerYPix - 10, 7, 0, Math.PI * 2);
-        ctx.fill();
-
-        ctx.fillStyle = '#F97316'; // Beak
-        ctx.beginPath();
-        ctx.arc(playerXPix, playerYPix - 12, 3, 0, Math.PI * 2);
-        ctx.fill();
-
-      // ==========================================
-      // GAME 2: VELOREN 3D VOXEL RPG
-      // ==========================================
-      } else if (selectedGame === 'veloren') {
-        const isUp = keys['w'] || keys['arrowup'];
-        const isDown = keys['s'] || keys['arrowdown'];
-        const isLeft = keys['a'] || keys['arrowleft'];
-        const isRight = keys['d'] || keys['arrowright'];
-        const isSpace = keys[' '] || keys['space'];
-
-        const moveSpeed = 120 * dt;
-        if (isUp) localY = Math.max(20, localY - moveSpeed);
-        if (isDown) localY = Math.min(canvas.height - 20, localY + moveSpeed);
-        if (isLeft) localX = Math.max(20, localX - moveSpeed);
-        if (isRight) localX = Math.min(canvas.width - 20, localX + moveSpeed);
-
-        setPlayerX(localX);
-        setPlayerY(localY);
-
-        // Clear Voxel Terrain
-        ctx.fillStyle = '#15803D';
-        ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-        // Draw Voxel Grid lines
-        ctx.strokeStyle = '#166534';
-        ctx.lineWidth = 1;
-        for (let x = 0; x < canvas.width; x += 30) {
-          ctx.beginPath();
-          ctx.moveTo(x, 0); ctx.lineTo(x, canvas.height); ctx.stroke();
-        }
-        for (let y = 0; y < canvas.height; y += 30) {
-          ctx.beginPath();
-          ctx.moveTo(0, y); ctx.lineTo(canvas.width, y); ctx.stroke();
-        }
-
-        // Draw Monsters & Attack Logic
-        monsters.forEach(m => {
-          ctx.fillStyle = m.color;
-          ctx.fillRect(m.x - 12, m.y - 12, 24, 24);
-          ctx.strokeStyle = '#000';
-          ctx.strokeRect(m.x - 12, m.y - 12, 24, 24);
-
-          // Distance check
-          const distToPlayer = Math.hypot(m.x - localX, m.y - localY);
-          if (isSpace && distToPlayer < 45) {
-            m.hp -= 40 * dt;
-            ctx.fillStyle = '#FDE047';
-            ctx.beginPath();
-            ctx.arc(m.x, m.y, 25, 0, Math.PI * 2);
-            ctx.fill();
-            if (m.hp <= 0) {
-              m.x = Math.random() * (canvas.width - 60) + 30;
-              m.y = Math.random() * (canvas.height - 60) + 30;
-              m.hp = 30;
-              localScore += 100;
-              setScore(localScore);
-              soundEngine.playSuccessTone();
-            }
-          }
-        });
-
-        // Player Voxel Hero
-        ctx.fillStyle = '#3B82F6';
-        ctx.fillRect(localX - 14, localY - 14, 28, 28);
-        ctx.strokeStyle = '#60A5FA';
-        ctx.lineWidth = 2;
-        ctx.strokeRect(localX - 14, localY - 14, 28, 28);
-
-        // Sword swing visual
-        if (isSpace) {
-          ctx.fillStyle = '#E0F2FE';
-          ctx.beginPath();
-          ctx.arc(localX, localY, 32, 0, Math.PI * 2);
-          ctx.stroke();
-        }
-
-      // ==========================================
-      // GAME 3: 3D HARDWARE BENCHMARK
-      // ==========================================
-      } else {
-        const time = now / 1000;
-        ctx.fillStyle = '#0F172A';
-        ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-        // Rotating 3D Polygon Mesh
-        ctx.save();
-        ctx.translate(canvas.width / 2, canvas.height / 2);
-
-        for (let i = 0; i < 12; i++) {
-          const angle = time * 2 + (i * Math.PI / 6);
-          const r = 120 + Math.sin(time * 3 + i) * 30;
-          const x = Math.cos(angle) * r;
-          const y = Math.sin(angle) * r;
-
-          ctx.fillStyle = `hsl(${(i * 30 + time * 50) % 360}, 80%, 60%)`;
-          ctx.beginPath();
-          ctx.arc(x, y, 16, 0, Math.PI * 2);
-          ctx.fill();
-        }
-
-        ctx.restore();
-      }
-
-      animId = requestAnimationFrame(loop);
-    };
-
-    animId = requestAnimationFrame(loop);
-    return () => cancelAnimationFrame(animId);
-  }, [selectedGame, distance, kartSpeed, kartPos, nitro, lap, playerX, playerY, playerHp, score, gameOver]);
-
-  return (
-    <div className="relative w-full h-full bg-[#090A0F] text-white flex flex-col font-sans overflow-hidden select-none">
-      {/* Top Header / Launcher Bar */}
-      <div className="flex items-center justify-between px-4 py-2.5 bg-black/70 border-b border-white/10 backdrop-blur z-20">
-        <div className="flex items-center gap-3">
-          <Gamepad2 className="w-5 h-5 text-emerald-400" />
-          <div className="flex flex-col">
-            <span className="text-xs font-bold text-white tracking-wide">SAVIA 3D Gaming Engine (Open Source)</span>
-            <span className="text-[10px] text-gray-400 font-mono">Motor 3D Real Interactivo • WebGL 2.0 Canvas</span>
-          </div>
-        </div>
-
-        <div className="flex items-center gap-2">
-          <button 
-            onClick={() => { setSelectedGame('supertux'); setGameOver(false); }} 
-            className={`px-3 py-1 rounded-lg text-xs font-semibold transition-all ${selectedGame === 'supertux' ? 'bg-amber-600 text-white shadow-lg' : 'bg-white/5 hover:bg-white/10 text-gray-300'}`}
-          >
-            🏎️ SuperTuxKart 3D
-          </button>
-          <button 
-            onClick={() => setSelectedGame('veloren')} 
-            className={`px-3 py-1 rounded-lg text-xs font-semibold transition-all ${selectedGame === 'veloren' ? 'bg-emerald-600 text-white shadow-lg' : 'bg-white/5 hover:bg-white/10 text-gray-300'}`}
-          >
-            ⚔️ Veloren 3D RPG
-          </button>
-          <button 
-            onClick={() => setSelectedGame('benchmark')} 
-            className={`px-3 py-1 rounded-lg text-xs font-semibold transition-all ${selectedGame === 'benchmark' ? 'bg-indigo-600 text-white shadow-lg' : 'bg-white/5 hover:bg-white/10 text-gray-300'}`}
-          >
-            ⚡ Test Benchmark 3D
-          </button>
-        </div>
-      </div>
-
-      {/* Main 3D Screen Viewport */}
-      <div className="flex-1 relative flex items-center justify-center p-3 overflow-hidden bg-black/40">
-        {/* HUD OVERLAY - SuperTuxKart 3D */}
-        {selectedGame === 'supertux' && (
-          <>
-            <div className="absolute top-4 left-4 z-20 flex flex-col gap-1.5 bg-black/80 p-3 rounded-xl border border-white/10 backdrop-blur font-mono text-xs shadow-xl">
-              <div className="flex items-center justify-between gap-4">
-                <span className="text-amber-400 font-bold">🏎️ SuperTuxKart 3D</span>
-                <span className="text-emerald-400 font-bold text-sm">Posición: #{rank} / 4</span>
-              </div>
-              <div className="flex items-center gap-4 text-gray-300 text-[11px]">
-                <span>Velocidad: <strong className="text-white font-mono text-sm">{kartSpeed} km/h</strong></span>
-                <span>Vuelta: <strong className="text-amber-400 font-mono text-sm">{lap} / 3</strong></span>
-              </div>
-              <div className="flex items-center gap-2 mt-1">
-                <span className="text-[10px] text-gray-400">NITRO:</span>
-                <div className="w-28 h-2.5 bg-gray-800 rounded-full overflow-hidden border border-white/10">
-                  <div className={`h-full transition-all ${isNitroActive ? 'bg-orange-500 animate-pulse' : 'bg-amber-400'}`} style={{ width: `${nitro}%` }} />
-                </div>
-                <span className="text-[10px] text-amber-300 font-bold">{nitro}%</span>
-              </div>
-            </div>
-
-            <div className="absolute top-4 right-4 z-20 flex flex-col items-end gap-1 bg-black/80 p-3 rounded-xl border border-white/10 backdrop-blur font-mono text-xs">
-              <span className="text-xs font-bold text-gray-300">FPS: <strong className="text-emerald-400">{fps}</strong></span>
-              <span className="text-[10px] text-gray-400">{gameMessage}</span>
-            </div>
-          </>
-        )}
-
-        {/* HUD OVERLAY - Veloren 3D */}
-        {selectedGame === 'veloren' && (
-          <div className="absolute top-4 left-4 z-20 flex flex-col gap-1 bg-black/80 p-3 rounded-xl border border-white/10 backdrop-blur font-mono text-xs">
-            <span className="text-emerald-400 font-bold">⚔️ Veloren 3D RPG (Open Source)</span>
-            <span className="text-white">Puntuación: <strong className="text-amber-400 font-bold">{score} XP</strong></span>
-            <span className="text-gray-400 text-[10px]">Usa WASD para moverte | Espacio para Atacar Monstruos 3D</span>
-          </div>
-        )}
-
-        {/* CANVAS GRAPHICS */}
-        <canvas ref={canvasRef} className="max-w-full max-h-full aspect-square rounded-2xl border border-white/10 shadow-2xl bg-black" width={500} height={500} />
-      </div>
-
-      {/* FOOTER CONTROLS GUIDE */}
-      <div className="px-4 py-2 bg-black/90 border-t border-white/10 flex items-center justify-between text-[11px] text-gray-400">
-        {selectedGame === 'supertux' ? (
-          <div className="flex items-center gap-4">
-            <span>Controles: <strong className="text-white">W / Flecha Arriba</strong> Acelerar | <strong className="text-white">S</strong> Freno | <strong className="text-white">A / D</strong> Girar | <strong className="text-white">Espacio</strong> Turbo Nitro</span>
-          </div>
-        ) : (
-          <span>Controles: <strong className="text-white">W A S D</strong> Moverse | <strong className="text-white">Espacio</strong> Atacar / Interactuar</span>
-        )}
-        <span className="text-emerald-400 font-mono hidden sm:inline">GPLv3 OpenSource Gaming Engine • Invitado Habilitado</span>
-      </div>
-    </div>
-  );
-};
+const WebGLApp = () => <ThreeGamesApp />;
 
 export type DesktopIcon = {
   id: string;
@@ -582,33 +59,32 @@ export type DesktopIcon = {
 };
 
 const DEFAULT_DESKTOP_ICONS: DesktopIcon[] = [
-  { id: 'about', title: 'Acerca de SaviaOS', appType: 'about', iconType: 'info', x: 20, y: 20 },
-  { id: 'theme', title: 'Fondos & Temas', appType: 'theme', iconType: 'theme', x: 20, y: 120 },
-  { id: 'controlpanel', title: 'Panel Control', appType: 'controlpanel', iconType: 'controlpanel', x: 20, y: 220 },
-  { id: 'appstore', title: 'App Store', appType: 'appstore', iconType: 'appstore', x: 20, y: 320 },
-  { id: 'terminal', title: 'Terminal', appType: 'terminal', iconType: 'terminal', x: 20, y: 420 },
-  { id: 'folder', title: 'Files', appType: 'folder', iconType: 'folder', x: 130, y: 20 },
-  { id: 'browser', title: 'Navegador', appType: 'browser', iconType: 'browser', x: 130, y: 120 },
-  { id: 'calculator', title: 'Calculadora', appType: 'calculator', iconType: 'calc', x: 130, y: 220 },
-  { id: 'calendar', title: 'Calendario', appType: 'calendar', iconType: 'calendar', x: 130, y: 320 },
-  { id: 'imageviewer', title: 'Galería Fotos', appType: 'imageviewer', iconType: 'image', x: 130, y: 420 },
-  { id: 'soundsettings', title: 'Audio Core', appType: 'soundsettings', iconType: 'sound', x: 240, y: 20 },
-  { id: 'pdfviewer', title: 'Visor PDF', appType: 'pdfviewer', iconType: 'pdf', x: 240, y: 120 },
-  { id: 'savia_doc', title: 'SaviaDoc', appType: 'office', iconType: 'doc', docData: 'nuevo documento.docx', x: 240, y: 220 },
-  { id: 'savia_xls', title: 'SaviaXls', appType: 'office', iconType: 'xls', docData: 'nuevo documento.xlsx', x: 240, y: 320 },
-  { id: 'savia_ppt', title: 'SaviaPpt', appType: 'office', iconType: 'ppt', docData: 'nuevo documento.pptx', x: 240, y: 420 },
-  { id: 'wine', title: 'Wine Subsystem', appType: 'wine', iconType: 'wine', x: 350, y: 20 },
-  { id: 'winmine', title: 'Buscaminas.exe', appType: 'wine', iconType: 'wine', docData: 'winmine', x: 350, y: 120 },
-  { id: 'pinball', title: '3D_Pinball.exe', appType: 'wine', iconType: 'wine', docData: 'pinball', x: 350, y: 220 },
-  { id: 'solitaire', title: 'Solitario.exe', appType: 'wine', iconType: 'wine', docData: 'solitaire', x: 350, y: 320 },
-  { id: 'putty', title: 'putty.exe', appType: 'wine', iconType: 'wine', docData: 'putty', x: 350, y: 420 },
-  { id: 'vlc_win32', title: 'vlc.exe', appType: 'wine', iconType: 'wine', docData: 'vlc_win32', x: 460, y: 20 },
+  { id: 'webgl_games', title: 'Savia Games', appType: 'webgl', iconType: 'game', x: 20, y: 20 },
+  { id: 'about', title: 'Acerca de SaviaOS', appType: 'about', iconType: 'info', x: 20, y: 120 },
+  { id: 'theme', title: 'Fondos & Temas', appType: 'theme', iconType: 'theme', x: 20, y: 220 },
+  { id: 'controlpanel', title: 'Panel Control', appType: 'controlpanel', iconType: 'controlpanel', x: 20, y: 320 },
+  { id: 'appstore', title: 'App Store', appType: 'appstore', iconType: 'appstore', x: 20, y: 420 },
+  { id: 'terminal', title: 'Terminal', appType: 'terminal', iconType: 'terminal', x: 130, y: 20 },
+  { id: 'folder', title: 'Files', appType: 'folder', iconType: 'folder', x: 130, y: 120 },
+  { id: 'browser', title: 'Navegador', appType: 'browser', iconType: 'browser', x: 130, y: 220 },
+  { id: 'calculator', title: 'Savia Calc', appType: 'calculator', iconType: 'calc', x: 130, y: 320 },
+  { id: 'calendar', title: 'Calendario', appType: 'calendar', iconType: 'calendar', x: 130, y: 420 },
+  { id: 'imageviewer', title: 'Galería Fotos', appType: 'imageviewer', iconType: 'image', x: 240, y: 20 },
+  { id: 'soundsettings', title: 'Audio Core', appType: 'soundsettings', iconType: 'sound', x: 240, y: 120 },
+  { id: 'pdfviewer', title: 'Savia Pdf', appType: 'pdfviewer', iconType: 'pdf', x: 240, y: 220 },
+  { id: 'savia_nano', title: 'Savia Nano', appType: 'texteditor', iconType: 'editor', x: 240, y: 320 },
+  { id: 'savia_doc', title: 'Savia Doc', appType: 'office', iconType: 'doc', docData: 'nuevo documento.docx', x: 240, y: 420 },
+  { id: 'savia_xls', title: 'Savia Xls', appType: 'office', iconType: 'xls', docData: 'nuevo documento.xlsx', x: 350, y: 20 },
+  { id: 'savia_ppt', title: 'Savia Ppt', appType: 'office', iconType: 'ppt', docData: 'nuevo documento.pptx', x: 350, y: 120 },
+  { id: 'paint', title: 'Savia Paint', appType: 'paint', iconType: 'paint', x: 350, y: 220 },
+  { id: 'showcase_web', title: 'Savia Web Portal', appType: 'showcaseweb', iconType: 'globe', x: 350, y: 320 },
 ];
 
 export default function DesktopEnvironment({ user, onExit }: { user: UserData, onExit: () => void }) {
   const [windows, setWindows] = useState<WindowData[]>([]);
   const [activeId, setActiveId] = useState<string>('');
   const [isStartMenuOpen, setIsStartMenuOpen] = useState(false);
+  const [startMenuViewMode, setStartMenuViewMode] = useState<'pinned' | 'all'>('pinned');
   const [startMenuSearch, setStartMenuSearch] = useState('');
   const [isSaviaMenuOpen, setIsSaviaMenuOpen] = useState(false);
   const [isControlCenterOpen, setIsControlCenterOpen] = useState(false);
@@ -733,6 +209,23 @@ export default function DesktopEnvironment({ user, onExit }: { user: UserData, o
     window.addEventListener('savia_os_desktop_icons_updated', handleIconsUpdated);
     window.addEventListener('savia_os_guest_reset', handleGuestResetEvent);
 
+    const handleGlobalTaskManagerKey = (e: KeyboardEvent) => {
+      if (
+        (e.ctrlKey && e.shiftKey && (e.key === 'Escape' || e.key === 'Esc')) ||
+        (e.ctrlKey && e.altKey && (e.key === 'Delete' || e.key === 'Del' || e.key === 't' || e.key === 'T'))
+      ) {
+        e.preventDefault();
+        openApp('taskmanager', 'Administrador de Tareas');
+      }
+    };
+
+    const handleOpenTaskManagerEvent = () => {
+      openApp('taskmanager', 'Administrador de Tareas');
+    };
+
+    window.addEventListener('keydown', handleGlobalTaskManagerKey);
+    window.addEventListener('savia_os_open_task_manager', handleOpenTaskManagerEvent);
+
     const handleThemeChange = (e: any) => {
       if (e.detail?.wallpaper) setWallpaper(e.detail.wallpaper);
       if (e.detail?.opacity !== undefined) setOverlayOpacity(e.detail.opacity);
@@ -751,6 +244,8 @@ export default function DesktopEnvironment({ user, onExit }: { user: UserData, o
     return () => {
       unsub();
       window.removeEventListener('click', closeWindowCtxMenu);
+      window.removeEventListener('keydown', handleGlobalTaskManagerKey);
+      window.removeEventListener('savia_os_open_task_manager', handleOpenTaskManagerEvent);
       window.removeEventListener('savia_os_desktop_icons_updated', handleIconsUpdated);
       window.removeEventListener('savia_os_guest_reset', handleGuestResetEvent);
       window.removeEventListener('savia_os_package_updated', handlePkgUpdate);
@@ -1089,50 +584,50 @@ export default function DesktopEnvironment({ user, onExit }: { user: UserData, o
                 <button
                   onClick={() => {
                     const docName = 'nuevo documento.docx';
-                    createNewDesktopIcon('SaviaDoc', 'office', 'doc', docName);
-                    openApp('office', 'SaviaDoc', docName);
+                    createNewDesktopIcon('Savia Doc', 'office', 'doc', docName);
+                    openApp('office', 'Savia Doc', docName);
                     setContextMenu(null);
                   }}
                   className="flex items-center gap-2.5 px-3 py-2 hover:bg-blue-600 rounded-lg text-left font-medium"
                 >
                   <FileText className="w-4 h-4 text-blue-500" />
-                  <span>Documento SaviaDoc (.docx)</span>
+                  <span>Documento Savia Doc (.docx)</span>
                 </button>
                 <button
                   onClick={() => {
                     const docName = 'nuevo documento.xlsx';
-                    createNewDesktopIcon('SaviaXls', 'office', 'xls', docName);
-                    openApp('office', 'SaviaXls', docName);
+                    createNewDesktopIcon('Savia Xls', 'office', 'xls', docName);
+                    openApp('office', 'Savia Xls', docName);
                     setContextMenu(null);
                   }}
                   className="flex items-center gap-2.5 px-3 py-2 hover:bg-blue-600 rounded-lg text-left font-medium"
                 >
                   <Activity className="w-4 h-4 text-emerald-500" />
-                  <span>Hoja SaviaXls (.xlsx)</span>
+                  <span>Hoja Savia Xls (.xlsx)</span>
                 </button>
                 <button
                   onClick={() => {
                     const docName = 'nuevo documento.pptx';
-                    createNewDesktopIcon('SaviaPpt', 'office', 'ppt', docName);
-                    openApp('office', 'SaviaPpt', docName);
+                    createNewDesktopIcon('Savia Ppt', 'office', 'ppt', docName);
+                    openApp('office', 'Savia Ppt', docName);
                     setContextMenu(null);
                   }}
                   className="flex items-center gap-2.5 px-3 py-2 hover:bg-blue-600 rounded-lg text-left font-medium"
                 >
                   <Monitor className="w-4 h-4 text-amber-500" />
-                  <span>Presentación SaviaPpt (.pptx)</span>
+                  <span>Presentación Savia Ppt (.pptx)</span>
                 </button>
                 <button
                   onClick={() => {
                     const docName = `Fichero_${Math.floor(Math.random()*1000)}.txt`;
-                    createNewDesktopIcon('Fichero Texto', 'texteditor', 'doc', docName);
-                    openApp('texteditor', 'Editor de Texto', docName);
+                    createNewDesktopIcon('Savia Nano', 'texteditor', 'editor', docName);
+                    openApp('texteditor', 'Savia Nano', docName);
                     setContextMenu(null);
                   }}
                   className="flex items-center gap-2.5 px-3 py-2 hover:bg-blue-600 rounded-lg text-left font-medium"
                 >
-                  <FileText className="w-4 h-4 text-cyan-400" />
-                  <span>Archivo de Texto (.txt)</span>
+                  <FileCode className="w-4 h-4 text-emerald-400" />
+                  <span>Código / Texto Savia Nano (.txt)</span>
                 </button>
                 <button
                   onClick={() => {
@@ -1148,6 +643,22 @@ export default function DesktopEnvironment({ user, onExit }: { user: UserData, o
             </div>
 
             <div className="h-px bg-white/10 my-1 w-full" />
+
+            <button
+              onClick={() => { openApp('taskmanager', 'Administrador de Tareas'); setContextMenu(null); }}
+              className="flex items-center gap-2.5 px-3 py-2 hover:bg-blue-600 rounded-xl text-left font-semibold text-emerald-300"
+            >
+              <Activity className="w-4 h-4 text-emerald-400" />
+              <span>Administrador de Tareas (Ctrl+Shift+Esc)</span>
+            </button>
+
+            <button
+              onClick={() => { openApp('showcaseweb', 'Savia Web Portal'); setContextMenu(null); }}
+              className="flex items-center gap-2.5 px-3 py-2 hover:bg-blue-600 rounded-xl text-left font-semibold text-sky-300"
+            >
+              <Globe className="w-4 h-4 text-sky-400" />
+              <span>Portal Web & GitHub Pages...</span>
+            </button>
 
             <button
               onClick={() => { alignIconsGrid(); setContextMenu(null); }}
@@ -1284,6 +795,7 @@ export default function DesktopEnvironment({ user, onExit }: { user: UserData, o
             {icon.iconType === 'office' && <FileText className="w-9 h-9 text-blue-400 drop-shadow-lg group-hover:scale-105 transition-transform" />}
             {icon.iconType === 'game' && <Gamepad2 className="w-9 h-9 text-purple-400 drop-shadow-lg group-hover:scale-105 transition-transform" />}
             {icon.iconType === 'paint' && <Palette className="w-9 h-9 text-pink-400 drop-shadow-lg group-hover:scale-105 transition-transform" />}
+            {icon.iconType === 'editor' && <FileCode className="w-9 h-9 text-emerald-400 drop-shadow-lg group-hover:scale-105 transition-transform" />}
             {icon.iconType === 'doc' && <FileText className="w-9 h-9 text-blue-500 drop-shadow-lg group-hover:scale-105 transition-transform" />}
             {icon.iconType === 'xls' && <Activity className="w-9 h-9 text-emerald-500 drop-shadow-lg group-hover:scale-105 transition-transform" />}
             {icon.iconType === 'ppt' && <Monitor className="w-9 h-9 text-amber-500 drop-shadow-lg group-hover:scale-105 transition-transform" />}
@@ -1337,9 +849,10 @@ export default function DesktopEnvironment({ user, onExit }: { user: UserData, o
                 {w.type === 'webgl' && <Cpu className="w-3.5 h-3.5" />}
                 {w.type === 'folder' && <Folder className="w-3.5 h-3.5" />}
                 {w.type === 'browser' && <Globe className="w-3.5 h-3.5" />}
-                {w.type === 'texteditor' && <FileText className="w-3.5 h-3.5" />}
-                {w.type === 'pdfviewer' && <FileImage className="w-3.5 h-3.5" />}
-                {w.type === 'taskmanager' && <Activity className="w-3.5 h-3.5" />}
+                {w.type === 'showcaseweb' && <Globe className="w-3.5 h-3.5 text-blue-400" />}
+                {w.type === 'texteditor' && <FileCode className="w-3.5 h-3.5 text-emerald-400" />}
+                {w.type === 'pdfviewer' && <FileImage className="w-3.5 h-3.5 text-red-500" />}
+                {w.type === 'taskmanager' && <Activity className="w-3.5 h-3.5 text-emerald-400" />}
                 {w.type === 'tetris' && <Gamepad2 className="w-3.5 h-3.5" />}
                 {w.type === 'calculator' && <CalcIcon className="w-3.5 h-3.5 text-amber-400" />}
                 {w.type === 'calendar' && <CalendarIcon className="w-3.5 h-3.5 text-cyan-400" />}
@@ -1365,8 +878,9 @@ export default function DesktopEnvironment({ user, onExit }: { user: UserData, o
               {w.type === 'webgl' && <WebGLApp />}
               {w.type === 'folder' && <FileExplorer user={user} onOpenFile={(type, title) => openApp(type as any, title)} />}
               {w.type === 'browser' && <BrowserApp user={user} />}
-              {w.type === 'texteditor' && <TextEditorApp />}
-              {w.type === 'pdfviewer' && <PdfViewerApp />}
+              {w.type === 'showcaseweb' && <ShowcaseWebSiteApp />}
+              {w.type === 'texteditor' && <TextEditorApp data={w.data} user={user} />}
+              {w.type === 'pdfviewer' && <PdfViewerApp user={user} initialFile={w.data} />}
               {w.type === 'office' && <OfficeApp user={user} initialFile={w.data} />}
               {w.type === 'taskmanager' && <TaskManager windows={windows} closeWindow={closeWindow} />}
               {w.type === 'tetris' && <TetrisApp />}
@@ -1476,6 +990,377 @@ export default function DesktopEnvironment({ user, onExit }: { user: UserData, o
                 </div>
               ))}
             </div>
+          ) : startMenuViewMode === 'all' ? (
+            /* ALL INSTALLED APPS VIEW */
+            <div className="flex-1 overflow-y-auto flex flex-col gap-4 pr-1">
+              {/* Header Nav */}
+              <div className="flex justify-between items-center px-1 pb-2 border-b border-white/10 sticky top-0 bg-[#1C1C1F] z-10">
+                <button 
+                  onClick={() => setStartMenuViewMode('pinned')}
+                  className="flex items-center gap-1.5 text-xs font-semibold text-sky-400 hover:text-sky-300 bg-sky-500/10 hover:bg-sky-500/20 px-3 py-1.5 rounded-xl border border-sky-500/30 transition-all cursor-pointer"
+                >
+                  <ChevronLeft className="w-4 h-4" />
+                  <span>Volver a Fijadas</span>
+                </button>
+                <div className="flex items-center gap-1.5">
+                  <Grid className="w-3.5 h-3.5 text-purple-400" />
+                  <span className="text-xs font-bold text-gray-200">Todas las Aplicaciones</span>
+                </div>
+              </div>
+
+              {/* Categoría: Juegos 3D & Arcade */}
+              <div>
+                <h4 className="text-[11px] font-bold text-purple-400 uppercase tracking-wider mb-2 px-1 flex items-center gap-1.5">
+                  <Gamepad2 className="w-3.5 h-3.5" />
+                  Juegos 3D y Arcade
+                </h4>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  <div 
+                    onClick={() => { openApp('webgl', 'Centro de Juegos 3D'); setIsStartMenuOpen(false); }}
+                    className="flex items-center gap-3 p-2.5 bg-purple-500/10 hover:bg-purple-500/20 border border-purple-500/20 rounded-xl cursor-pointer transition-all group"
+                  >
+                    <div className="p-2 bg-purple-500/20 rounded-lg border border-purple-500/30 group-hover:scale-110 transition-transform">
+                      <Gamepad2 className="w-5 h-5 text-purple-400" />
+                    </div>
+                    <div className="flex flex-col min-w-0">
+                      <span className="text-xs font-bold text-white group-hover:text-purple-300">Centro de Juegos 3D</span>
+                      <span className="text-[10px] text-gray-400 truncate">Three.js: Carreras, Shooter & Ajedrez 3D</span>
+                    </div>
+                  </div>
+
+                  <div 
+                    onClick={() => { openApp('tetris', 'Tetris Arcade'); setIsStartMenuOpen(false); }}
+                    className="flex items-center gap-3 p-2.5 bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/20 rounded-xl cursor-pointer transition-all group"
+                  >
+                    <div className="p-2 bg-amber-500/20 rounded-lg border border-amber-500/30 group-hover:scale-110 transition-transform">
+                      <Trophy className="w-5 h-5 text-amber-400" />
+                    </div>
+                    <div className="flex flex-col min-w-0">
+                      <span className="text-xs font-bold text-white group-hover:text-amber-300">Tetris Arcade 2D</span>
+                      <span className="text-[10px] text-gray-400 truncate">Juego retro de bloques y récords</span>
+                    </div>
+                  </div>
+
+                  <div 
+                    onClick={() => { openApp('wine', 'Buscaminas Win32', 'winmine'); setIsStartMenuOpen(false); }}
+                    className="flex items-center gap-3 p-2.5 bg-white/5 hover:bg-amber-500/20 border border-white/5 hover:border-amber-500/30 rounded-xl cursor-pointer transition-all group"
+                  >
+                    <div className="p-2 bg-amber-500/20 rounded-lg border border-amber-500/30 group-hover:scale-110 transition-transform">
+                      <Box className="w-5 h-5 text-amber-400" />
+                    </div>
+                    <div className="flex flex-col min-w-0">
+                      <span className="text-xs font-bold text-white group-hover:text-amber-300">Buscaminas Win32</span>
+                      <span className="text-[10px] text-gray-400 truncate">Ejecutable winmine.exe en Wine</span>
+                    </div>
+                  </div>
+
+                  <div 
+                    onClick={() => { openApp('wine', '3D Pinball Cadet', 'pinball'); setIsStartMenuOpen(false); }}
+                    className="flex items-center gap-3 p-2.5 bg-white/5 hover:bg-amber-500/20 border border-white/5 hover:border-amber-500/30 rounded-xl cursor-pointer transition-all group"
+                  >
+                    <div className="p-2 bg-amber-500/20 rounded-lg border border-amber-500/30 group-hover:scale-110 transition-transform">
+                      <Box className="w-5 h-5 text-amber-400" />
+                    </div>
+                    <div className="flex flex-col min-w-0">
+                      <span className="text-xs font-bold text-white group-hover:text-amber-300">3D Pinball Space Cadet</span>
+                      <span className="text-[10px] text-gray-400 truncate">Pinball 3D clásico ejecutado en Wine</span>
+                    </div>
+                  </div>
+
+                  <div 
+                    onClick={() => { openApp('wine', 'Solitario Win32', 'solitaire'); setIsStartMenuOpen(false); }}
+                    className="flex items-center gap-3 p-2.5 bg-white/5 hover:bg-amber-500/20 border border-white/5 hover:border-amber-500/30 rounded-xl cursor-pointer transition-all group"
+                  >
+                    <div className="p-2 bg-amber-500/20 rounded-lg border border-amber-500/30 group-hover:scale-110 transition-transform">
+                      <Box className="w-5 h-5 text-amber-400" />
+                    </div>
+                    <div className="flex flex-col min-w-0">
+                      <span className="text-xs font-bold text-white group-hover:text-amber-300">Solitario Klondike</span>
+                      <span className="text-[10px] text-gray-400 truncate">Juego de cartas clásico Win32</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Categoría: Productividad y Ofimática */}
+              <div>
+                <h4 className="text-[11px] font-bold text-blue-400 uppercase tracking-wider mb-2 px-1 flex items-center gap-1.5">
+                  <FileText className="w-3.5 h-3.5" />
+                  Productividad y Oficina
+                </h4>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  <div 
+                    onClick={() => { openApp('office', 'Savia Doc', 'nuevo documento.docx'); setIsStartMenuOpen(false); }}
+                    className="flex items-center gap-3 p-2.5 bg-blue-500/10 hover:bg-blue-500/20 border border-blue-500/20 rounded-xl cursor-pointer transition-all group"
+                  >
+                    <div className="p-2 bg-blue-500/20 rounded-lg border border-blue-500/30">
+                      <FileText className="w-5 h-5 text-blue-400" />
+                    </div>
+                    <div className="flex flex-col min-w-0">
+                      <span className="text-xs font-bold text-white">Savia Doc (.docx)</span>
+                      <span className="text-[10px] text-gray-400 truncate">Procesador de texto rico</span>
+                    </div>
+                  </div>
+
+                  <div 
+                    onClick={() => { openApp('office', 'Savia Xls', 'nuevo documento.xlsx'); setIsStartMenuOpen(false); }}
+                    className="flex items-center gap-3 p-2.5 bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/20 rounded-xl cursor-pointer transition-all group"
+                  >
+                    <div className="p-2 bg-emerald-500/20 rounded-lg border border-emerald-500/30">
+                      <Activity className="w-5 h-5 text-emerald-400" />
+                    </div>
+                    <div className="flex flex-col min-w-0">
+                      <span className="text-xs font-bold text-white">Savia Xls (.xlsx)</span>
+                      <span className="text-[10px] text-gray-400 truncate">Hoja de cálculo y gráficos</span>
+                    </div>
+                  </div>
+
+                  <div 
+                    onClick={() => { openApp('office', 'Savia Ppt', 'nuevo documento.pptx'); setIsStartMenuOpen(false); }}
+                    className="flex items-center gap-3 p-2.5 bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/20 rounded-xl cursor-pointer transition-all group"
+                  >
+                    <div className="p-2 bg-amber-500/20 rounded-lg border border-amber-500/30">
+                      <Monitor className="w-5 h-5 text-amber-400" />
+                    </div>
+                    <div className="flex flex-col min-w-0">
+                      <span className="text-xs font-bold text-white">Savia Ppt (.pptx)</span>
+                      <span className="text-[10px] text-gray-400 truncate">Presentaciones y diapositivas</span>
+                    </div>
+                  </div>
+
+                  <div 
+                    onClick={() => { openApp('pdfviewer', 'Savia Pdf'); setIsStartMenuOpen(false); }}
+                    className="flex items-center gap-3 p-2.5 bg-red-500/10 hover:bg-red-500/20 border border-red-500/20 rounded-xl cursor-pointer transition-all group"
+                  >
+                    <div className="p-2 bg-red-500/20 rounded-lg border border-red-500/30">
+                      <FileImage className="w-5 h-5 text-red-400" />
+                    </div>
+                    <div className="flex flex-col min-w-0">
+                      <span className="text-xs font-bold text-white">Savia Pdf</span>
+                      <span className="text-[10px] text-gray-400 truncate">Lector y anotador de PDFs</span>
+                    </div>
+                  </div>
+
+                  <div 
+                    onClick={() => { openApp('texteditor', 'Savia Nano'); setIsStartMenuOpen(false); }}
+                    className="flex items-center gap-3 p-2.5 bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/20 rounded-xl cursor-pointer transition-all group"
+                  >
+                    <div className="p-2 bg-emerald-500/20 rounded-lg border border-emerald-500/30">
+                      <FileCode className="w-5 h-5 text-emerald-400" />
+                    </div>
+                    <div className="flex flex-col min-w-0">
+                      <span className="text-xs font-bold text-white">Savia Nano</span>
+                      <span className="text-[10px] text-gray-400 truncate">Editor de código y texto nano</span>
+                    </div>
+                  </div>
+
+                  <div 
+                    onClick={() => { openApp('showcaseweb', 'Savia Web Portal'); setIsStartMenuOpen(false); }}
+                    className="flex items-center gap-3 p-2.5 bg-sky-500/10 hover:bg-sky-500/20 border border-sky-500/20 rounded-xl cursor-pointer transition-all group"
+                  >
+                    <div className="p-2 bg-sky-500/20 rounded-lg border border-sky-500/30">
+                      <Globe className="w-5 h-5 text-sky-400" />
+                    </div>
+                    <div className="flex flex-col min-w-0">
+                      <span className="text-xs font-bold text-white">Savia Web Portal</span>
+                      <span className="text-[10px] text-gray-400 truncate">Web promocional y GitHub Pages</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Categoría: Sistema y Utilidades */}
+              <div>
+                <h4 className="text-[11px] font-bold text-emerald-400 uppercase tracking-wider mb-2 px-1 flex items-center gap-1.5">
+                  <Settings className="w-3.5 h-3.5" />
+                  Sistema y Utilidades
+                </h4>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  <div 
+                    onClick={() => { openApp('terminal', 'Terminal POSIX'); setIsStartMenuOpen(false); }}
+                    className="flex items-center gap-3 p-2.5 bg-white/5 hover:bg-white/10 border border-white/5 rounded-xl cursor-pointer transition-all"
+                  >
+                    <div className="p-2 bg-gray-500/20 rounded-lg border border-gray-500/30">
+                      <Terminal className="w-5 h-5 text-gray-200" />
+                    </div>
+                    <div className="flex flex-col min-w-0">
+                      <span className="text-xs font-bold text-white">Terminal POSIX</span>
+                      <span className="text-[10px] text-gray-400 truncate">Shell Bash, APT & NPM</span>
+                    </div>
+                  </div>
+
+                  <div 
+                    onClick={() => { openApp('folder', 'Explorador de Archivos'); setIsStartMenuOpen(false); }}
+                    className="flex items-center gap-3 p-2.5 bg-white/5 hover:bg-white/10 border border-white/5 rounded-xl cursor-pointer transition-all"
+                  >
+                    <div className="p-2 bg-amber-500/20 rounded-lg border border-amber-500/30">
+                      <Folder className="w-5 h-5 text-amber-400" fill="currentColor" />
+                    </div>
+                    <div className="flex flex-col min-w-0">
+                      <span className="text-xs font-bold text-white">Gestor de Archivos</span>
+                      <span className="text-[10px] text-gray-400 truncate">Directorio virtual de SAVIA-OS</span>
+                    </div>
+                  </div>
+
+                  <div 
+                    onClick={() => { openApp('browser', 'Navegador Web'); setIsStartMenuOpen(false); }}
+                    className="flex items-center gap-3 p-2.5 bg-white/5 hover:bg-white/10 border border-white/5 rounded-xl cursor-pointer transition-all"
+                  >
+                    <div className="p-2 bg-blue-500/20 rounded-lg border border-blue-500/30">
+                      <Globe className="w-5 h-5 text-blue-400" />
+                    </div>
+                    <div className="flex flex-col min-w-0">
+                      <span className="text-xs font-bold text-white">Navegador Web</span>
+                      <span className="text-[10px] text-gray-400 truncate">Exploración web e iFrame integration</span>
+                    </div>
+                  </div>
+
+                  <div 
+                    onClick={() => { openApp('controlpanel', 'Panel de Control'); setIsStartMenuOpen(false); }}
+                    className="flex items-center gap-3 p-2.5 bg-white/5 hover:bg-white/10 border border-white/5 rounded-xl cursor-pointer transition-all"
+                  >
+                    <div className="p-2 bg-emerald-500/20 rounded-lg border border-emerald-500/30">
+                      <Settings className="w-5 h-5 text-emerald-400" />
+                    </div>
+                    <div className="flex flex-col min-w-0">
+                      <span className="text-xs font-bold text-white">Panel de Control</span>
+                      <span className="text-[10px] text-gray-400 truncate">Usuarios, red, energía y seguridad</span>
+                    </div>
+                  </div>
+
+                  <div 
+                    onClick={() => { openApp('appstore', 'Software Center'); setIsStartMenuOpen(false); }}
+                    className="flex items-center gap-3 p-2.5 bg-white/5 hover:bg-white/10 border border-white/5 rounded-xl cursor-pointer transition-all"
+                  >
+                    <div className="p-2 bg-amber-500/20 rounded-lg border border-amber-500/30">
+                      <Box className="w-5 h-5 text-amber-400" />
+                    </div>
+                    <div className="flex flex-col min-w-0">
+                      <span className="text-xs font-bold text-white">App Store APT</span>
+                      <span className="text-[10px] text-gray-400 truncate">Instalación de paquetes de software</span>
+                    </div>
+                  </div>
+
+                  <div 
+                    onClick={() => { openApp('taskmanager', 'Monitor de Sistema'); setIsStartMenuOpen(false); }}
+                    className="flex items-center gap-3 p-2.5 bg-white/5 hover:bg-white/10 border border-white/5 rounded-xl cursor-pointer transition-all"
+                  >
+                    <div className="p-2 bg-emerald-500/20 rounded-lg border border-emerald-500/30">
+                      <Cpu className="w-5 h-5 text-emerald-400" />
+                    </div>
+                    <div className="flex flex-col min-w-0">
+                      <span className="text-xs font-bold text-white">Monitor de Sistema</span>
+                      <span className="text-[10px] text-gray-400 truncate">Uso de CPU, Memoria RAM y Procesos</span>
+                    </div>
+                  </div>
+
+                  <div 
+                    onClick={() => { openApp('calculator', 'Savia Calc'); setIsStartMenuOpen(false); }}
+                    className="flex items-center gap-3 p-2.5 bg-white/5 hover:bg-white/10 border border-white/5 rounded-xl cursor-pointer transition-all"
+                  >
+                    <div className="p-2 bg-amber-500/20 rounded-lg border border-amber-500/30">
+                      <CalcIcon className="w-5 h-5 text-amber-400" />
+                    </div>
+                    <div className="flex flex-col min-w-0">
+                      <span className="text-xs font-bold text-white">Savia Calc</span>
+                      <span className="text-[10px] text-gray-400 truncate">Operaciones estándar y científicas</span>
+                    </div>
+                  </div>
+
+                  <div 
+                    onClick={() => { openApp('calendar', 'Calendario'); setIsStartMenuOpen(false); }}
+                    className="flex items-center gap-3 p-2.5 bg-white/5 hover:bg-white/10 border border-white/5 rounded-xl cursor-pointer transition-all"
+                  >
+                    <div className="p-2 bg-cyan-500/20 rounded-lg border border-cyan-500/30">
+                      <CalendarIcon className="w-5 h-5 text-cyan-400" />
+                    </div>
+                    <div className="flex flex-col min-w-0">
+                      <span className="text-xs font-bold text-white">Calendario y Agenda</span>
+                      <span className="text-[10px] text-gray-400 truncate">Fechas, eventos y hora del sistema</span>
+                    </div>
+                  </div>
+
+                  <div 
+                    onClick={() => { openApp('imageviewer', 'Galería'); setIsStartMenuOpen(false); }}
+                    className="flex items-center gap-3 p-2.5 bg-white/5 hover:bg-white/10 border border-white/5 rounded-xl cursor-pointer transition-all"
+                  >
+                    <div className="p-2 bg-purple-500/20 rounded-lg border border-purple-500/30">
+                      <ImageIcon className="w-5 h-5 text-purple-400" />
+                    </div>
+                    <div className="flex flex-col min-w-0">
+                      <span className="text-xs font-bold text-white">Galería de Fotos</span>
+                      <span className="text-[10px] text-gray-400 truncate">Visor de imágenes y wallpapers</span>
+                    </div>
+                  </div>
+
+                  <div 
+                    onClick={() => { openApp('paint', 'SAVIA Paint'); setIsStartMenuOpen(false); }}
+                    className="flex items-center gap-3 p-2.5 bg-white/5 hover:bg-white/10 border border-white/5 rounded-xl cursor-pointer transition-all"
+                  >
+                    <div className="p-2 bg-pink-500/20 rounded-lg border border-pink-500/30">
+                      <Palette className="w-5 h-5 text-pink-400" />
+                    </div>
+                    <div className="flex flex-col min-w-0">
+                      <span className="text-xs font-bold text-white">SAVIA Paint 2D</span>
+                      <span className="text-[10px] text-gray-400 truncate">Lienzo Canvas de dibujo y pintura</span>
+                    </div>
+                  </div>
+
+                  <div 
+                    onClick={() => { openApp('soundsettings', 'Audio Core'); setIsStartMenuOpen(false); }}
+                    className="flex items-center gap-3 p-2.5 bg-white/5 hover:bg-white/10 border border-white/5 rounded-xl cursor-pointer transition-all"
+                  >
+                    <div className="p-2 bg-pink-500/20 rounded-lg border border-pink-500/30">
+                      <Radio className="w-5 h-5 text-pink-400" />
+                    </div>
+                    <div className="flex flex-col min-w-0">
+                      <span className="text-xs font-bold text-white">Audio Core Synthesizer</span>
+                      <span className="text-[10px] text-gray-400 truncate">Servidor de sonido WebAudio</span>
+                    </div>
+                  </div>
+
+                  <div 
+                    onClick={() => { openApp('theme', 'Personalización de Temas'); setIsStartMenuOpen(false); }}
+                    className="flex items-center gap-3 p-2.5 bg-white/5 hover:bg-white/10 border border-white/5 rounded-xl cursor-pointer transition-all"
+                  >
+                    <div className="p-2 bg-indigo-500/20 rounded-lg border border-indigo-500/30">
+                      <Palette className="w-5 h-5 text-indigo-400" />
+                    </div>
+                    <div className="flex flex-col min-w-0">
+                      <span className="text-xs font-bold text-white">Personalización & Temas</span>
+                      <span className="text-[10px] text-gray-400 truncate">Wallpapers y estilos visuales</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Categoría: Paquetes APT Instalados */}
+              {installedPackages.length > 0 && (
+                <div>
+                  <h4 className="text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-2 px-1 flex items-center gap-1.5">
+                    <Terminal className="w-3.5 h-3.5 text-blue-400" />
+                    Paquetes Instalados ({installedPackages.length})
+                  </h4>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    {installedPackages.map(pkgId => (
+                      <div 
+                        key={pkgId}
+                        onClick={() => { openApp('terminal', `Ejecutar ${pkgId}`); setIsStartMenuOpen(false); }}
+                        className="flex items-center justify-between p-2.5 bg-white/5 hover:bg-blue-600/20 border border-white/5 hover:border-blue-500/40 rounded-xl cursor-pointer transition-all"
+                      >
+                        <div className="flex items-center gap-2.5">
+                          <Terminal className="w-4 h-4 text-blue-400" />
+                          <span className="text-xs font-mono text-gray-200">{pkgId}</span>
+                        </div>
+                        <span className="text-[9px] font-mono px-1.5 py-0.5 bg-blue-500/20 text-blue-300 border border-blue-500/30 rounded">
+                          APT / NPM
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
           ) : (
             /* PINNED APPS VIEW */
             <div className="flex-1 overflow-y-auto flex flex-col gap-4 pr-1">
@@ -1483,10 +1368,24 @@ export default function DesktopEnvironment({ user, onExit }: { user: UserData, o
               <div>
                 <div className="mb-2 flex justify-between items-center px-1">
                   <h3 className="text-xs font-bold tracking-wide text-gray-300">Sistema SAVIA-OS</h3>
-                  <span className="text-[10px] text-blue-400 font-mono">{installedPackages.length} Paquetes</span>
+                  <button 
+                    onClick={() => setStartMenuViewMode('all')}
+                    className="flex items-center gap-1 text-[11px] font-semibold text-sky-400 hover:text-sky-300 bg-sky-500/10 hover:bg-sky-500/20 px-2.5 py-1 rounded-lg border border-sky-500/20 transition-all cursor-pointer"
+                  >
+                    <span>Ver más aplicaciones</span>
+                    <ChevronRight className="w-3.5 h-3.5" />
+                  </button>
                 </div>
 
                 <div className="grid grid-cols-4 sm:grid-cols-6 gap-2">
+                  <div className="flex flex-col items-center gap-1 cursor-pointer hover:bg-purple-500/20 p-2 rounded-xl transition-colors border border-purple-500/30 bg-purple-500/10" onClick={() => { openApp('webgl', 'Centro de Juegos 3D'); setIsStartMenuOpen(false); }}>
+                    <Gamepad2 className="w-6 h-6 text-purple-400" />
+                    <span className="text-[10px] font-bold text-center text-purple-200">Juegos 3D</span>
+                  </div>
+                  <div className="flex flex-col items-center gap-1 cursor-pointer hover:bg-amber-500/20 p-2 rounded-xl transition-colors border border-amber-500/30 bg-amber-500/10" onClick={() => { openApp('tetris', 'Tetris Arcade'); setIsStartMenuOpen(false); }}>
+                    <Trophy className="w-6 h-6 text-amber-400" />
+                    <span className="text-[10px] font-bold text-center text-amber-200">Tetris 2D</span>
+                  </div>
                   <div className="flex flex-col items-center gap-1 cursor-pointer hover:bg-white/10 p-2 rounded-xl transition-colors" onClick={() => { openApp('about', 'Acerca de SAVIA-OS'); setIsStartMenuOpen(false); }}>
                     <Info className="w-6 h-6 text-blue-400" />
                     <span className="text-[10px] font-medium text-center">Alberto Arce</span>
@@ -1526,14 +1425,6 @@ export default function DesktopEnvironment({ user, onExit }: { user: UserData, o
                   <div className="flex flex-col items-center gap-1 cursor-pointer hover:bg-white/10 p-2 rounded-xl transition-colors" onClick={() => { openApp('calendar', 'Calendario'); setIsStartMenuOpen(false); }}>
                     <CalendarIcon className="w-6 h-6 text-cyan-400" />
                     <span className="text-[10px] font-medium text-center">Calendario</span>
-                  </div>
-                  <div className="flex flex-col items-center gap-1 cursor-pointer hover:bg-white/10 p-2 rounded-xl transition-colors" onClick={() => { openApp('imageviewer', 'Galería'); setIsStartMenuOpen(false); }}>
-                    <ImageIcon className="w-6 h-6 text-purple-400" />
-                    <span className="text-[10px] font-medium text-center">Galería</span>
-                  </div>
-                  <div className="flex flex-col items-center gap-1 cursor-pointer hover:bg-white/10 p-2 rounded-xl transition-colors" onClick={() => { openApp('soundsettings', 'Audio Core'); setIsStartMenuOpen(false); }}>
-                    <Radio className="w-6 h-6 text-pink-400" />
-                    <span className="text-[10px] font-medium text-center">Audio</span>
                   </div>
                 </div>
               </div>
