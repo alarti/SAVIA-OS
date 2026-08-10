@@ -60,15 +60,43 @@ bienvenidoSaviaNano();
   // Load file content if initialFilePath provided
   useEffect(() => {
     if (initialFilePath) {
-      const loaded = vfs.readFile(initialFilePath);
+      let loaded = vfs.readFile(initialFilePath);
+      let foundPath = initialFilePath;
+
+      if (!loaded) {
+        const cleanName = initialFilePath.split('/').pop() || initialFilePath;
+        const candidates = [
+          `/home/${activeUsername}/Desktop/${cleanName}`,
+          `/home/${activeUsername}/Documents/${cleanName}`,
+          `/home/${activeUsername}/${cleanName}`,
+          `/home/user/Desktop/${cleanName}`,
+          `/home/guest/Desktop/${cleanName}`,
+          `/${cleanName}`
+        ];
+        for (const cPath of candidates) {
+          const attempt = vfs.readFile(cPath);
+          if (attempt) {
+            loaded = attempt;
+            foundPath = cPath;
+            break;
+          }
+        }
+      }
+
       if (loaded) {
         setCode(loaded.content);
         setFileName(loaded.name);
-        setCurrentFilePath(initialFilePath);
+        setCurrentFilePath(foundPath);
         setLanguage(detectLanguageFromFilename(loaded.name));
+      } else if (initialFilePath) {
+        const parts = initialFilePath.split('/');
+        const fName = parts.pop() || 'archivo.txt';
+        setFileName(fName);
+        setCurrentFilePath(initialFilePath);
+        setLanguage(detectLanguageFromFilename(fName));
       }
     }
-  }, [initialFilePath]);
+  }, [initialFilePath, activeUsername]);
 
   const flashStatus = (msg: string) => {
     setStatusMsg(msg);

@@ -1,4 +1,5 @@
 // System Info Utility for Real Browser & Host Hardware Metrics
+import { networkManager } from './networkManager';
 
 export interface RealGpuInfo {
   vendor: string;
@@ -236,12 +237,24 @@ let lastResourceBytes = 0;
 let lastCheckTime = Date.now();
 
 export function getRealNetworkInfo(): RealNetworkInfo {
-  const online = navigator.onLine;
+  const isOnline = networkManager.isOnline();
   const conn = (navigator as any).connection || (navigator as any).mozConnection || (navigator as any).webkitConnection;
 
-  const effectiveType = conn?.effectiveType || (online ? '4g' : 'offline');
-  const downlinkMbps = conn?.downlink || (online ? 10 : 0);
-  const rttMs = conn?.rtt || (online ? 35 : 0);
+  if (!isOnline) {
+    return {
+      online: false,
+      effectiveType: 'offline',
+      downlinkMbps: 0,
+      rttMs: 0,
+      saveData: !!conn?.saveData,
+      rxKbps: 0,
+      txKbps: 0,
+    };
+  }
+
+  const effectiveType = conn?.effectiveType || '4g';
+  const downlinkMbps = conn?.downlink || 10;
+  const rttMs = conn?.rtt || 35;
   const saveData = !!conn?.saveData;
 
   // Calculate actual byte transfer speed from Performance API
@@ -265,12 +278,12 @@ export function getRealNetworkInfo(): RealNetworkInfo {
     lastResourceBytes = currentTotalBytes;
     lastCheckTime = now;
   } catch (e) {
-    rxKbps = online ? Math.round(downlinkMbps * 128) : 0;
-    txKbps = online ? Math.round(rxKbps * 0.2) : 0;
+    rxKbps = isOnline ? Math.round(downlinkMbps * 128) : 0;
+    txKbps = isOnline ? Math.round(rxKbps * 0.2) : 0;
   }
 
   return {
-    online,
+    online: isOnline,
     effectiveType,
     downlinkMbps,
     rttMs,

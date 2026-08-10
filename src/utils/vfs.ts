@@ -14,12 +14,27 @@ export type VFSMap = Record<string, VFSFileItem[]>;
 
 const DEFAULT_VFS: VFSMap = {
   '/': [
+    { id: 'bin_dir', name: 'bin', type: 'folder', iconType: 'folder', date: 'Oct 12 09:30', permissions: 'drwxr-xr-x', owner: 'root' },
+    { id: 'boot_dir', name: 'boot', type: 'folder', iconType: 'folder', date: 'Oct 12 09:30', permissions: 'drwxr-xr-x', owner: 'root' },
+    { id: 'dev_dir', name: 'dev', type: 'folder', iconType: 'folder', date: 'Oct 12 09:30', permissions: 'drwxr-xr-x', owner: 'root' },
+    { id: 'etc_dir', name: 'etc', type: 'folder', iconType: 'folder', date: 'Oct 12 09:30', permissions: 'drwxr-xr-x', owner: 'root' },
+    { id: 'home_dir', name: 'home', type: 'folder', iconType: 'folder', date: 'Oct 12 09:30', permissions: 'drwxr-xr-x', owner: 'root' },
+    { id: 'lib_dir', name: 'lib', type: 'folder', iconType: 'folder', date: 'Oct 12 09:30', permissions: 'drwxr-xr-x', owner: 'root' },
+    { id: 'mnt_dir', name: 'mnt', type: 'folder', iconType: 'folder', date: 'Oct 12 09:30', permissions: 'drwxr-xr-x', owner: 'root' },
+    { id: 'opt_dir', name: 'opt', type: 'folder', iconType: 'folder', date: 'Oct 12 09:30', permissions: 'drwxr-xr-x', owner: 'root' },
+    { id: 'proc_dir', name: 'proc', type: 'folder', iconType: 'folder', date: 'Oct 12 09:30', permissions: 'drwxr-xr-x', owner: 'root' },
     { id: 'root_dir', name: 'root', type: 'folder', iconType: 'folder', date: 'Oct 12 09:30', permissions: 'drwx------', owner: 'root' },
-    { id: 'usr', name: 'usr', type: 'folder', iconType: 'folder', date: 'Oct 12 09:30', permissions: 'drwxr-xr-x', owner: 'root' },
-    { id: 'bin', name: 'bin', type: 'folder', iconType: 'folder', date: 'Oct 12 09:30', permissions: 'drwxr-xr-x', owner: 'root' },
-    { id: 'etc', name: 'etc', type: 'folder', iconType: 'folder', date: 'Oct 12 09:30', permissions: 'drwxr-xr-x', owner: 'root' },
-    { id: 'home', name: 'home', type: 'folder', iconType: 'folder', date: 'Oct 12 09:30', permissions: 'drwxr-xr-x', owner: 'root' },
+    { id: 'sys_dir', name: 'sys', type: 'folder', iconType: 'folder', date: 'Oct 12 09:30', permissions: 'drwxr-xr-x', owner: 'root' },
+    { id: 'tmp_dir', name: 'tmp', type: 'folder', iconType: 'folder', date: 'Oct 12 09:30', permissions: 'drwxrwxrwx', owner: 'root' },
+    { id: 'usr_dir', name: 'usr', type: 'folder', iconType: 'folder', date: 'Oct 12 09:30', permissions: 'drwxr-xr-x', owner: 'root' },
+    { id: 'var_dir', name: 'var', type: 'folder', iconType: 'folder', date: 'Oct 12 09:30', permissions: 'drwxr-xr-x', owner: 'root' },
   ],
+  '/mnt': [
+    { id: 'mnt_local', name: 'local', type: 'folder', iconType: 'folder', date: 'Oct 12 09:30', permissions: 'drwxr-xr-x', owner: 'root' },
+    { id: 'mnt_cdrom', name: 'cdrom', type: 'folder', iconType: 'folder', date: 'Oct 12 09:30', permissions: 'drwxr-xr-x', owner: 'root' },
+    { id: 'mnt_usb', name: 'usb', type: 'folder', iconType: 'folder', date: 'Oct 12 09:30', permissions: 'drwxr-xr-x', owner: 'root' },
+  ],
+  '/mnt/local': [],
   '/home': [
     { id: 'root_h_dir', name: 'root', type: 'folder', iconType: 'folder', date: 'Oct 12 09:30', permissions: 'drwx------', owner: 'root' },
     { id: 'user_dir', name: 'user', type: 'folder', iconType: 'folder', date: 'Oct 12 09:30', permissions: 'drwxr-xr-x', owner: 'user' },
@@ -66,6 +81,10 @@ const DEFAULT_VFS: VFSMap = {
   ],
   '/home/guest/Desktop': [
     { id: 'gd_welcome', name: 'Bienvenida_Invitado.txt', type: 'file', iconType: 'text', size: '1 KB', date: 'Hoy 08:00', permissions: '-rw-r--r--', owner: 'guest', content: 'Bienvenido usuario invitado a SAVIA-OS.' },
+    { id: 'gd_doc', name: 'Documento_Invitado.docx', type: 'file', iconType: 'text', size: '12 KB', date: 'Hoy 08:00', permissions: '-rw-r--r--', owner: 'guest' },
+    { id: 'gd_xls', name: 'Presupuesto_Invitado.xlsx', type: 'file', iconType: 'text', size: '18 KB', date: 'Hoy 08:00', permissions: '-rw-r--r--', owner: 'guest' },
+    { id: 'gd_ppt', name: 'Presentacion_Invitado.pptx', type: 'file', iconType: 'text', size: '24 KB', date: 'Hoy 08:00', permissions: '-rw-r--r--', owner: 'guest' },
+    { id: 'gd_readme', name: 'Leeme_Invitado.txt', type: 'file', iconType: 'text', size: '1 KB', date: 'Hoy 08:00', permissions: '-rw-r--r--', owner: 'guest', content: 'Archivos y documentos del Escritorio de Invitado en SAVIA-OS.' },
   ],
   '/home/guest/Documents': [
     { id: 'gdoc_guest', name: 'Documento_Invitado.docx', type: 'file', iconType: 'text', size: '12 KB', date: 'Hoy 08:00', permissions: '-rw-r--r--', owner: 'guest' },
@@ -79,7 +98,58 @@ export const vfs = {
   getVFS(): VFSMap {
     try {
       const saved = localStorage.getItem('savia_os_mock_fs');
-      if (saved) return JSON.parse(saved);
+      let map: VFSMap = DEFAULT_VFS;
+      if (saved) {
+        map = JSON.parse(saved);
+        if (!map['/']) {
+          map['/'] = DEFAULT_VFS['/'];
+        } else {
+          DEFAULT_VFS['/'].forEach(item => {
+            if (!map['/'].some((x: VFSFileItem) => x.name === item.name)) {
+              map['/'].push(item);
+            }
+          });
+        }
+        if (!map['/mnt']) map['/mnt'] = DEFAULT_VFS['/mnt'];
+        if (!map['/mnt/local']) map['/mnt/local'] = [];
+        if (!map['/home/guest/Desktop'] || map['/home/guest/Desktop'].length === 0) {
+          map['/home/guest/Desktop'] = DEFAULT_VFS['/home/guest/Desktop'];
+        }
+      }
+
+      // Sync folders inside /mnt/local to /home/guest/Desktop & /home/user/Desktop
+      if (map['/mnt/local'] && Array.isArray(map['/mnt/local'])) {
+        map['/mnt/local'].forEach((localDir: VFSFileItem) => {
+          const folderName = localDir.name;
+          const displayIconName = `📂 ${folderName}`;
+
+          ['/home/guest/Desktop', '/home/user/Desktop'].forEach(desktopPath => {
+            if (!map[desktopPath]) map[desktopPath] = [];
+            if (!map[desktopPath].some(item => item.name === folderName || item.name === displayIconName)) {
+              map[desktopPath].push({
+                id: `sync_${desktopPath}_${folderName}`,
+                name: displayIconName,
+                type: 'folder',
+                iconType: 'folder',
+                date: 'Sincronizado',
+                permissions: 'drwxr-xr-x',
+                owner: 'guest'
+              });
+            }
+
+            // Create direct alias entries so navigating to /home/guest/Desktop/📂 folderName works
+            const mntRealPath = `/mnt/local/${folderName}`;
+            const alias1 = `${desktopPath}/${folderName}`;
+            const alias2 = `${desktopPath}/${displayIconName}`;
+            if (map[mntRealPath]) {
+              map[alias1] = map[mntRealPath];
+              map[alias2] = map[mntRealPath];
+            }
+          });
+        });
+      }
+
+      return map;
     } catch (e) {
       console.error('Error reading VFS', e);
     }

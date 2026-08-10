@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Terminal, Folder, Globe, Cpu, X, Square, Minus, Zap, User, Monitor, Search, FileText, FileImage, Power, Activity, Gamepad2, Volume2, VolumeX, Box, Radio, Palette, Download, Sliders, ShieldCheck, ShieldAlert, Info, Settings, Wifi, Battery, CheckCircle, Image as ImageIcon, Calculator as CalcIcon, Calendar as CalendarIcon, Move, Maximize2, Minimize2, RefreshCcw, Plus, Trash2, Edit2, Play, ChevronRight, ChevronLeft, Grid, Sparkles, Trophy, Rocket, FileCode } from 'lucide-react';
+import { Terminal, Folder, Globe, Cpu, X, Square, Minus, Zap, User, Monitor, Search, FileText, FileImage, Power, Activity, Gamepad2, Volume2, VolumeX, Box, Radio, Palette, Download, Sliders, ShieldCheck, ShieldAlert, Info, Settings, Wifi, WifiOff, Battery, CheckCircle, Image as ImageIcon, Calculator as CalcIcon, Calendar as CalendarIcon, Move, Maximize2, Minimize2, RefreshCcw, Plus, Trash2, Edit2, Play, ChevronRight, ChevronLeft, Grid, Sparkles, Trophy, Rocket, FileCode } from 'lucide-react';
+import { networkManager } from '../utils/networkManager';
 import Editor from '@monaco-editor/react';
 import type { UserData } from '../utils/auth';
 import TerminalApp from './Terminal';
@@ -21,18 +22,20 @@ import CalendarClockApp from './CalendarClockApp';
 import ImageViewerApp from './ImageViewerApp';
 import WebampPlayerApp from './WebampPlayerApp';
 import ThreeGamesApp from './ThreeGamesApp';
+import DiskManagerApp from './DiskManagerApp';
 import { TrashApp } from './TrashApp';
 import { soundEngine } from '../utils/soundEngine';
 import { getInstalledPackageIds, AVAILABLE_PACKAGES } from '../utils/packageRegistry';
 import { userStorage } from '../utils/userStorage';
 import { trashAndUndo } from '../utils/trashAndUndo';
-import { isSystemDesktopIcon } from '../utils/vfs';
+import { isSystemDesktopIcon, vfs } from '../utils/vfs';
 
 type WindowData = {
   id: string;
   title: string;
-  type: 'terminal' | 'webgl' | 'folder' | 'browser' | 'texteditor' | 'pdfviewer' | 'office' | 'taskmanager' | 'tetris' | 'appstore' | 'soundsettings' | 'paint' | 'about' | 'controlpanel' | 'theme' | 'calculator' | 'calendar' | 'imageviewer' | 'webamp' | 'wine' | 'trash';
+  type: 'terminal' | 'webgl' | 'folder' | 'browser' | 'texteditor' | 'pdfviewer' | 'office' | 'taskmanager' | 'tetris' | 'appstore' | 'soundsettings' | 'paint' | 'about' | 'controlpanel' | 'theme' | 'calculator' | 'calendar' | 'imageviewer' | 'webamp' | 'wine' | 'trash' | 'equipo' | 'diskmanager';
   data?: any;
+  docData?: any;
   x: number;
   y: number;
   w: number;
@@ -62,25 +65,33 @@ export type DesktopIcon = {
 };
 
 const DEFAULT_DESKTOP_ICONS: DesktopIcon[] = [
-  { id: 'webgl_games', title: 'Savia Games', appType: 'webgl', iconType: 'game', x: 20, y: 20 },
-  { id: 'about', title: 'Acerca de SaviaOS', appType: 'about', iconType: 'info', x: 20, y: 120 },
-  { id: 'theme', title: 'Fondos & Temas', appType: 'theme', iconType: 'theme', x: 20, y: 220 },
-  { id: 'controlpanel', title: 'Panel Control', appType: 'controlpanel', iconType: 'controlpanel', x: 20, y: 320 },
-  { id: 'appstore', title: 'App Store', appType: 'appstore', iconType: 'appstore', x: 20, y: 420 },
-  { id: 'terminal', title: 'Terminal', appType: 'terminal', iconType: 'terminal', x: 130, y: 20 },
-  { id: 'folder', title: 'Files', appType: 'folder', iconType: 'folder', x: 130, y: 120 },
-  { id: 'browser', title: 'Navegador', appType: 'browser', iconType: 'browser', x: 130, y: 220 },
-  { id: 'calculator', title: 'Savia Calc', appType: 'calculator', iconType: 'calc', x: 130, y: 320 },
-  { id: 'calendar', title: 'Calendario', appType: 'calendar', iconType: 'calendar', x: 130, y: 420 },
-  { id: 'imageviewer', title: 'Galería Fotos', appType: 'imageviewer', iconType: 'image', x: 240, y: 20 },
-  { id: 'soundsettings', title: 'Audio Core', appType: 'soundsettings', iconType: 'sound', x: 240, y: 120 },
-  { id: 'pdfviewer', title: 'Savia Pdf', appType: 'pdfviewer', iconType: 'pdf', x: 240, y: 220 },
-  { id: 'savia_nano', title: 'Savia Nano', appType: 'texteditor', iconType: 'editor', x: 240, y: 320 },
-  { id: 'savia_doc', title: 'Savia Doc', appType: 'office', iconType: 'doc', docData: 'nuevo documento.docx', x: 240, y: 420 },
-  { id: 'savia_xls', title: 'Savia Xls', appType: 'office', iconType: 'xls', docData: 'nuevo documento.xlsx', x: 350, y: 20 },
-  { id: 'savia_ppt', title: 'Savia Ppt', appType: 'office', iconType: 'ppt', docData: 'nuevo documento.pptx', x: 350, y: 120 },
-  { id: 'paint', title: 'Savia Paint', appType: 'paint', iconType: 'paint', x: 350, y: 220 },
-  { id: 'webamp', title: 'Webamp Music', appType: 'webamp', iconType: 'music', x: 350, y: 320 },
+  // Columna 1 (x: 20) - Sistema y Archivos
+  { id: 'equipo', title: 'Equipo', appType: 'equipo', iconType: 'equipo', x: 20, y: 20 },
+  { id: 'trash', title: 'Papelera', appType: 'trash', iconType: 'trash', x: 20, y: 120 },
+  { id: 'files', title: 'Explorador Archivos', appType: 'folder', iconType: 'folder', x: 20, y: 220 },
+  { id: 'browser', title: 'Navegador Web', appType: 'browser', iconType: 'browser', x: 20, y: 320 },
+  { id: 'term', title: 'Terminal POSIX', appType: 'terminal', iconType: 'terminal', x: 20, y: 420 },
+
+  // Columna 2 (x: 130) - Ofimática y Documentos
+  { id: 'office', title: 'Suite Ofimática', appType: 'office', iconType: 'office', x: 130, y: 20 },
+  { id: 'savia_doc', title: 'Savia Doc', appType: 'office', iconType: 'doc', docData: 'nuevo documento.docx', x: 130, y: 120 },
+  { id: 'savia_xls', title: 'Savia Xls', appType: 'office', iconType: 'xls', docData: 'nuevo documento.xlsx', x: 130, y: 220 },
+  { id: 'savia_ppt', title: 'Savia Ppt', appType: 'office', iconType: 'ppt', docData: 'nuevo documento.pptx', x: 130, y: 320 },
+  { id: 'pdfviewer', title: 'Savia Pdf', appType: 'pdfviewer', iconType: 'pdf', x: 130, y: 420 },
+
+  // Columna 3 (x: 240) - Herramientas y Multimedia
+  { id: 'savia_nano', title: 'Savia Nano', appType: 'texteditor', iconType: 'editor', x: 240, y: 20 },
+  { id: 'paint', title: 'Savia Paint', appType: 'paint', iconType: 'paint', x: 240, y: 120 },
+  { id: 'calc', title: 'Savia Calc', appType: 'calculator', iconType: 'calc', x: 240, y: 220 },
+  { id: 'calendar', title: 'Calendario', appType: 'calendar', iconType: 'calendar', x: 240, y: 320 },
+  { id: 'imageviewer', title: 'Galería Fotos', appType: 'imageviewer', iconType: 'image', x: 240, y: 420 },
+
+  // Columna 4 (x: 350) - Entretenimiento y Configuración
+  { id: 'webgl_games', title: 'Savia Games', appType: 'webgl', iconType: 'game', x: 350, y: 20 },
+  { id: 'webamp', title: 'Webamp Music', appType: 'webamp', iconType: 'music', x: 350, y: 120 },
+  { id: 'control', title: 'Panel de Control', appType: 'controlpanel', iconType: 'controlpanel', x: 350, y: 220 },
+  { id: 'appstore', title: 'App Store', appType: 'appstore', iconType: 'appstore', x: 350, y: 320 },
+  { id: 'theme', title: 'Temas & Fondos', appType: 'theme', iconType: 'theme', x: 350, y: 420 },
 ];
 
 export interface AccentThemeConfig {
@@ -321,7 +332,15 @@ export default function DesktopEnvironment({ user, onExit }: { user: UserData, o
   const [isSaviaMenuOpen, setIsSaviaMenuOpen] = useState(false);
   const [isControlCenterOpen, setIsControlCenterOpen] = useState(false);
   const [isVolumeMenuOpen, setIsVolumeMenuOpen] = useState(false);
+  const [isOnline, setIsOnline] = useState(() => networkManager.isOnline());
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null);
+
+  useEffect(() => {
+    const unsubNet = networkManager.subscribe((online) => {
+      setIsOnline(online);
+    });
+    return unsubNet;
+  }, []);
   const [volume, setVolumeState] = useState(soundEngine.getVolume());
   const [isMuted, setIsMutedState] = useState(soundEngine.isMuted());
   const [installedPackages, setInstalledPackages] = useState<string[]>(getInstalledPackageIds());
@@ -392,13 +411,67 @@ export default function DesktopEnvironment({ user, onExit }: { user: UserData, o
     return () => window.removeEventListener('keydown', handleDesktopKeyDown);
   }, [desktopIcons, selectedIconIds, user.username]);
 
-  // Sync icons and theme when user changes
+  // Sync icons and theme when user changes & ensure guest reset
   useEffect(() => {
+    if (user.username === 'guest' || user.isGuest) {
+      userStorage.resetGuestAccount();
+    }
     setDesktopIcons(userStorage.getDesktopIcons(user.username));
     setWallpaper(userStorage.getWallpaper(user.username));
     setOverlayOpacity(userStorage.getOverlayOpacity(user.username));
     setCurrentTheme(userStorage.getTheme(user.username));
     setCurrentAccent(userStorage.getAccent(user.username));
+  }, [user.username]);
+
+  // Event listeners for desktop icon updates and guest reset
+  useEffect(() => {
+    const handleDesktopIconsUpdate = () => {
+      setDesktopIcons(userStorage.getDesktopIcons(user.username));
+    };
+    window.addEventListener('savia_os_desktop_icons_updated', handleDesktopIconsUpdate);
+    window.addEventListener('savia_os_guest_reset', handleDesktopIconsUpdate);
+    return () => {
+      window.removeEventListener('savia_os_desktop_icons_updated', handleDesktopIconsUpdate);
+      window.removeEventListener('savia_os_guest_reset', handleDesktopIconsUpdate);
+    };
+  }, [user.username]);
+
+  // Sync local mounted directories from /mnt/local to Desktop Icons
+  useEffect(() => {
+    const syncLocalMountedDirs = () => {
+      const map = vfs.getVFS();
+      const localDirs = map['/mnt/local'] || [];
+      if (localDirs.length > 0) {
+        setDesktopIcons(prev => {
+          let updated = [...prev];
+          let changed = false;
+          localDirs.forEach((dir, index) => {
+            const folderPath = `/mnt/local/${dir.name}`;
+            if (!updated.some(ic => ic.docData === folderPath || ic.title === dir.name || ic.title === `📂 ${dir.name}`)) {
+              updated.push({
+                id: `synced_dir_${dir.name}_${index}`,
+                title: `📂 ${dir.name}`,
+                appType: 'folder',
+                iconType: 'folder',
+                docData: folderPath,
+                x: 350,
+                y: 420
+              });
+              changed = true;
+            }
+          });
+          if (changed) {
+            userStorage.setDesktopIcons(user.username, updated);
+            return updated;
+          }
+          return prev;
+        });
+      }
+    };
+
+    syncLocalMountedDirs();
+    window.addEventListener('savia_os_vfs_updated', syncLocalMountedDirs);
+    return () => window.removeEventListener('savia_os_vfs_updated', syncLocalMountedDirs);
   }, [user.username]);
 
   // Desktop Icon Context Menu & Creation Modals State
@@ -480,6 +553,7 @@ export default function DesktopEnvironment({ user, onExit }: { user: UserData, o
   // Desktop Wallpaper & Theme State
   const [wallpaper, setWallpaper] = useState<string>(() => userStorage.getWallpaper(user.username));
   const [overlayOpacity, setOverlayOpacity] = useState<number>(() => userStorage.getOverlayOpacity(user.username));
+  const [brightness, setBrightness] = useState<number>(() => userStorage.getBrightness(user.username));
   const [currentTheme, setCurrentTheme] = useState<string>(() => userStorage.getTheme(user.username));
   const [currentAccent, setCurrentAccent] = useState<string>(() => userStorage.getAccent(user.username));
 
@@ -523,6 +597,7 @@ export default function DesktopEnvironment({ user, onExit }: { user: UserData, o
       setDesktopIcons(userStorage.getDesktopIcons(user.username));
       setWallpaper(userStorage.getWallpaper(user.username));
       setOverlayOpacity(userStorage.getOverlayOpacity(user.username));
+      setBrightness(userStorage.getBrightness(user.username));
       setCurrentTheme(userStorage.getTheme(user.username));
       setCurrentAccent(userStorage.getAccent(user.username));
     };
@@ -561,6 +636,7 @@ export default function DesktopEnvironment({ user, onExit }: { user: UserData, o
     const handleThemeChange = (e: any) => {
       if (e.detail?.wallpaper) setWallpaper(e.detail.wallpaper);
       if (e.detail?.opacity !== undefined) setOverlayOpacity(e.detail.opacity);
+      if (e.detail?.brightness !== undefined) setBrightness(e.detail.brightness);
       if (e.detail?.theme) setCurrentTheme(e.detail.theme);
       if (e.detail?.accent) setCurrentAccent(e.detail.accent);
     };
@@ -764,18 +840,16 @@ export default function DesktopEnvironment({ user, onExit }: { user: UserData, o
           y: START_Y + row * GRID_Y,
         };
       });
-      try {
-        localStorage.setItem('savia_os_desktop_icons', JSON.stringify(updated));
-      } catch {}
+      userStorage.setDesktopIcons(user.username, updated);
       return updated;
     });
+    soundEngine.playSuccessTone();
   };
 
   const resetIconsLayout = () => {
     setDesktopIcons(DEFAULT_DESKTOP_ICONS);
-    try {
-      localStorage.setItem('savia_os_desktop_icons', JSON.stringify(DEFAULT_DESKTOP_ICONS));
-    } catch {}
+    userStorage.setDesktopIcons(user.username, DEFAULT_DESKTOP_ICONS);
+    soundEngine.playSuccessTone();
   };
   
   const focusWindow = (id: string) => {
@@ -841,6 +915,9 @@ export default function DesktopEnvironment({ user, onExit }: { user: UserData, o
     } else if (type === 'webamp') {
       defaultW = 680;
       defaultH = 460;
+    } else if (type === 'equipo' || type === 'diskmanager') {
+      defaultW = Math.min(1080, Math.max(780, Math.floor(screenW * 0.82)));
+      defaultH = Math.min(720, Math.max(520, Math.floor(screenH * 0.78)));
     }
 
     const windowCount = windows.length;
@@ -849,6 +926,7 @@ export default function DesktopEnvironment({ user, onExit }: { user: UserData, o
     const posY = Math.max(10, Math.floor((screenH - defaultH) / 2 - 15) + offset);
 
     const newId = Math.random().toString();
+
     setWindows(ws => [...ws, {
       id: newId,
       title,
@@ -897,7 +975,8 @@ export default function DesktopEnvironment({ user, onExit }: { user: UserData, o
 
   return (
     <div 
-      className="w-full h-[100dvh] bg-[#0A0B10] overflow-hidden flex flex-col font-sans relative select-none" 
+      className="w-full h-[100dvh] bg-[#0A0B10] overflow-hidden flex flex-col font-sans relative select-none transition-all duration-150" 
+      style={{ filter: `brightness(${brightness}%)` }}
       onClick={() => { setIsStartMenuOpen(false); setIsSaviaMenuOpen(false); setIsControlCenterOpen(false); setIsVolumeMenuOpen(false); }}
     >
       {/* Desktop Background / Area */}
@@ -1227,39 +1306,73 @@ export default function DesktopEnvironment({ user, onExit }: { user: UserData, o
                 });
               }}
             >
-            {icon.iconType === 'info' && (
-              <div className="p-2 bg-gradient-to-tr from-blue-600 to-indigo-500 rounded-2xl shadow-xl border border-white/20 group-hover:scale-105 transition-transform">
-                <Info className="w-7 h-7 text-white" />
-              </div>
-            )}
-            {icon.iconType === 'theme' && (
-              <div className="p-2 bg-gradient-to-tr from-purple-600 to-pink-500 rounded-2xl shadow-xl border border-white/20 group-hover:scale-105 transition-transform">
-                <Palette className="w-7 h-7 text-white" />
-              </div>
-            )}
-            {icon.iconType === 'controlpanel' && (
-              <div className="p-2 bg-gradient-to-tr from-emerald-600 to-teal-500 rounded-2xl shadow-xl border border-white/20 group-hover:scale-105 transition-transform">
-                <Settings className="w-7 h-7 text-white" />
-              </div>
-            )}
-            {icon.iconType === 'appstore' && <Box className="w-9 h-9 text-blue-400 drop-shadow-lg group-hover:scale-105 transition-transform" />}
-            {icon.iconType === 'terminal' && <Terminal className="w-9 h-9 text-white drop-shadow-lg group-hover:scale-105 transition-transform" />}
-            {icon.iconType === 'sound' && <Radio className="w-9 h-9 text-pink-400 drop-shadow-lg group-hover:scale-105 transition-transform" />}
-            {icon.iconType === 'calc' && <CalcIcon className="w-9 h-9 text-amber-400 drop-shadow-lg group-hover:scale-105 transition-transform" />}
-            {icon.iconType === 'calendar' && <CalendarIcon className="w-9 h-9 text-cyan-400 drop-shadow-lg group-hover:scale-105 transition-transform" />}
-            {icon.iconType === 'image' && <ImageIcon className="w-9 h-9 text-purple-400 drop-shadow-lg group-hover:scale-105 transition-transform" />}
-            {icon.iconType === 'folder' && <Folder className="w-9 h-9 text-amber-400 drop-shadow-lg group-hover:scale-105 transition-transform" fill="currentColor" />}
-            {icon.iconType === 'browser' && <Globe className="w-9 h-9 text-blue-400 drop-shadow-lg group-hover:scale-105 transition-transform" />}
-            {icon.iconType === 'pdf' && <FileImage className="w-9 h-9 text-red-500 drop-shadow-lg group-hover:scale-105 transition-transform" />}
-            {icon.iconType === 'office' && <FileText className="w-9 h-9 text-blue-400 drop-shadow-lg group-hover:scale-105 transition-transform" />}
-            {icon.iconType === 'game' && <Gamepad2 className="w-9 h-9 text-purple-400 drop-shadow-lg group-hover:scale-105 transition-transform" />}
-            {icon.iconType === 'paint' && <Palette className="w-9 h-9 text-pink-400 drop-shadow-lg group-hover:scale-105 transition-transform" />}
-            {icon.iconType === 'editor' && <FileCode className="w-9 h-9 text-emerald-400 drop-shadow-lg group-hover:scale-105 transition-transform" />}
-            {icon.iconType === 'doc' && <FileText className="w-9 h-9 text-blue-500 drop-shadow-lg group-hover:scale-105 transition-transform" />}
-            {icon.iconType === 'xls' && <Activity className="w-9 h-9 text-emerald-500 drop-shadow-lg group-hover:scale-105 transition-transform" />}
-            {icon.iconType === 'ppt' && <Monitor className="w-9 h-9 text-amber-500 drop-shadow-lg group-hover:scale-105 transition-transform" />}
-            {icon.iconType === 'wine' && <Box className="w-9 h-9 text-amber-500 drop-shadow-lg group-hover:scale-105 transition-transform" />}
-            {(icon.iconType === 'trash' || icon.appType === 'trash') && <Trash2 className="w-9 h-9 text-rose-400 drop-shadow-lg group-hover:scale-105 transition-transform" />}
+            {(() => {
+              const type = icon.iconType || icon.appType;
+              if (type === 'equipo' || icon.appType === 'equipo' || icon.appType === 'diskmanager') {
+                return (
+                  <div className="p-2 bg-gradient-to-tr from-cyan-600 to-blue-600 rounded-2xl shadow-xl border border-white/20 group-hover:scale-105 transition-transform">
+                    <Monitor className="w-7 h-7 text-white" />
+                  </div>
+                );
+              }
+              if (type === 'trash' || icon.appType === 'trash') {
+                return (
+                  <div className="p-2 bg-gradient-to-tr from-rose-600 to-red-500 rounded-2xl shadow-xl border border-white/20 group-hover:scale-105 transition-transform">
+                    <Trash2 className="w-7 h-7 text-white" />
+                  </div>
+                );
+              }
+              if (type === 'music' || type === 'webamp' || icon.appType === 'webamp') {
+                return (
+                  <div className="p-2 bg-gradient-to-tr from-amber-500 to-yellow-600 rounded-2xl shadow-xl border border-white/20 group-hover:scale-105 transition-transform">
+                    <Radio className="w-7 h-7 text-white" />
+                  </div>
+                );
+              }
+              if (type === 'info' || type === 'about' || icon.appType === 'about') {
+                return (
+                  <div className="p-2 bg-gradient-to-tr from-blue-600 to-indigo-500 rounded-2xl shadow-xl border border-white/20 group-hover:scale-105 transition-transform">
+                    <Info className="w-7 h-7 text-white" />
+                  </div>
+                );
+              }
+              if (type === 'theme' || icon.appType === 'theme') {
+                return (
+                  <div className="p-2 bg-gradient-to-tr from-purple-600 to-pink-500 rounded-2xl shadow-xl border border-white/20 group-hover:scale-105 transition-transform">
+                    <Palette className="w-7 h-7 text-white" />
+                  </div>
+                );
+              }
+              if (type === 'controlpanel' || icon.appType === 'controlpanel') {
+                return (
+                  <div className="p-2 bg-gradient-to-tr from-emerald-600 to-teal-500 rounded-2xl shadow-xl border border-white/20 group-hover:scale-105 transition-transform">
+                    <Settings className="w-7 h-7 text-white" />
+                  </div>
+                );
+              }
+              if (type === 'appstore') return <Box className="w-9 h-9 text-blue-400 drop-shadow-lg group-hover:scale-105 transition-transform" />;
+              if (type === 'terminal') return <Terminal className="w-9 h-9 text-white drop-shadow-lg group-hover:scale-105 transition-transform" />;
+              if (type === 'sound') return <Radio className="w-9 h-9 text-pink-400 drop-shadow-lg group-hover:scale-105 transition-transform" />;
+              if (type === 'calc') return <CalcIcon className="w-9 h-9 text-amber-400 drop-shadow-lg group-hover:scale-105 transition-transform" />;
+              if (type === 'calendar') return <CalendarIcon className="w-9 h-9 text-cyan-400 drop-shadow-lg group-hover:scale-105 transition-transform" />;
+              if (type === 'image') return <ImageIcon className="w-9 h-9 text-purple-400 drop-shadow-lg group-hover:scale-105 transition-transform" />;
+              if (type === 'folder') return <Folder className="w-9 h-9 text-amber-400 drop-shadow-lg group-hover:scale-105 transition-transform" fill="currentColor" />;
+              if (type === 'browser') return <Globe className="w-9 h-9 text-blue-400 drop-shadow-lg group-hover:scale-105 transition-transform" />;
+              if (type === 'pdf') return <FileImage className="w-9 h-9 text-red-500 drop-shadow-lg group-hover:scale-105 transition-transform" />;
+              if (type === 'office' || type === 'doc') return <FileText className="w-9 h-9 text-blue-400 drop-shadow-lg group-hover:scale-105 transition-transform" />;
+              if (type === 'game') return <Gamepad2 className="w-9 h-9 text-purple-400 drop-shadow-lg group-hover:scale-105 transition-transform" />;
+              if (type === 'paint') return <Palette className="w-9 h-9 text-pink-400 drop-shadow-lg group-hover:scale-105 transition-transform" />;
+              if (type === 'editor' || type === 'text') return <FileCode className="w-9 h-9 text-emerald-400 drop-shadow-lg group-hover:scale-105 transition-transform" />;
+              if (type === 'xls') return <Activity className="w-9 h-9 text-emerald-500 drop-shadow-lg group-hover:scale-105 transition-transform" />;
+              if (type === 'ppt') return <Monitor className="w-9 h-9 text-amber-500 drop-shadow-lg group-hover:scale-105 transition-transform" />;
+              if (type === 'wine') return <Box className="w-9 h-9 text-amber-500 drop-shadow-lg group-hover:scale-105 transition-transform" />;
+
+              return (
+                <div className="p-2 bg-gradient-to-tr from-gray-600 to-slate-500 rounded-2xl shadow-xl border border-white/20 group-hover:scale-105 transition-transform">
+                  <Folder className="w-7 h-7 text-white" />
+                </div>
+              );
+            })()}
 
             <span className={activeThemeStyle.iconTitleStyle}>{icon.title}</span>
           </div>
@@ -1267,9 +1380,27 @@ export default function DesktopEnvironment({ user, onExit }: { user: UserData, o
         })}
 
         {/* Windows */}
-        {windows.map(w => (
-          <div
-            key={w.id}
+        {windows.map(w => {
+          if (w.type === 'webamp') {
+            return (
+              <div
+                key={w.id}
+                onMouseDown={(e) => { e.stopPropagation(); focusWindow(w.id); }}
+                className={`absolute z-30 transition-all duration-150 ${w.minimized ? 'opacity-0 pointer-events-none scale-95' : 'opacity-100 scale-100'}`}
+                style={{
+                  left: w.x,
+                  top: w.y,
+                  zIndex: w.zIndex,
+                }}
+              >
+                <WebampPlayerApp initialFile={w.data} onClose={() => closeWindow(w.id)} />
+              </div>
+            );
+          }
+
+          return (
+            <div
+              key={w.id}
             onMouseDown={(e) => { e.stopPropagation(); focusWindow(w.id); }}
             className={`absolute shadow-2xl flex flex-col overflow-hidden transition-all duration-200 ${
               activeId === w.id
@@ -1323,8 +1454,8 @@ export default function DesktopEnvironment({ user, onExit }: { user: UserData, o
                 {w.type === 'calculator' && <CalcIcon className="w-3.5 h-3.5 text-amber-400" />}
                 {w.type === 'calendar' && <CalendarIcon className="w-3.5 h-3.5 text-cyan-400" />}
                 {w.type === 'imageviewer' && <ImageIcon className="w-3.5 h-3.5 text-purple-400" />}
-                {w.type === 'webamp' && <Radio className="w-3.5 h-3.5 text-amber-400" />}
                 {w.type === 'trash' && <Trash2 className="w-3.5 h-3.5 text-rose-400" />}
+                {(w.type === 'equipo' || w.type === 'diskmanager') && <Monitor className="w-3.5 h-3.5 text-cyan-400" />}
                 <span className="text-xs font-medium tracking-wide">{w.title}</span>
                 {w.type === 'taskmanager' && (
                   <span className="px-1.5 py-0.5 bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 rounded text-[10px] font-mono font-bold flex items-center gap-1">
@@ -1348,7 +1479,7 @@ export default function DesktopEnvironment({ user, onExit }: { user: UserData, o
               {w.type === 'paint' && <PaintApp />}
               {w.type === 'theme' && <ThemeCustomizerApp user={user} />}
               {w.type === 'webgl' && <WebGLApp />}
-              {w.type === 'folder' && <FileExplorer user={user} onOpenFile={(type, title) => openApp(type as any, title)} />}
+              {w.type === 'folder' && <FileExplorer user={user} initialPath={w.data || w.docData} onOpenFile={(type, title, data) => openApp(type as any, title, data)} />}
               {w.type === 'browser' && <BrowserApp user={user} />}
               {w.type === 'texteditor' && <TextEditorApp data={w.data} user={user} />}
               {w.type === 'pdfviewer' && <PdfViewerApp user={user} initialFile={w.data} />}
@@ -1358,8 +1489,8 @@ export default function DesktopEnvironment({ user, onExit }: { user: UserData, o
               {w.type === 'calculator' && <CalculatorApp />}
               {w.type === 'calendar' && <CalendarClockApp />}
               {w.type === 'imageviewer' && <ImageViewerApp />}
-              {w.type === 'webamp' && <WebampPlayerApp initialFile={w.data} onClose={() => closeWindow(w.id)} />}
               {w.type === 'trash' && <TrashApp onOpenFile={(type, title, data) => openApp(type as any, title, data)} />}
+              {(w.type === 'equipo' || w.type === 'diskmanager') && <DiskManagerApp onOpenApp={(type, title, data) => openApp(type as any, title, data)} />}
             </div>
 
             {/* Window Resizing Handle */}
@@ -1379,7 +1510,8 @@ export default function DesktopEnvironment({ user, onExit }: { user: UserData, o
               </div>
             )}
           </div>
-        ))}
+        );
+      })}
       </div>
 
       {/* Start Menu */}
@@ -1983,8 +2115,29 @@ export default function DesktopEnvironment({ user, onExit }: { user: UserData, o
         </div>
         <div className="h-7 w-px bg-white/15 mx-1.5"></div>
 
-        {/* Taskbar Audio & Tray */}
-        <div className="flex items-center gap-2 relative">
+        {/* Taskbar Audio, Network & Tray */}
+        <div className="flex items-center gap-1.5 relative">
+          {/* Network Tray Icon */}
+          <button
+            onClick={() => {
+              networkManager.toggleNetwork();
+              soundEngine.playButtonClick();
+            }}
+            className={`p-2 hover:bg-white/10 rounded-xl transition-all relative flex items-center gap-1 ${
+              isOnline ? 'text-cyan-400' : 'bg-red-500/20 text-red-400 border border-red-500/30'
+            }`}
+            title={isOnline ? "WiFi Activado (Haz clic para desactivar)" : "WiFi Desactivado (Haz clic para activar)"}
+          >
+            {isOnline ? (
+              <Wifi className="w-4 h-4" />
+            ) : (
+              <>
+                <WifiOff className="w-4 h-4 text-red-400" />
+                <span className="text-[9px] font-mono font-bold text-red-300 hidden sm:inline uppercase">OFFLINE</span>
+              </>
+            )}
+          </button>
+
           <button
             onClick={() => { setIsControlCenterOpen(!isControlCenterOpen); setIsStartMenuOpen(false); setIsVolumeMenuOpen(false); }}
             className="p-2 hover:bg-white/10 rounded-xl transition-colors text-gray-300 hover:text-white relative"

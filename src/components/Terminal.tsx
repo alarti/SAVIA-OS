@@ -4,6 +4,7 @@ import { AVAILABLE_PACKAGES, getInstalledPackageIds, installPackage, uninstallPa
 import { soundEngine } from '../utils/soundEngine';
 import { securityEngine } from '../utils/securityEngine';
 import { verifyUserPassword } from '../utils/auth';
+import { networkManager } from '../utils/networkManager';
 
 type FileSystem = {
   [path: string]: {
@@ -671,6 +672,11 @@ export default function TerminalApp({ user, onOpenApp }: { user: UserData; onOpe
           setOutput(prev => [...prev, `curl: command not found. Run 'apt install curl' to install.`]);
           break;
         }
+        if (!networkManager.isOnline()) {
+          soundEngine.playError();
+          setOutput(prev => [...prev, `curl: (7) Failed to connect to host: Network is unreachable (SaviaOS Offline Kill-Switch Active)`]);
+          break;
+        }
         const url = args[1];
         if (!url) {
           setOutput(prev => [...prev, `curl: try 'curl <url>'`]);
@@ -684,6 +690,65 @@ export default function TerminalApp({ user, onOpenApp }: { user: UserData; onOpe
           setOutput(prev => [...prev, `HTTP/1.1 ${res.status} ${res.statusText}`, `Content-Type: ${res.headers.get('content-type') || 'text/plain'}`, ``, text.substring(0, 500) + (text.length > 500 ? '\n...[truncated]' : '')]);
         } catch {
           setOutput(prev => [...prev, `curl: (6) Could not resolve host or CORS restricted. Fetching fallback API data...`, `{"status":"ok","message":"Connected to SAVIA-OS Network Interface","ping":12}`]);
+        }
+        break;
+
+      case 'ping':
+        const pingTarget = args[1] || '8.8.8.8';
+        if (!networkManager.isOnline()) {
+          soundEngine.playError();
+          setOutput(prev => [...prev, `ping: connect: Network is unreachable (SaviaOS Offline Kill-Switch Active)`]);
+        } else {
+          setOutput(prev => [
+            ...prev,
+            `PING ${pingTarget} 56(84) bytes of data.`,
+            `64 bytes from ${pingTarget}: icmp_seq=1 ttl=118 time=12.4 ms`,
+            `64 bytes from ${pingTarget}: icmp_seq=2 ttl=118 time=10.8 ms`,
+            `64 bytes from ${pingTarget}: icmp_seq=3 ttl=118 time=11.2 ms`,
+            `--- ${pingTarget} ping statistics ---`,
+            `3 packets transmitted, 3 received, 0% packet loss, time 2004ms`
+          ]);
+        }
+        break;
+
+      case 'ifconfig':
+      case 'ip':
+        const isOnlineNow = networkManager.isOnline();
+        setOutput(prev => [
+          ...prev,
+          `lo: flags=73<UP,LOOPBACK,RUNNING> mtu 65536`,
+          `        inet 127.0.0.1  netmask 255.0.0.0`,
+          `eth0: flags=${isOnlineNow ? '4163<UP,BROADCAST,RUNNING,MULTICAST>' : '4099<NO-CARRIER,BROADCAST,MULTICAST>'} mtu 1500`,
+          `        inet 192.168.1.105  netmask 255.255.255.0  broadcast 192.168.1.255`,
+          `        rx packets ${isOnlineNow ? 14205 : 0}  bytes ${isOnlineNow ? 18450122 : 0}`,
+          `        tx packets ${isOnlineNow ? 9812 : 0}  bytes ${isOnlineNow ? 3201402 : 0}`,
+          `        status: ${isOnlineNow ? 'ONLINE (TCP/IP Active)' : 'OFFLINE (SaviaOS Kill-Switch Active)'}`
+        ]);
+        break;
+
+      case 'ifdown':
+        networkManager.setNetworkDisabled(true);
+        soundEngine.playNotification();
+        setOutput(prev => [...prev, `[KERNEL]: Interface eth0 brought DOWN. Network kill-switch ENABLED (SaviaOS Offline PWA Mode).`]);
+        break;
+
+      case 'ifup':
+        networkManager.setNetworkDisabled(false);
+        soundEngine.playNotification();
+        setOutput(prev => [...prev, `[KERNEL]: Interface eth0 brought UP. Network connectivity RESTORED.`]);
+        break;
+
+      case 'netstat':
+        if (!networkManager.isOnline()) {
+          setOutput(prev => [...prev, `Active Internet connections (only servers for local sockets, network interface is DOWN):`, `unix  2  [ ACC ]  STREAM  LISTENING  /var/run/savia-compositor.sock`]);
+        } else {
+          setOutput(prev => [
+            ...prev,
+            `Active Internet connections (w/o servers)`,
+            `Proto Recv-Q Send-Q Local Address           Foreign Address         State`,
+            `tcp        0      0 192.168.1.105:54321     104.16.249.249:443      ESTABLISHED`,
+            `tcp        0      0 192.168.1.105:3000      127.0.0.1:58102         ESTABLISHED`
+          ]);
         }
         break;
 

@@ -136,14 +136,13 @@ const INITIAL_FS: Record<string, FileItem[]> = {
   ]
 };
 
-export default function FileExplorer({ user, onOpenFile }: { user?: UserData; onOpenFile?: (type: string, title: string, data?: string) => void }) {
+export default function FileExplorer({ user, onOpenFile, initialPath }: { user?: UserData; onOpenFile?: (type: string, title: string, data?: string) => void; initialPath?: string }) {
   const activeUsername = user?.username || 'user';
-  const defaultHome = activeUsername === 'root' ? '/root' : `/home/${activeUsername}`;
+  const defaultHome = initialPath || (activeUsername === 'root' ? '/root' : `/home/${activeUsername}`);
 
   const [fs, setFs] = useState<Record<string, FileItem[]>>(() => {
     try {
-      const saved = localStorage.getItem('savia_os_mock_fs');
-      if (saved) return JSON.parse(saved);
+      return vfs.getVFS();
     } catch {}
     return INITIAL_FS;
   });
@@ -158,9 +157,7 @@ export default function FileExplorer({ user, onOpenFile }: { user?: UserData; on
     setHistory([defaultHome]);
     setHistoryIndex(0);
     try {
-      const saved = localStorage.getItem('savia_os_mock_fs');
-      if (saved) setFs(JSON.parse(saved));
-      else setFs(INITIAL_FS);
+      setFs(vfs.getVFS());
     } catch {}
   }, [activeUsername]);
 
@@ -244,7 +241,19 @@ export default function FileExplorer({ user, onOpenFile }: { user?: UserData; on
   const [sudoModalPath, setSudoModalPath] = useState<string | null>(null);
 
   const navigateTo = (path: string) => {
-    const cleanPath = path.replace(/\/+/g, '/').replace(/\/$/, '') || '/';
+    let cleanPath = path.replace(/\/+/g, '/').replace(/\/$/, '') || '/';
+
+    // If navigating to a synced folder inside Desktop (e.g. /home/guest/Desktop/📂 folder_name)
+    if (cleanPath.startsWith('/home/guest/Desktop/') || cleanPath.startsWith('/home/user/Desktop/')) {
+      const folderName = cleanPath.split('/').pop() || '';
+      const rawName = folderName.replace(/^📂\s*/, '').trim();
+      const mntPath = `/mnt/local/${rawName}`;
+      const latestVFS = vfs.getVFS();
+      if (latestVFS[mntPath]) {
+        cleanPath = mntPath;
+      }
+    }
+
     const activeUsername = user?.username || 'user';
     const accessCheck = securityEngine.checkPathAccess(activeUsername, cleanPath);
 
@@ -254,9 +263,13 @@ export default function FileExplorer({ user, onOpenFile }: { user?: UserData; on
       return;
     }
 
-    if (!fs[cleanPath]) {
+    const latestFs = vfs.getVFS();
+    if (!latestFs[cleanPath] && !fs[cleanPath]) {
       setFs(prev => ({ ...prev, [cleanPath]: [] }));
+    } else if (latestFs[cleanPath]) {
+      setFs(latestFs);
     }
+
     const newHistory = history.slice(0, historyIndex + 1);
     newHistory.push(cleanPath);
     setHistory(newHistory);
@@ -339,40 +352,42 @@ export default function FileExplorer({ user, onOpenFile }: { user?: UserData; on
     const nameLower = item.name.toLowerCase();
     let appTypeForRecent = 'texteditor';
     
+    const fullItemPath = currentPath === '/' ? `/${item.name}` : `${currentPath}/${item.name}`;
+
     if (nameLower.endsWith('.mp3') || nameLower.endsWith('.wav') || nameLower.endsWith('.ogg') || nameLower.endsWith('.flac') || nameLower.endsWith('.aac')) {
       appTypeForRecent = 'webamp';
       if (onOpenFile) {
-        onOpenFile('webamp', `Webamp Music Player - ${item.name}`, currentPath === '/' ? `/${item.name}` : `${currentPath}/${item.name}`);
+        onOpenFile('webamp', `Webamp Music Player - ${item.name}`, fullItemPath);
       }
     } else if (nameLower.endsWith('.txt') || nameLower.endsWith('.js') || nameLower.endsWith('.json') || nameLower.endsWith('.html') || nameLower.endsWith('.md')) {
       appTypeForRecent = 'texteditor';
       if (onOpenFile) {
-        onOpenFile('texteditor', `Editor de Código - ${item.name}`);
+        onOpenFile('texteditor', `Editor de Código - ${item.name}`, fullItemPath);
       }
     } else if (nameLower.endsWith('.pdf')) {
       appTypeForRecent = 'pdfviewer';
       if (onOpenFile) {
-        onOpenFile('pdfviewer', `Visor PDF - ${item.name}`, currentPath === '/' ? `/${item.name}` : `${currentPath}/${item.name}`);
+        onOpenFile('pdfviewer', `Visor PDF - ${item.name}`, fullItemPath);
       }
     } else if (nameLower.endsWith('.png') || nameLower.endsWith('.jpg') || nameLower.endsWith('.jpeg')) {
       appTypeForRecent = 'imageviewer';
       if (onOpenFile) {
-        onOpenFile('imageviewer', `Galería Fotos - ${item.name}`);
+        onOpenFile('imageviewer', `Galería Fotos - ${item.name}`, fullItemPath);
       }
     } else if (nameLower.endsWith('.docx') || nameLower.endsWith('.xlsx') || nameLower.endsWith('.pptx')) {
       appTypeForRecent = 'office';
       if (onOpenFile) {
-        onOpenFile('office', `SaviaOffice - ${item.name}`, item.name);
+        onOpenFile('office', `SaviaOffice - ${item.name}`, fullItemPath);
       }
     } else if (item.type === 'executable' || nameLower.endsWith('.sh')) {
       appTypeForRecent = 'terminal';
       if (onOpenFile) {
-        onOpenFile('terminal', `Ejecución Terminal - ${item.name}`);
+        onOpenFile('terminal', `Ejecución Terminal - ${item.name}`, fullItemPath);
       }
     } else {
       appTypeForRecent = 'texteditor';
       if (onOpenFile) {
-        onOpenFile('texteditor', `Editor de Archivos - ${item.name}`);
+        onOpenFile('texteditor', `Editor de Archivos - ${item.name}`, fullItemPath);
       }
     }
 
@@ -831,6 +846,7 @@ export default function FileExplorer({ user, onOpenFile }: { user?: UserData; on
     { label: 'Imágenes', path: `${userHomePath}/Pictures`, icon: ImageIcon, color: 'text-purple-400' },
     { label: 'Música', path: `${userHomePath}/Music`, icon: Music, color: 'text-pink-400' },
     { label: 'Vídeos', path: `${userHomePath}/Videos`, icon: Film, color: 'text-red-400' },
+    { label: 'Puntos de Montaje (/mnt)', path: '/mnt/local', icon: HardDrive, color: 'text-cyan-300' },
     { label: 'Raíz del Sistema', path: '/', icon: Folder, color: 'text-gray-400' },
   ];
 

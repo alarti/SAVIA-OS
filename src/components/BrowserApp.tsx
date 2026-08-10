@@ -1,7 +1,8 @@
-import React, { useState, useRef } from 'react';
-import { Globe, ArrowLeft, ArrowRight, RotateCw, Home, Search, Star, MoreVertical, Shield, Plus, X, Lock, ShieldAlert } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { Globe, ArrowLeft, ArrowRight, RotateCw, Home, Search, Star, MoreVertical, Shield, Plus, X, Lock, ShieldAlert, WifiOff, Cpu, HardDrive, CheckCircle2 } from 'lucide-react';
 import type { UserData } from '../utils/auth';
 import { securityEngine } from '../utils/securityEngine';
+import { networkManager } from '../utils/networkManager';
 
 type Tab = {
   id: string;
@@ -11,6 +12,7 @@ type Tab = {
 };
 
 export default function BrowserApp({ user }: { user?: UserData }) {
+  const [isOnline, setIsOnline] = useState(() => networkManager.isOnline());
   const [tabs, setTabs] = useState<Tab[]>([{ id: '1', url: '/api/proxy?url=' + encodeURIComponent('https://www.wikipedia.org'), displayUrl: 'https://www.wikipedia.org', title: 'Wikipedia' }]);
   const [activeTabId, setActiveTabId] = useState<string>('1');
   const [inputUrl, setInputUrl] = useState('https://www.wikipedia.org');
@@ -19,6 +21,13 @@ export default function BrowserApp({ user }: { user?: UserData }) {
     { url: 'https://github.com', title: 'GitHub' }
   ]);
   const [showBookmarks, setShowBookmarks] = useState(false);
+
+  useEffect(() => {
+    const unsub = networkManager.subscribe((online) => {
+      setIsOnline(online);
+    });
+    return unsub;
+  }, []);
 
   const activeTab = tabs.find(t => t.id === activeTabId) || tabs[0];
 
@@ -196,25 +205,62 @@ export default function BrowserApp({ user }: { user?: UserData }) {
         </div>
       )}
 
-      {/* Warning Bar for iframes */}
-      <div className="bg-blue-50 border-b border-blue-200 px-4 py-1.5 flex items-center gap-2 text-xs text-blue-800 z-10 shrink-0">
-        <Shield className="w-4 h-4 text-blue-600 shrink-0" />
-        <span className="flex-1">
-          <strong>SAVIA-OS Web Proxy:</strong> Local proxy engine is active to bypass X-Frame-Options and CORS restrictions safely.
-        </span>
-      </div>
+      {/* Warning Bar for network status & iframes */}
+      {!isOnline ? (
+        <div className="bg-amber-500/15 border-b border-amber-500/30 px-4 py-2 flex items-center justify-between gap-2 text-xs text-amber-900 z-10 shrink-0 font-sans">
+          <div className="flex items-center gap-2">
+            <WifiOff className="w-4 h-4 text-amber-600 shrink-0" />
+            <span>
+              <strong>MODO FORZADO OFF-GRID (OFFLINE PWA):</strong> La conectividad externa está desactivada en el kernel de SaviaOS. Las peticiones a sitios externos se simularán con respuestas de caché local.
+            </span>
+          </div>
+          <button
+            onClick={() => networkManager.setNetworkDisabled(false)}
+            className="px-2.5 py-1 bg-amber-600 hover:bg-amber-700 text-white font-bold rounded-lg text-[11px] shrink-0"
+          >
+            Reconectar Red
+          </button>
+        </div>
+      ) : (
+        <div className="bg-blue-50 border-b border-blue-200 px-4 py-1.5 flex items-center gap-2 text-xs text-blue-800 z-10 shrink-0">
+          <Shield className="w-4 h-4 text-blue-600 shrink-0" />
+          <span className="flex-1">
+            <strong>SAVIA-OS Web Proxy:</strong> Local proxy engine is active to bypass X-Frame-Options and CORS restrictions safely.
+          </span>
+        </div>
+      )}
 
       {/* Viewport */}
       <div className="flex-1 relative bg-white">
-        {tabs.map(tab => (
-          <iframe 
-            key={tab.id}
-            src={tab.url} 
-            className={`absolute inset-0 w-full h-full border-none bg-white ${activeTabId === tab.id ? 'opacity-100 z-10 pointer-events-auto' : 'opacity-0 z-0 pointer-events-none'}`}
-            title={`Browser Tab ${tab.title}`} 
-            sandbox="allow-same-origin allow-scripts allow-forms allow-popups" 
-          />
-        ))}
+        {!isOnline ? (
+          <div className="absolute inset-0 z-20 bg-slate-900 text-white p-8 flex flex-col items-center justify-center text-center font-sans">
+            <div className="w-20 h-20 bg-amber-500/20 border border-amber-500/40 rounded-3xl flex items-center justify-center mb-6 text-amber-400">
+              <WifiOff className="w-10 h-10" />
+            </div>
+            <h2 className="text-2xl font-bold mb-2">Sin Conexión a Red (Modo Offline PWA)</h2>
+            <p className="text-sm text-slate-300 max-w-md mb-6 leading-relaxed">
+              El interruptor de red de SaviaOS está desactivado o tu dispositivo está sin conexión. Todas las aplicaciones locales (Editor, VFS, Term, Paint, Webamp, Office) siguen funcionando al 100% gracias a la arquitectura PWA local.
+            </p>
+            <div className="flex items-center gap-3">
+              <button
+                onClick={() => networkManager.setNetworkDisabled(false)}
+                className="px-5 py-2.5 bg-cyan-600 hover:bg-cyan-500 text-white font-bold text-xs rounded-xl shadow-lg transition-all"
+              >
+                Activar Conectividad
+              </button>
+            </div>
+          </div>
+        ) : (
+          tabs.map(tab => (
+            <iframe 
+              key={tab.id}
+              src={tab.url} 
+              className={`absolute inset-0 w-full h-full border-none bg-white ${activeTabId === tab.id ? 'opacity-100 z-10 pointer-events-auto' : 'opacity-0 z-0 pointer-events-none'}`}
+              title={`Browser Tab ${tab.title}`} 
+              sandbox="allow-same-origin allow-scripts allow-forms allow-popups" 
+            />
+          ))
+        )}
       </div>
     </div>
   );

@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { 
-  Settings, ShieldCheck, Volume2, Monitor, Wifi, Box, User, ExternalLink, Cpu, 
+  Settings, ShieldCheck, Volume2, Monitor, Wifi, WifiOff, Box, User, ExternalLink, Cpu, 
   Lock, CheckCircle, Play, RefreshCw, Globe, Camera, Mic, Usb, Cable, 
   Activity, Battery, Compass, Bluetooth, HardDrive, Sliders, AlertTriangle, Video, MicOff, VideoOff, Radio, Power, Palette, Zap, Terminal, Key, UserCheck, ShieldAlert, Download, Check, Trash2, Search, Eye
 } from 'lucide-react';
@@ -10,6 +10,7 @@ import { verifyUserPassword, saveUserPassword, DEFAULT_USERS, UserData } from '.
 import { securityEngine, SecurityEvent } from '../utils/securityEngine';
 import { userStorage } from '../utils/userStorage';
 import { getRealOsInfo, getRealGpuInfo, getRealMemoryInfo } from '../utils/systemInfo';
+import { networkManager } from '../utils/networkManager';
 import SudoDialog from './SudoDialog';
 
 type TabType = 'security' | 'appstore' | 'appearance' | 'sound' | 'devices' | 'accounts' | 'network';
@@ -324,9 +325,18 @@ export default function ControlPanelApp({ user, onOpenApp }: { user?: UserData; 
   };
 
   // --- NETWORK & EVOLUTION STATE ---
-  const [isOnline, setIsOnline] = useState<boolean>(navigator.onLine);
+  const [isOnline, setIsOnline] = useState<boolean>(() => networkManager.isOnline());
+  const [isNetDisabled, setIsNetDisabled] = useState<boolean>(() => networkManager.isNetworkDisabled());
   const [networkLatency, setNetworkLatency] = useState<number | null>(null);
   const [pinging, setPinging] = useState(false);
+
+  useEffect(() => {
+    const unsub = networkManager.subscribe((online, disabled) => {
+      setIsOnline(online);
+      setIsNetDisabled(disabled);
+    });
+    return unsub;
+  }, []);
   const [evolutionActive, setEvolutionActive] = useState(false);
   const [evolutionLogs, setEvolutionLogs] = useState<string[]>([
     '[GENETIC AI] Motor de optimización adaptativo listo.',
@@ -963,23 +973,69 @@ export default function ControlPanelApp({ user, onOpenApp }: { user?: UserData; 
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="bg-[#1C1C1F] p-5 rounded-2xl border border-white/10 flex flex-col gap-4">
-                <h3 className="text-xs font-bold text-white uppercase tracking-wider text-gray-400">Conectividad de Red</h3>
+                <div className="flex items-center justify-between">
+                  <h3 className="text-xs font-bold text-white uppercase tracking-wider text-gray-400">Conectividad de Red & Kill-Switch</h3>
+                  <span className={`text-[10px] font-mono px-2 py-0.5 rounded font-bold ${isOnline ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : 'bg-red-500/20 text-red-400 border border-red-500/30'}`}>
+                    {isOnline ? 'ONLINE' : 'OFFLINE (OFFGRID)'}
+                  </span>
+                </div>
                 
+                {/* Network Kill-Switch Toggle */}
+                <div className="p-3.5 bg-black/40 border border-white/10 rounded-xl flex items-center justify-between gap-3">
+                  <div className="flex flex-col gap-0.5">
+                    <span className="text-xs font-bold text-white flex items-center gap-1.5">
+                      {isNetDisabled ? <WifiOff className="w-4 h-4 text-red-400" /> : <Wifi className="w-4 h-4 text-cyan-400" />}
+                      Interruptor de Conectividad de Red
+                    </span>
+                    <span className="text-[11px] text-gray-400">
+                      {isNetDisabled ? 'Modo sin red activo. Las aplicaciones funcionan 100% en local.' : 'Permite tráfico de red exterior y peticiones HTTP.'}
+                    </span>
+                  </div>
+
+                  <button
+                    onClick={() => networkManager.toggleNetwork()}
+                    className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all shrink-0 ${
+                      isNetDisabled 
+                        ? 'bg-red-600 hover:bg-red-500 text-white shadow-lg shadow-red-600/30' 
+                        : 'bg-emerald-600 hover:bg-emerald-500 text-white shadow-lg shadow-emerald-600/30'
+                    }`}
+                  >
+                    {isNetDisabled ? 'Desactivado (Offline)' : 'Activado (Online)'}
+                  </button>
+                </div>
+
                 <div className="flex items-center justify-between p-3 bg-black/30 rounded-xl">
-                  <span className="text-xs font-semibold text-gray-300">Estado de Internet</span>
+                  <span className="text-xs font-semibold text-gray-300">Estado Conexión Navegador</span>
                   <span className={`text-xs font-bold px-2.5 py-1 rounded-full ${isOnline ? 'bg-emerald-500/20 text-emerald-400' : 'bg-rose-500/20 text-rose-400'}`}>
-                    {isOnline ? 'Online / Conectado' : 'Offline'}
+                    {isOnline ? 'Online / Conectado' : 'Offline / Sin Red'}
                   </span>
                 </div>
 
                 <div className="flex items-center justify-between p-3 bg-black/30 rounded-xl">
                   <span className="text-xs font-semibold text-gray-300">Latencia Ping Local</span>
-                  <span className="text-xs font-mono font-bold text-cyan-400">{networkLatency !== null ? `${networkLatency} ms` : 'Sin medir'}</span>
+                  <span className="text-xs font-mono font-bold text-cyan-400">{isOnline ? (networkLatency !== null ? `${networkLatency} ms` : 'Sin medir') : 'N/A (Modo Offline)'}</span>
                 </div>
 
-                <button onClick={runNetworkPing} disabled={pinging} className="px-4 py-2 bg-cyan-600 hover:bg-cyan-500 text-white font-semibold text-xs rounded-xl shadow self-start">
+                <button onClick={runNetworkPing} disabled={pinging || !isOnline} className={`px-4 py-2 font-semibold text-xs rounded-xl shadow self-start ${isOnline ? 'bg-cyan-600 hover:bg-cyan-500 text-white' : 'bg-gray-800 text-gray-500 cursor-not-allowed'}`}>
                   {pinging ? 'Midiendo...' : 'Ejecutar Test Ping'}
                 </button>
+
+                {/* PWA Section */}
+                <div className="mt-2 pt-3 border-t border-white/10 flex flex-col gap-2">
+                  <h4 className="text-xs font-bold text-white uppercase tracking-wider text-gray-400 flex items-center gap-1.5">
+                    <Download className="w-3.5 h-3.5 text-purple-400" />
+                    SaviaOS Progressive Web App (PWA)
+                  </h4>
+                  <div className="p-3 bg-purple-500/10 border border-purple-500/20 rounded-xl text-xs text-purple-200 flex flex-col gap-1.5 font-sans">
+                    <div className="flex items-center justify-between">
+                      <span className="font-bold text-white">Service Worker Cache:</span>
+                      <span className="font-mono text-emerald-400 font-bold">Activo (Ready Offline)</span>
+                    </div>
+                    <p className="text-[11px] text-gray-300">
+                      SaviaOS registra un Service Worker PWA con almacenamiento VFS local y caché de componentes. Puedes instalar SaviaOS en tu escritorio o móvil y ejecutarlo completamente sin conexión a Internet.
+                    </p>
+                  </div>
+                </div>
               </div>
 
               <div className="bg-[#1C1C1F] p-5 rounded-2xl border border-white/10 flex flex-col gap-3">

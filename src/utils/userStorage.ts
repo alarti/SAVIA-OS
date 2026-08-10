@@ -3,7 +3,7 @@ import { PRESET_WALLPAPERS } from '../components/ThemeCustomizerApp';
 export interface DesktopIcon {
   id: string;
   title: string;
-  appType: 'terminal' | 'webgl' | 'folder' | 'browser' | 'texteditor' | 'pdfviewer' | 'office' | 'taskmanager' | 'tetris' | 'appstore' | 'soundsettings' | 'paint' | 'about' | 'controlpanel' | 'theme' | 'calculator' | 'calendar' | 'imageviewer' | 'webamp' | 'wine' | 'trash';
+  appType: 'terminal' | 'webgl' | 'folder' | 'browser' | 'texteditor' | 'pdfviewer' | 'office' | 'taskmanager' | 'tetris' | 'appstore' | 'soundsettings' | 'paint' | 'about' | 'controlpanel' | 'theme' | 'calculator' | 'calendar' | 'imageviewer' | 'webamp' | 'wine' | 'trash' | 'equipo' | 'diskmanager';
   iconType: string;
   docData?: any;
   x: number;
@@ -21,23 +21,33 @@ export interface RecentItem {
 }
 
 const DEFAULT_DESKTOP_ICONS: DesktopIcon[] = [
-  { id: 'webgl_games', title: 'Savia Games', appType: 'webgl', iconType: 'game', x: 20, y: 20 },
-  { id: 'term', title: 'Terminal POSIX', appType: 'terminal', iconType: 'terminal', x: 20, y: 120 },
-  { id: 'files', title: 'Explorador de Archivos', appType: 'folder', iconType: 'folder', x: 20, y: 220 },
+  // Columna 1 (x: 20) - Sistema y Archivos
+  { id: 'equipo', title: 'Equipo', appType: 'equipo', iconType: 'equipo', x: 20, y: 20 },
+  { id: 'trash', title: 'Papelera', appType: 'trash', iconType: 'trash', x: 20, y: 120 },
+  { id: 'files', title: 'Explorador Archivos', appType: 'folder', iconType: 'folder', x: 20, y: 220 },
   { id: 'browser', title: 'Navegador Web', appType: 'browser', iconType: 'browser', x: 20, y: 320 },
-  { id: 'office', title: 'Suite Ofimática', appType: 'office', iconType: 'office', x: 20, y: 420 },
-  { id: 'trash', title: 'Papelera de Reciclaje', appType: 'trash', iconType: 'trash', x: 350, y: 120 },
-  { id: 'savia_doc', title: 'Savia Doc', appType: 'office', iconType: 'doc', docData: 'nuevo documento.docx', x: 130, y: 20 },
-  { id: 'savia_xls', title: 'Savia Xls', appType: 'office', iconType: 'xls', docData: 'nuevo documento.xlsx', x: 130, y: 120 },
-  { id: 'savia_ppt', title: 'Savia Ppt', appType: 'office', iconType: 'ppt', docData: 'nuevo documento.pptx', x: 130, y: 220 },
-  { id: 'pdfviewer', title: 'Savia Pdf', appType: 'pdfviewer', iconType: 'pdf', x: 130, y: 320 },
-  { id: 'savia_nano', title: 'Savia Nano', appType: 'texteditor', iconType: 'editor', x: 130, y: 420 },
-  { id: 'paint', title: 'Savia Paint', appType: 'paint', iconType: 'paint', x: 240, y: 20 },
-  { id: 'control', title: 'Panel de Control', appType: 'controlpanel', iconType: 'controlpanel', x: 240, y: 120 },
-  { id: 'appstore', title: 'Centro de Software APT', appType: 'appstore', iconType: 'appstore', x: 240, y: 220 },
-  { id: 'theme', title: 'Personalización', appType: 'theme', iconType: 'theme', x: 240, y: 320 },
-  { id: 'taskmgr', title: 'Monitor de Sistema', appType: 'taskmanager', iconType: 'taskmanager', x: 240, y: 420 },
-  { id: 'calc', title: 'Savia Calc', appType: 'calculator', iconType: 'calc', x: 350, y: 20 },
+  { id: 'term', title: 'Terminal POSIX', appType: 'terminal', iconType: 'terminal', x: 20, y: 420 },
+
+  // Columna 2 (x: 130) - Ofimática y Documentos
+  { id: 'office', title: 'Suite Ofimática', appType: 'office', iconType: 'office', x: 130, y: 20 },
+  { id: 'savia_doc', title: 'Savia Doc', appType: 'office', iconType: 'doc', docData: 'nuevo documento.docx', x: 130, y: 120 },
+  { id: 'savia_xls', title: 'Savia Xls', appType: 'office', iconType: 'xls', docData: 'nuevo documento.xlsx', x: 130, y: 220 },
+  { id: 'savia_ppt', title: 'Savia Ppt', appType: 'office', iconType: 'ppt', docData: 'nuevo documento.pptx', x: 130, y: 320 },
+  { id: 'pdfviewer', title: 'Savia Pdf', appType: 'pdfviewer', iconType: 'pdf', x: 130, y: 420 },
+
+  // Columna 3 (x: 240) - Herramientas y Multimedia
+  { id: 'savia_nano', title: 'Savia Nano', appType: 'texteditor', iconType: 'editor', x: 240, y: 20 },
+  { id: 'paint', title: 'Savia Paint', appType: 'paint', iconType: 'paint', x: 240, y: 120 },
+  { id: 'calc', title: 'Savia Calc', appType: 'calculator', iconType: 'calc', x: 240, y: 220 },
+  { id: 'calendar', title: 'Calendario', appType: 'calendar', iconType: 'calendar', x: 240, y: 320 },
+  { id: 'imageviewer', title: 'Galería Fotos', appType: 'imageviewer', iconType: 'image', x: 240, y: 420 },
+
+  // Columna 4 (x: 350) - Entretenimiento y Configuración
+  { id: 'webgl_games', title: 'Savia Games', appType: 'webgl', iconType: 'game', x: 350, y: 20 },
+  { id: 'webamp', title: 'Webamp Music', appType: 'webamp', iconType: 'music', x: 350, y: 120 },
+  { id: 'control', title: 'Panel de Control', appType: 'controlpanel', iconType: 'controlpanel', x: 350, y: 220 },
+  { id: 'appstore', title: 'App Store', appType: 'appstore', iconType: 'appstore', x: 350, y: 320 },
+  { id: 'theme', title: 'Temas & Fondos', appType: 'theme', iconType: 'theme', x: 350, y: 420 },
 ];
 
 export const userStorage = {
@@ -52,22 +62,35 @@ export const userStorage = {
         const gameIdsToRemove = ['winmine', 'pinball', 'solitaire', 'tetris', 'veloren_3d', 'supertux_3d'];
         parsed = parsed.filter(ic => !gameIdsToRemove.includes(ic.id) && !ic.title.toLowerCase().includes('.exe'));
         
-        // Ensure webgl games title is updated to Savia Games
+        // Normalize icons
         parsed = parsed.map(ic => {
           if (ic.id === 'webgl_games' || ic.appType === 'webgl') {
-            return { ...ic, title: 'Savia Games' };
+            return { ...ic, title: 'Savia Games', iconType: 'game' };
           }
-          if (ic.id === 'pdfviewer' || ic.appType === 'pdfviewer') {
-            return { ...ic, title: 'SaviaPdf' };
+          if (ic.id === 'equipo' || ic.appType === 'equipo') {
+            return { ...ic, title: 'Equipo', iconType: 'equipo' };
+          }
+          if (ic.id === 'trash' || ic.appType === 'trash') {
+            return { ...ic, title: 'Papelera', iconType: 'trash' };
+          }
+          if (ic.id === 'webamp' || ic.appType === 'webamp') {
+            return { ...ic, title: 'Webamp Music', iconType: 'music' };
           }
           return ic;
         });
 
-        if (!parsed.some(i => i.id === 'webgl_games' || i.appType === 'webgl')) {
-          parsed.unshift({ id: 'webgl_games', title: 'Savia Games', appType: 'webgl', iconType: 'game', x: 20, y: 20 });
+        // Ensure key system icons exist
+        if (!parsed.some(i => i.id === 'equipo' || i.appType === 'equipo')) {
+          parsed.unshift({ id: 'equipo', title: 'Equipo', appType: 'equipo', iconType: 'equipo', x: 20, y: 20 });
         }
         if (!parsed.some(i => i.id === 'trash' || i.appType === 'trash')) {
-          parsed.push({ id: 'trash', title: 'Papelera de Reciclaje', appType: 'trash', iconType: 'trash', x: 350, y: 120 });
+          parsed.unshift({ id: 'trash', title: 'Papelera', appType: 'trash', iconType: 'trash', x: 20, y: 120 });
+        }
+        if (!parsed.some(i => i.id === 'webamp' || i.appType === 'webamp')) {
+          parsed.push({ id: 'webamp', title: 'Webamp Music', appType: 'webamp', iconType: 'music', x: 350, y: 120 });
+        }
+        if (!parsed.some(i => i.id === 'webgl_games' || i.appType === 'webgl')) {
+          parsed.push({ id: 'webgl_games', title: 'Savia Games', appType: 'webgl', iconType: 'game', x: 350, y: 20 });
         }
         return parsed;
       }
@@ -75,31 +98,46 @@ export const userStorage = {
       console.error('Error loading desktop icons for ' + username, e);
     }
     
-    // Default tailored icons per user role
     if (username === 'root') {
       return [
-        { id: 'term', title: 'Terminal Root (#)', appType: 'terminal', iconType: 'terminal', x: 20, y: 20 },
-        { id: 'control', title: 'Centro de Seguridad Kernel', appType: 'controlpanel', iconType: 'controlpanel', x: 20, y: 120 },
-        { id: 'files', title: 'Sistema de Archivos Root', appType: 'folder', iconType: 'folder', x: 20, y: 220 },
-        { id: 'taskmgr', title: 'Monitor de Sistema Root', appType: 'taskmanager', iconType: 'taskmanager', x: 20, y: 320 },
+        { id: 'equipo', title: 'Equipo', appType: 'equipo', iconType: 'equipo', x: 20, y: 20 },
+        { id: 'trash', title: 'Papelera', appType: 'trash', iconType: 'trash', x: 20, y: 120 },
+        { id: 'term', title: 'Terminal Root (#)', appType: 'terminal', iconType: 'terminal', x: 20, y: 220 },
+        { id: 'control', title: 'Centro de Seguridad Kernel', appType: 'controlpanel', iconType: 'controlpanel', x: 20, y: 320 },
+        { id: 'files', title: 'Sistema de Archivos Root', appType: 'folder', iconType: 'folder', x: 130, y: 20 },
+        { id: 'taskmgr', title: 'Monitor de Sistema Root', appType: 'taskmanager', iconType: 'taskmanager', x: 130, y: 120 },
       ];
     }
 
     if (username === 'guest') {
       return [
-        { id: 'browser', title: 'Navegador Web', appType: 'browser', iconType: 'browser', x: 20, y: 20 },
-        { id: 'files', title: 'Archivos Invitado', appType: 'folder', iconType: 'folder', x: 20, y: 120 },
-        { id: 'savia_doc', title: 'SaviaDoc', appType: 'office', iconType: 'doc', docData: 'Documento_Invitado.docx', x: 20, y: 220 },
-        { id: 'savia_xls', title: 'SaviaXls', appType: 'office', iconType: 'xls', docData: 'Presupuesto_Invitado.xlsx', x: 20, y: 320 },
-        { id: 'savia_ppt', title: 'SaviaPpt', appType: 'office', iconType: 'ppt', docData: 'Presentacion_Invitado.pptx', x: 20, y: 420 },
-        { id: 'pdfviewer', title: 'SaviaPdf', appType: 'pdfviewer', iconType: 'pdf', x: 130, y: 20 },
-        { id: 'savia_nano', title: 'Savia Nano', appType: 'texteditor', iconType: 'text', x: 130, y: 120 },
-        { id: 'savia_games', title: 'Savia Games', appType: 'webgl', iconType: 'game', x: 130, y: 220 },
-        { id: 'paint', title: 'SAVIA Paint', appType: 'paint', iconType: 'paint', x: 130, y: 320 },
-        { id: 'calc', title: 'Calculadora', appType: 'calculator', iconType: 'calc', x: 130, y: 420 },
+        // Columna 1 (x: 20)
+        { id: 'equipo', title: 'Equipo', appType: 'equipo', iconType: 'equipo', x: 20, y: 20 },
+        { id: 'trash', title: 'Papelera', appType: 'trash', iconType: 'trash', x: 20, y: 120 },
+        { id: 'files', title: 'Archivos Invitado', appType: 'folder', iconType: 'folder', x: 20, y: 220 },
+        { id: 'browser', title: 'Navegador Web', appType: 'browser', iconType: 'browser', x: 20, y: 320 },
+        { id: 'term', title: 'Terminal POSIX', appType: 'terminal', iconType: 'terminal', x: 20, y: 420 },
+
+        // Columna 2 (x: 130)
+        { id: 'office', title: 'Suite Ofimática', appType: 'office', iconType: 'office', x: 130, y: 20 },
+        { id: 'savia_doc', title: 'Savia Doc', appType: 'office', iconType: 'doc', docData: 'Documento_Invitado.docx', x: 130, y: 120 },
+        { id: 'savia_xls', title: 'Savia Xls', appType: 'office', iconType: 'xls', docData: 'Presupuesto_Invitado.xlsx', x: 130, y: 220 },
+        { id: 'savia_ppt', title: 'Savia Ppt', appType: 'office', iconType: 'ppt', docData: 'Presentacion_Invitado.pptx', x: 130, y: 320 },
+        { id: 'pdfviewer', title: 'Savia Pdf', appType: 'pdfviewer', iconType: 'pdf', x: 130, y: 420 },
+
+        // Columna 3 (x: 240)
+        { id: 'savia_nano', title: 'Savia Nano', appType: 'texteditor', iconType: 'editor', x: 240, y: 20 },
+        { id: 'paint', title: 'Savia Paint', appType: 'paint', iconType: 'paint', x: 240, y: 120 },
+        { id: 'calc', title: 'Savia Calc', appType: 'calculator', iconType: 'calc', x: 240, y: 220 },
+        { id: 'webgl_games', title: 'Savia Games', appType: 'webgl', iconType: 'game', x: 240, y: 320 },
+        { id: 'webamp', title: 'Webamp Music', appType: 'webamp', iconType: 'music', x: 240, y: 420 },
+
+        // Columna 4 (x: 350)
+        { id: 'control', title: 'Panel de Control', appType: 'controlpanel', iconType: 'controlpanel', x: 350, y: 220 },
+        { id: 'appstore', title: 'App Store', appType: 'appstore', iconType: 'appstore', x: 350, y: 320 },
       ];
     }
-
+    
     return DEFAULT_DESKTOP_ICONS;
   },
 
@@ -170,6 +208,20 @@ export const userStorage = {
   setOverlayOpacity(username: string, opacity: number): void {
     try {
       localStorage.setItem(`savia_os_overlay_opacity_${username}`, opacity.toString());
+    } catch {}
+  },
+
+  getBrightness(username: string): number {
+    try {
+      const saved = localStorage.getItem(`savia_os_brightness_${username}`);
+      if (saved) return parseInt(saved, 10);
+    } catch {}
+    return 100;
+  },
+
+  setBrightness(username: string, brightness: number): void {
+    try {
+      localStorage.setItem(`savia_os_brightness_${username}`, brightness.toString());
     } catch {}
   },
 
@@ -309,11 +361,44 @@ export const userStorage = {
             if (!defaultGuestPaths.includes(dirPath)) {
               delete fs[dirPath];
             }
-          } else if (Array.isArray(fs[dirPath])) {
-            // Filter out items owned by guest in non-guest directories
+          } else if (Array.isArray(fs[dirPath]) && !dirPath.startsWith('/mnt')) {
+            // Filter out items owned by guest in non-guest directories (except /mnt)
             fs[dirPath] = fs[dirPath].filter((item: any) => item.owner !== 'guest');
           }
         });
+
+        // Ensure root system directories exist
+        fs['/'] = [
+          { id: 'bin_dir', name: 'bin', type: 'folder', iconType: 'folder', date: 'Oct 12 09:30', permissions: 'drwxr-xr-x', owner: 'root' },
+          { id: 'boot_dir', name: 'boot', type: 'folder', iconType: 'folder', date: 'Oct 12 09:30', permissions: 'drwxr-xr-x', owner: 'root' },
+          { id: 'dev_dir', name: 'dev', type: 'folder', iconType: 'folder', date: 'Oct 12 09:30', permissions: 'drwxr-xr-x', owner: 'root' },
+          { id: 'etc_dir', name: 'etc', type: 'folder', iconType: 'folder', date: 'Oct 12 09:30', permissions: 'drwxr-xr-x', owner: 'root' },
+          { id: 'home_dir', name: 'home', type: 'folder', iconType: 'folder', date: 'Oct 12 09:30', permissions: 'drwxr-xr-x', owner: 'root' },
+          { id: 'lib_dir', name: 'lib', type: 'folder', iconType: 'folder', date: 'Oct 12 09:30', permissions: 'drwxr-xr-x', owner: 'root' },
+          { id: 'mnt_dir', name: 'mnt', type: 'folder', iconType: 'folder', date: 'Oct 12 09:30', permissions: 'drwxr-xr-x', owner: 'root' },
+          { id: 'opt_dir', name: 'opt', type: 'folder', iconType: 'folder', date: 'Oct 12 09:30', permissions: 'drwxr-xr-x', owner: 'root' },
+          { id: 'proc_dir', name: 'proc', type: 'folder', iconType: 'folder', date: 'Oct 12 09:30', permissions: 'drwxr-xr-x', owner: 'root' },
+          { id: 'root_dir', name: 'root', type: 'folder', iconType: 'folder', date: 'Oct 12 09:30', permissions: 'drwx------', owner: 'root' },
+          { id: 'sys_dir', name: 'sys', type: 'folder', iconType: 'folder', date: 'Oct 12 09:30', permissions: 'drwxr-xr-x', owner: 'root' },
+          { id: 'tmp_dir', name: 'tmp', type: 'folder', iconType: 'folder', date: 'Oct 12 09:30', permissions: 'drwxrwxrwx', owner: 'root' },
+          { id: 'usr_dir', name: 'usr', type: 'folder', iconType: 'folder', date: 'Oct 12 09:30', permissions: 'drwxr-xr-x', owner: 'root' },
+          { id: 'var_dir', name: 'var', type: 'folder', iconType: 'folder', date: 'Oct 12 09:30', permissions: 'drwxr-xr-x', owner: 'root' },
+        ];
+        fs['/home'] = [
+          { id: 'root_h_dir', name: 'root', type: 'folder', iconType: 'folder', date: 'Oct 12 09:30', permissions: 'drwx------', owner: 'root' },
+          { id: 'user_dir', name: 'user', type: 'folder', iconType: 'folder', date: 'Oct 12 09:30', permissions: 'drwxr-xr-x', owner: 'user' },
+          { id: 'guest_dir', name: 'guest', type: 'folder', iconType: 'folder', date: 'Oct 12 09:30', permissions: 'drwxr-xr-x', owner: 'guest' },
+        ];
+        if (!fs['/mnt']) {
+          fs['/mnt'] = [
+            { id: 'mnt_local', name: 'local', type: 'folder', iconType: 'folder', date: 'Oct 12 09:30', permissions: 'drwxr-xr-x', owner: 'root' },
+            { id: 'mnt_cdrom', name: 'cdrom', type: 'folder', iconType: 'folder', date: 'Oct 12 09:30', permissions: 'drwxr-xr-x', owner: 'root' },
+            { id: 'mnt_usb', name: 'usb', type: 'folder', iconType: 'folder', date: 'Oct 12 09:30', permissions: 'drwxr-xr-x', owner: 'root' },
+          ];
+        }
+        if (!fs['/mnt/local']) {
+          fs['/mnt/local'] = [];
+        }
 
         // Restore default guest file system structure
         fs['/home/guest'] = [
@@ -325,8 +410,30 @@ export const userStorage = {
           { id: 'guest_welcome', name: 'Welcome.pdf', type: 'file', iconType: 'file', size: '500 KB', date: 'Hoy 08:00', permissions: '-rw-r--r--', owner: 'guest' },
         ];
         fs['/home/guest/Desktop'] = [
-          { id: 'gd_welcome', name: 'Bienvenida_Invitado.txt', type: 'file', iconType: 'text', size: '1 KB', date: 'Hoy 08:00', permissions: '-rw-r--r--', owner: 'guest' },
+          { id: 'gd_welcome', name: 'Bienvenida_Invitado.txt', type: 'file', iconType: 'text', size: '1 KB', date: 'Hoy 08:00', permissions: '-rw-r--r--', owner: 'guest', content: 'Bienvenido usuario invitado a SAVIA-OS.' },
+          { id: 'gd_doc', name: 'Documento_Invitado.docx', type: 'file', iconType: 'text', size: '12 KB', date: 'Hoy 08:00', permissions: '-rw-r--r--', owner: 'guest' },
+          { id: 'gd_xls', name: 'Presupuesto_Invitado.xlsx', type: 'file', iconType: 'text', size: '18 KB', date: 'Hoy 08:00', permissions: '-rw-r--r--', owner: 'guest' },
+          { id: 'gd_ppt', name: 'Presentacion_Invitado.pptx', type: 'file', iconType: 'text', size: '24 KB', date: 'Hoy 08:00', permissions: '-rw-r--r--', owner: 'guest' },
+          { id: 'gd_readme', name: 'Leeme_Invitado.txt', type: 'file', iconType: 'text', size: '1 KB', date: 'Hoy 08:00', permissions: '-rw-r--r--', owner: 'guest', content: 'Archivos y documentos del Escritorio de Invitado en SAVIA-OS.' },
         ];
+
+        if (fs['/mnt/local'] && Array.isArray(fs['/mnt/local'])) {
+          fs['/mnt/local'].forEach((localFolder: any) => {
+            const folderName = localFolder.name;
+            const desktopItemName = `📂 ${folderName}`;
+            if (!fs['/home/guest/Desktop'].some((x: any) => x.name === folderName || x.name === desktopItemName)) {
+              fs['/home/guest/Desktop'].push({
+                id: `g_mnt_${folderName}`,
+                name: desktopItemName,
+                type: 'folder',
+                iconType: 'folder',
+                date: 'Sincronizado',
+                permissions: 'drwxr-xr-x',
+                owner: 'guest'
+              });
+            }
+          });
+        }
         fs['/home/guest/Documents'] = [
           { id: 'gdoc_guest', name: 'Documento_Invitado.docx', type: 'file', iconType: 'text', size: '12 KB', date: 'Hoy 08:00', permissions: '-rw-r--r--', owner: 'guest' },
         ];
@@ -346,6 +453,7 @@ export const userStorage = {
     // Trigger update events
     window.dispatchEvent(new CustomEvent('savia_os_desktop_icons_updated', { detail: { username: 'guest' } }));
     window.dispatchEvent(new CustomEvent('savia_os_recents_updated', { detail: { username: 'guest' } }));
+    window.dispatchEvent(new CustomEvent('savia_os_vfs_updated'));
     window.dispatchEvent(new CustomEvent('savia_os_guest_reset'));
   }
 };

@@ -1,29 +1,71 @@
 import React, { useState, useEffect } from 'react';
-import { Wifi, Bluetooth, Share2, Moon, Sun, Volume2, VolumeX, ShieldCheck, Battery, Radio, Info, Settings, Music, Box, Lock, Activity, Palette } from 'lucide-react';
+import { Wifi, WifiOff, Bluetooth, Share2, Moon, Sun, Volume2, VolumeX, ShieldCheck, Battery, Radio, Info, Settings, Music, Box, Lock, Activity, Palette } from 'lucide-react';
 import { soundEngine } from '../utils/soundEngine';
+import { networkManager } from '../utils/networkManager';
+import { userStorage } from '../utils/userStorage';
+import type { UserData } from '../utils/auth';
 
 export default function ControlCenter({
   onOpenApp,
-  onClose
+  onClose,
+  user
 }: {
   onOpenApp: (type: string, title: string) => void;
   onClose: () => void;
+  user?: UserData;
 }) {
-  const [wifi, setWifi] = useState(true);
+  const activeUsername = user?.username || 'user';
+  const [wifi, setWifi] = useState(() => networkManager.isOnline());
   const [bluetooth, setBluetooth] = useState(true);
   const [airDrop, setAirDrop] = useState(true);
-  const [darkMode, setDarkMode] = useState(true);
-  const [brightness, setBrightness] = useState(100);
+  const [darkMode, setDarkMode] = useState(() => userStorage.getTheme(activeUsername) !== 'minimal-light');
+  const [brightness, setBrightness] = useState(() => userStorage.getBrightness(activeUsername));
   const [volume, setVolumeState] = useState(soundEngine.getVolume());
   const [isMuted, setIsMutedState] = useState(soundEngine.isMuted());
 
   useEffect(() => {
-    const unsub = soundEngine.subscribe(() => {
+    const unsubSound = soundEngine.subscribe(() => {
       setVolumeState(soundEngine.getVolume());
       setIsMutedState(soundEngine.isMuted());
     });
-    return unsub;
+    const unsubNet = networkManager.subscribe((online) => {
+      setWifi(online);
+    });
+
+    const handleThemeChange = (e: any) => {
+      if (e.detail?.brightness !== undefined) {
+        setBrightness(e.detail.brightness);
+      }
+      if (e.detail?.theme) {
+        setDarkMode(e.detail.theme !== 'minimal-light');
+      }
+    };
+    window.addEventListener('savia_os_theme_changed', handleThemeChange as any);
+
+    return () => {
+      unsubSound();
+      unsubNet();
+      window.removeEventListener('savia_os_theme_changed', handleThemeChange as any);
+    };
   }, []);
+
+  const handleBrightnessChange = (newVal: number) => {
+    setBrightness(newVal);
+    userStorage.setBrightness(activeUsername, newVal);
+    window.dispatchEvent(new CustomEvent('savia_os_theme_changed', {
+      detail: { brightness: newVal }
+    }));
+  };
+
+  const handleToggleDarkMode = () => {
+    const newDarkMode = !darkMode;
+    setDarkMode(newDarkMode);
+    const newTheme = newDarkMode ? 'dark-glass' : 'minimal-light';
+    userStorage.setTheme(activeUsername, newTheme);
+    window.dispatchEvent(new CustomEvent('savia_os_theme_changed', {
+      detail: { theme: newTheme }
+    }));
+  };
 
   const handleVolumeChange = (v: number) => {
     soundEngine.setVolume(v);
@@ -51,15 +93,15 @@ export default function ControlCenter({
       <div className="bg-white/5 border border-white/10 rounded-2xl p-3 flex flex-col gap-2.5">
         <div className="flex items-center justify-between">
           <button 
-            onClick={() => setWifi(!wifi)} 
-            className={`flex items-center gap-3 flex-1 p-2 rounded-xl transition-all ${wifi ? 'bg-blue-600 text-white' : 'bg-white/5 text-gray-400'}`}
+            onClick={() => networkManager.toggleNetwork()} 
+            className={`flex items-center gap-3 flex-1 p-2 rounded-xl transition-all ${wifi ? 'bg-blue-600 text-white' : 'bg-red-500/20 border border-red-500/40 text-red-300'}`}
           >
-            <div className={`p-2 rounded-full ${wifi ? 'bg-white/20' : 'bg-white/10'}`}>
-              <Wifi className="w-4 h-4" />
+            <div className={`p-2 rounded-full ${wifi ? 'bg-white/20' : 'bg-red-500/30'}`}>
+              {wifi ? <Wifi className="w-4 h-4" /> : <WifiOff className="w-4 h-4 text-red-400" />}
             </div>
             <div className="flex flex-col text-left leading-tight">
               <span className="text-xs font-bold">Red Host (Navegador)</span>
-              <span className="text-[10px] opacity-80">{wifi ? 'En Línea (TCP/IP Active)' : 'Desconectado'}</span>
+              <span className="text-[10px] font-mono opacity-90">{wifi ? 'En Línea (TCP/IP Active)' : '🚫 Fuera de Línea (PWA Offline)'}</span>
             </div>
           </button>
         </div>
@@ -86,13 +128,13 @@ export default function ControlCenter({
       {/* Display & Dark Mode Block */}
       <div className="grid grid-cols-2 gap-2">
         <button 
-          onClick={() => setDarkMode(!darkMode)} 
-          className={`flex items-center gap-2.5 p-3 rounded-2xl border border-white/10 transition-all ${darkMode ? 'bg-indigo-600/30 text-indigo-300' : 'bg-white/5 text-gray-300'}`}
+          onClick={handleToggleDarkMode} 
+          className={`flex items-center gap-2.5 p-3 rounded-2xl border border-white/10 transition-all ${darkMode ? 'bg-indigo-600/30 text-indigo-300' : 'bg-amber-500/20 text-amber-300'}`}
         >
           {darkMode ? <Moon className="w-4 h-4 text-indigo-400" /> : <Sun className="w-4 h-4 text-amber-400" />}
           <div className="flex flex-col text-left leading-tight">
             <span className="text-xs font-bold">Modo Oscuro</span>
-            <span className="text-[10px] opacity-70">{darkMode ? 'Activado' : 'Desactivado'}</span>
+            <span className="text-[10px] opacity-70">{darkMode ? 'Activado (Dark)' : 'Desactivado (Light)'}</span>
           </div>
         </button>
 
@@ -116,7 +158,7 @@ export default function ControlCenter({
           min="20" 
           max="100" 
           value={brightness} 
-          onChange={(e) => setBrightness(parseInt(e.target.value))}
+          onChange={(e) => handleBrightnessChange(parseInt(e.target.value, 10))}
           className="w-full accent-amber-400 cursor-pointer h-2 bg-gray-700 rounded-lg"
         />
       </div>
