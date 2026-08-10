@@ -1,5 +1,4 @@
 import React, { useState } from 'react';
-import { ThreeRacing } from './games/ThreeRacing';
 import { ThreeShooter } from './games/ThreeShooter';
 import { ThreeChess } from './games/ThreeChess';
 import { ThreeVoxelWorld } from './games/ThreeVoxelWorld';
@@ -7,14 +6,10 @@ import { ThreePhysics } from './games/ThreePhysics';
 import TetrisApp from './TetrisApp';
 import { RetroSnake2D } from './games/RetroSnake2D';
 import { Breakout2D } from './games/Breakout2D';
-import { MameSpaceInvaders } from './games/MameSpaceInvaders';
-import { MameStreetFighter } from './games/MameStreetFighter';
-import { MameDoomRaycaster } from './games/MameDoomRaycaster';
 import { soundEngine } from '../utils/soundEngine';
 import { 
   Gamepad2, 
   Rocket, 
-  Trophy, 
   Sparkles, 
   Box, 
   Flame, 
@@ -23,28 +18,22 @@ import {
   ChevronRight, 
   Grid, 
   Maximize2, 
-  RotateCcw, 
   Zap,
-  Radio
 } from 'lucide-react';
 
 export type GameId = 
-  | 'racing' 
-  | 'shooter' 
   | 'chess' 
+  | 'shooter' 
   | 'voxel' 
   | 'physics' 
   | 'tetris' 
   | 'snake' 
-  | 'breakout' 
-  | 'mame_invaders' 
-  | 'mame_streetfighter' 
-  | 'mame_doom';
+  | 'breakout';
 
 interface GameItem {
   id: GameId;
   title: string;
-  category: '3d' | '2d' | 'mame';
+  category: '3d' | '2d';
   categoryLabel: string;
   description: string;
   badge: string;
@@ -55,14 +44,14 @@ interface GameItem {
 const GAME_CATALOG: GameItem[] = [
   // Three.js 3D Games
   {
-    id: 'racing',
-    title: 'SuperTuxKart 3D',
+    id: 'chess',
+    title: 'Ajedrez 3D vs NPC Bot',
     category: '3d',
     categoryLabel: 'Three.js 3D',
-    description: 'Carreras de Karts 3D con nitro y rivales IA',
-    badge: '3D GPU',
-    badgeColor: 'bg-sky-500/20 text-sky-300 border-sky-500/40',
-    icon: <Trophy className="w-4 h-4 text-amber-400" />
+    description: 'Tablero 3D rotatorio con motor de inteligencia artificial NPC',
+    badge: '3D IA Bot',
+    badgeColor: 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40',
+    icon: <Sparkles className="w-4 h-4 text-emerald-400" />
   },
   {
     id: 'shooter',
@@ -73,16 +62,6 @@ const GAME_CATALOG: GameItem[] = [
     badge: '3D GPU',
     badgeColor: 'bg-purple-500/20 text-purple-300 border-purple-500/40',
     icon: <Rocket className="w-4 h-4 text-sky-400" />
-  },
-  {
-    id: 'chess',
-    title: 'Ajedrez 3D Interactive',
-    category: '3d',
-    categoryLabel: 'Three.js 3D',
-    description: 'Tablero 3D rotatorio con piezas y movimientos reales',
-    badge: '3D GPU',
-    badgeColor: 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40',
-    icon: <Sparkles className="w-4 h-4 text-emerald-400" />
   },
   {
     id: 'voxel',
@@ -136,43 +115,11 @@ const GAME_CATALOG: GameItem[] = [
     badgeColor: 'bg-amber-500/20 text-amber-300 border-amber-500/40',
     icon: <Zap className="w-4 h-4 text-amber-400" />
   },
-
-  // MAME & Retro Emulators
-  {
-    id: 'mame_invaders',
-    title: 'Space Invaders MAME',
-    category: 'mame',
-    categoryLabel: 'Emuladores MAME',
-    description: 'Cabina Arcade MAME clásica con CRT y defensas laser',
-    badge: 'MAME CRT',
-    badgeColor: 'bg-red-500/20 text-red-300 border-red-500/40',
-    icon: <Gamepad2 className="w-4 h-4 text-red-400" />
-  },
-  {
-    id: 'mame_streetfighter',
-    title: 'Street Fighter II MAME',
-    category: 'mame',
-    categoryLabel: 'Emuladores MAME',
-    description: 'Lucha Arcade Ryu vs CPU Ken con combos y Hadoken',
-    badge: 'MAME Arcade',
-    badgeColor: 'bg-red-500/20 text-red-300 border-red-500/40',
-    icon: <Flame className="w-4 h-4 text-red-400" />
-  },
-  {
-    id: 'mame_doom',
-    title: 'Retro DOOM 3D MAME',
-    category: 'mame',
-    categoryLabel: 'Emuladores MAME',
-    description: 'Motor Raycaster 3D en laberinto MAME con escopeta',
-    badge: 'MAME 3D',
-    badgeColor: 'bg-red-500/20 text-red-300 border-red-500/40',
-    icon: <Flame className="w-4 h-4 text-orange-400" />
-  },
 ];
 
 export const ThreeGamesApp: React.FC = () => {
-  const [activeGameId, setActiveGameId] = useState<GameId>('racing');
-  const [selectedCategory, setSelectedCategory] = useState<'all' | '3d' | '2d' | 'mame'>('all');
+  const [activeGameId, setActiveGameId] = useState<GameId>('chess');
+  const [selectedCategory, setSelectedCategory] = useState<'all' | '3d' | '2d'>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
 
@@ -268,16 +215,6 @@ export const ThreeGamesApp: React.FC = () => {
               >
                 Arcade 2D
               </button>
-              <button
-                onClick={() => setSelectedCategory('mame')}
-                className={`px-2.5 py-1 rounded-lg text-[11px] font-semibold transition-all shrink-0 cursor-pointer ${
-                  selectedCategory === 'mame'
-                    ? 'bg-red-600 text-white shadow-md'
-                    : 'text-gray-400 hover:bg-slate-800/60 hover:text-white'
-                }`}
-              >
-                MAME Retro
-              </button>
             </div>
 
             {/* GAME LIST */}
@@ -366,17 +303,13 @@ export const ThreeGamesApp: React.FC = () => {
 
         {/* ACTIVE GAME CANVAS CONTAINER */}
         <div id="active-game-container" className="flex-1 w-full h-full relative overflow-hidden bg-slate-950">
-          {activeGameId === 'racing' && <ThreeRacing />}
-          {activeGameId === 'shooter' && <ThreeShooter />}
           {activeGameId === 'chess' && <ThreeChess />}
+          {activeGameId === 'shooter' && <ThreeShooter />}
           {activeGameId === 'voxel' && <ThreeVoxelWorld />}
           {activeGameId === 'physics' && <ThreePhysics />}
           {activeGameId === 'tetris' && <TetrisApp />}
           {activeGameId === 'snake' && <RetroSnake2D />}
           {activeGameId === 'breakout' && <Breakout2D />}
-          {activeGameId === 'mame_invaders' && <MameSpaceInvaders />}
-          {activeGameId === 'mame_streetfighter' && <MameStreetFighter />}
-          {activeGameId === 'mame_doom' && <MameDoomRaycaster />}
         </div>
       </div>
     </div>

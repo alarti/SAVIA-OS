@@ -19,7 +19,7 @@ import OfficeApp from './OfficeApp';
 import CalculatorApp from './CalculatorApp';
 import CalendarClockApp from './CalendarClockApp';
 import ImageViewerApp from './ImageViewerApp';
-import WineRunnerApp, { WIN32_APP_CATALOG } from './WineRunnerApp';
+import WebampPlayerApp from './WebampPlayerApp';
 import ThreeGamesApp from './ThreeGamesApp';
 import { TrashApp } from './TrashApp';
 import { soundEngine } from '../utils/soundEngine';
@@ -31,7 +31,7 @@ import { isSystemDesktopIcon } from '../utils/vfs';
 type WindowData = {
   id: string;
   title: string;
-  type: 'terminal' | 'webgl' | 'folder' | 'browser' | 'texteditor' | 'pdfviewer' | 'office' | 'taskmanager' | 'tetris' | 'appstore' | 'soundsettings' | 'paint' | 'about' | 'controlpanel' | 'theme' | 'calculator' | 'calendar' | 'imageviewer' | 'wine' | 'trash';
+  type: 'terminal' | 'webgl' | 'folder' | 'browser' | 'texteditor' | 'pdfviewer' | 'office' | 'taskmanager' | 'tetris' | 'appstore' | 'soundsettings' | 'paint' | 'about' | 'controlpanel' | 'theme' | 'calculator' | 'calendar' | 'imageviewer' | 'webamp' | 'wine' | 'trash';
   data?: any;
   x: number;
   y: number;
@@ -40,6 +40,7 @@ type WindowData = {
   zIndex: number;
   minimized: boolean;
   maximized: boolean;
+  alwaysOnTop?: boolean;
 };
 
 import SaviaNanoApp from './SaviaNanoApp';
@@ -79,6 +80,7 @@ const DEFAULT_DESKTOP_ICONS: DesktopIcon[] = [
   { id: 'savia_xls', title: 'Savia Xls', appType: 'office', iconType: 'xls', docData: 'nuevo documento.xlsx', x: 350, y: 20 },
   { id: 'savia_ppt', title: 'Savia Ppt', appType: 'office', iconType: 'ppt', docData: 'nuevo documento.pptx', x: 350, y: 120 },
   { id: 'paint', title: 'Savia Paint', appType: 'paint', iconType: 'paint', x: 350, y: 220 },
+  { id: 'webamp', title: 'Webamp Music', appType: 'webamp', iconType: 'music', x: 350, y: 320 },
 ];
 
 export interface AccentThemeConfig {
@@ -836,6 +838,9 @@ export default function DesktopEnvironment({ user, onExit }: { user: UserData, o
     } else if (type === 'wine') {
       defaultW = Math.min(1080, Math.max(780, Math.floor(screenW * 0.8)));
       defaultH = Math.min(740, Math.max(540, Math.floor(screenH * 0.78)));
+    } else if (type === 'webamp') {
+      defaultW = 680;
+      defaultH = 460;
     }
 
     const windowCount = windows.length;
@@ -866,7 +871,15 @@ export default function DesktopEnvironment({ user, onExit }: { user: UserData, o
 
   const closeWindow = (id: string) => {
     soundEngine.playWindowClose();
-    setWindows(ws => ws.filter(w => w.id !== id));
+    setWindows(ws => {
+      const closed = ws.find(w => w.id === id);
+      if (closed && (closed.type === 'webamp' || closed.title.toLowerCase().includes('webamp'))) {
+        setTimeout(() => {
+          document.querySelectorAll('#webamp, .webamp-root, #webamp-context-menu').forEach(el => el.remove());
+        }, 50);
+      }
+      return ws.filter(w => w.id !== id);
+    });
   };
 
   const toggleMaximize = (id: string) => {
@@ -1269,7 +1282,7 @@ export default function DesktopEnvironment({ user, onExit }: { user: UserData, o
               top: w.maximized ? 0 : w.y,
               width: w.maximized ? '100%' : w.w,
               height: w.maximized ? '100%' : w.h,
-              zIndex: w.zIndex,
+              zIndex: (w.type === 'taskmanager' || w.alwaysOnTop) ? w.zIndex + 100000 : w.zIndex,
             }}
           >
             {/* Window Header */}
@@ -1305,14 +1318,19 @@ export default function DesktopEnvironment({ user, onExit }: { user: UserData, o
                 {w.type === 'browser' && <Globe className="w-3.5 h-3.5" />}
                 {w.type === 'texteditor' && <FileCode className="w-3.5 h-3.5 text-emerald-400" />}
                 {w.type === 'pdfviewer' && <FileImage className="w-3.5 h-3.5 text-red-500" />}
-                {w.type === 'taskmanager' && <Activity className="w-3.5 h-3.5 text-emerald-400" />}
+                {w.type === 'taskmanager' && <Activity className="w-3.5 h-3.5 text-emerald-400 animate-pulse" />}
                 {w.type === 'tetris' && <Gamepad2 className="w-3.5 h-3.5" />}
                 {w.type === 'calculator' && <CalcIcon className="w-3.5 h-3.5 text-amber-400" />}
                 {w.type === 'calendar' && <CalendarIcon className="w-3.5 h-3.5 text-cyan-400" />}
                 {w.type === 'imageviewer' && <ImageIcon className="w-3.5 h-3.5 text-purple-400" />}
-                {w.type === 'wine' && <Box className="w-3.5 h-3.5 text-amber-400" />}
+                {w.type === 'webamp' && <Radio className="w-3.5 h-3.5 text-amber-400" />}
                 {w.type === 'trash' && <Trash2 className="w-3.5 h-3.5 text-rose-400" />}
                 <span className="text-xs font-medium tracking-wide">{w.title}</span>
+                {w.type === 'taskmanager' && (
+                  <span className="px-1.5 py-0.5 bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 rounded text-[10px] font-mono font-bold flex items-center gap-1">
+                    📌 ALWAYS ON TOP (SCHED_RR -10)
+                  </span>
+                )}
               </div>
               <div className="flex items-center gap-3">
                 <button onClick={(e) => { e.stopPropagation(); toggleMinimize(w.id); }} className={`hover:text-white transition-colors ${isTouch ? 'p-1.5' : ''}`}><Minus className="w-3.5 h-3.5" /></button>
@@ -1340,7 +1358,7 @@ export default function DesktopEnvironment({ user, onExit }: { user: UserData, o
               {w.type === 'calculator' && <CalculatorApp />}
               {w.type === 'calendar' && <CalendarClockApp />}
               {w.type === 'imageviewer' && <ImageViewerApp />}
-              {w.type === 'wine' && <WineRunnerApp user={user} initialFile={w.data} onOpenApp={(type, title, data) => openApp(type as any, title, data)} />}
+              {w.type === 'webamp' && <WebampPlayerApp initialFile={w.data} onClose={() => closeWindow(w.id)} />}
               {w.type === 'trash' && <TrashApp onOpenFile={(type, title, data) => openApp(type as any, title, data)} />}
             </div>
 
@@ -1393,15 +1411,14 @@ export default function DesktopEnvironment({ user, onExit }: { user: UserData, o
             <div className="flex-1 overflow-y-auto flex flex-col gap-2 pr-1">
               <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider px-1">Resultados de Búsqueda</span>
               
-              {/* Filtered Win32 Apps */}
-              {WIN32_APP_CATALOG.filter(a => 
+              {/* Filtered Packages */}
+              {AVAILABLE_PACKAGES.filter(a => 
                 a.name.toLowerCase().includes(startMenuSearch.toLowerCase()) || 
-                a.exeName.toLowerCase().includes(startMenuSearch.toLowerCase()) || 
                 a.description.toLowerCase().includes(startMenuSearch.toLowerCase())
-              ).map(winApp => (
+              ).map(pkg => (
                 <div 
-                  key={winApp.id}
-                  onClick={() => { openApp('wine', winApp.name, winApp.id); setIsStartMenuOpen(false); setStartMenuSearch(''); }}
+                  key={pkg.id}
+                  onClick={() => { openApp((pkg.id === 'webamp' ? 'webamp' : 'appstore') as any, pkg.name); setIsStartMenuOpen(false); setStartMenuSearch(''); }}
                   className="flex items-center justify-between p-2.5 bg-white/5 hover:bg-amber-600/20 border border-white/5 hover:border-amber-500/50 rounded-xl cursor-pointer transition-all group"
                 >
                   <div className="flex items-center gap-3">
@@ -1409,13 +1426,10 @@ export default function DesktopEnvironment({ user, onExit }: { user: UserData, o
                       <Box className="w-5 h-5 text-amber-400 group-hover:scale-110 transition-transform" />
                     </div>
                     <div className="flex flex-col">
-                      <span className="text-xs font-bold text-white group-hover:text-amber-300">{winApp.name}</span>
-                      <span className="text-[10px] text-gray-400">{winApp.exeName} • {winApp.description}</span>
+                      <span className="text-xs font-bold text-white group-hover:text-amber-300">{pkg.name}</span>
+                      <span className="text-[10px] text-gray-400">{pkg.description}</span>
                     </div>
                   </div>
-                  <span className="text-[10px] font-mono px-2 py-0.5 bg-amber-500/20 text-amber-300 border border-amber-500/40 rounded-md">
-                    Win32
-                  </span>
                 </div>
               ))}
 
@@ -1496,41 +1510,15 @@ export default function DesktopEnvironment({ user, onExit }: { user: UserData, o
                   </div>
 
                   <div 
-                    onClick={() => { openApp('wine', 'Buscaminas Win32', 'winmine'); setIsStartMenuOpen(false); }}
-                    className="flex items-center gap-3 p-2.5 bg-white/5 hover:bg-amber-500/20 border border-white/5 hover:border-amber-500/30 rounded-xl cursor-pointer transition-all group"
+                    onClick={() => { openApp('webamp', 'Webamp Music Player'); setIsStartMenuOpen(false); }}
+                    className="flex items-center gap-3 p-2.5 bg-pink-500/10 hover:bg-pink-500/20 border border-pink-500/20 rounded-xl cursor-pointer transition-all group"
                   >
-                    <div className="p-2 bg-amber-500/20 rounded-lg border border-amber-500/30 group-hover:scale-110 transition-transform">
-                      <Box className="w-5 h-5 text-amber-400" />
+                    <div className="p-2 bg-pink-500/20 rounded-lg border border-pink-500/30 group-hover:scale-110 transition-transform">
+                      <Radio className="w-5 h-5 text-pink-400" />
                     </div>
                     <div className="flex flex-col min-w-0">
-                      <span className="text-xs font-bold text-white group-hover:text-amber-300">Buscaminas Win32</span>
-                      <span className="text-[10px] text-gray-400 truncate">Ejecutable winmine.exe en Wine</span>
-                    </div>
-                  </div>
-
-                  <div 
-                    onClick={() => { openApp('wine', '3D Pinball Cadet', 'pinball'); setIsStartMenuOpen(false); }}
-                    className="flex items-center gap-3 p-2.5 bg-white/5 hover:bg-amber-500/20 border border-white/5 hover:border-amber-500/30 rounded-xl cursor-pointer transition-all group"
-                  >
-                    <div className="p-2 bg-amber-500/20 rounded-lg border border-amber-500/30 group-hover:scale-110 transition-transform">
-                      <Box className="w-5 h-5 text-amber-400" />
-                    </div>
-                    <div className="flex flex-col min-w-0">
-                      <span className="text-xs font-bold text-white group-hover:text-amber-300">3D Pinball Space Cadet</span>
-                      <span className="text-[10px] text-gray-400 truncate">Pinball 3D clásico ejecutado en Wine</span>
-                    </div>
-                  </div>
-
-                  <div 
-                    onClick={() => { openApp('wine', 'Solitario Win32', 'solitaire'); setIsStartMenuOpen(false); }}
-                    className="flex items-center gap-3 p-2.5 bg-white/5 hover:bg-amber-500/20 border border-white/5 hover:border-amber-500/30 rounded-xl cursor-pointer transition-all group"
-                  >
-                    <div className="p-2 bg-amber-500/20 rounded-lg border border-amber-500/30 group-hover:scale-110 transition-transform">
-                      <Box className="w-5 h-5 text-amber-400" />
-                    </div>
-                    <div className="flex flex-col min-w-0">
-                      <span className="text-xs font-bold text-white group-hover:text-amber-300">Solitario Klondike</span>
-                      <span className="text-[10px] text-gray-400 truncate">Juego de cartas clásico Win32</span>
+                      <span className="text-xs font-bold text-white group-hover:text-pink-300">Webamp Music Player</span>
+                      <span className="text-[10px] text-gray-400 truncate">Reproductor Winamp 2.91 con Ecualizador</span>
                     </div>
                   </div>
                 </div>
@@ -1872,62 +1860,22 @@ export default function DesktopEnvironment({ user, onExit }: { user: UserData, o
                 </div>
               </div>
 
-              {/* Integrated Savia WinEmu Subsystem Apps */}
+              {/* Webamp Audio Engine */}
               <div>
                 <div className="mb-2 flex justify-between items-center px-1">
-                  <h3 className="text-xs font-bold tracking-wide text-amber-300 flex items-center gap-1.5">
-                    <Box className="w-3.5 h-3.5 text-amber-400" />
-                    Aplicaciones Windows (Savia WinEmu x86)
+                  <h3 className="text-xs font-bold tracking-wide text-pink-300 flex items-center gap-1.5">
+                    <Radio className="w-3.5 h-3.5 text-pink-400" />
+                    Audio & Música Studio
                   </h3>
-                  <span className="text-[10px] text-amber-400/80 font-mono">v86 WASM Core</span>
+                  <span className="text-[10px] text-pink-400/80 font-mono">Webamp 2.91</span>
                 </div>
 
-                <div className="grid grid-cols-2 gap-2">
-                  <div onClick={() => { openApp('wine', 'Buscaminas Win32', 'winmine'); setIsStartMenuOpen(false); }} className="flex items-center gap-2.5 p-2 bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/20 rounded-xl cursor-pointer transition-colors">
-                    <Box className="w-5 h-5 text-amber-400 shrink-0" />
+                <div className="grid grid-cols-1 gap-2">
+                  <div onClick={() => { openApp('webamp', 'Webamp Music Player'); setIsStartMenuOpen(false); }} className="flex items-center gap-2.5 p-2 bg-pink-500/10 hover:bg-pink-500/20 border border-pink-500/20 rounded-xl cursor-pointer transition-colors">
+                    <Radio className="w-5 h-5 text-pink-400 shrink-0" />
                     <div className="flex flex-col min-w-0">
-                      <span className="text-xs font-bold text-white truncate">Buscaminas</span>
-                      <span className="text-[10px] text-gray-400 font-mono">winmine.exe</span>
-                    </div>
-                  </div>
-
-                  <div onClick={() => { openApp('wine', '3D Pinball Cadet', 'pinball'); setIsStartMenuOpen(false); }} className="flex items-center gap-2.5 p-2 bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/20 rounded-xl cursor-pointer transition-colors">
-                    <Box className="w-5 h-5 text-amber-400 shrink-0" />
-                    <div className="flex flex-col min-w-0">
-                      <span className="text-xs font-bold text-white truncate">3D Pinball Cadet</span>
-                      <span className="text-[10px] text-gray-400 font-mono">pinball.exe</span>
-                    </div>
-                  </div>
-
-                  <div onClick={() => { openApp('wine', 'Solitario Win32', 'solitaire'); setIsStartMenuOpen(false); }} className="flex items-center gap-2.5 p-2 bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/20 rounded-xl cursor-pointer transition-colors">
-                    <Box className="w-5 h-5 text-amber-400 shrink-0" />
-                    <div className="flex flex-col min-w-0">
-                      <span className="text-xs font-bold text-white truncate">Solitario Klondike</span>
-                      <span className="text-[10px] text-gray-400 font-mono">sol.exe</span>
-                    </div>
-                  </div>
-
-                  <div onClick={() => { openApp('wine', 'PuTTY SSH Client', 'putty'); setIsStartMenuOpen(false); }} className="flex items-center gap-2.5 p-2 bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/20 rounded-xl cursor-pointer transition-colors">
-                    <Box className="w-5 h-5 text-amber-400 shrink-0" />
-                    <div className="flex flex-col min-w-0">
-                      <span className="text-xs font-bold text-white truncate">PuTTY SSH</span>
-                      <span className="text-[10px] text-gray-400 font-mono">putty.exe</span>
-                    </div>
-                  </div>
-
-                  <div onClick={() => { openApp('wine', 'VLC Media Player', 'vlc_win32'); setIsStartMenuOpen(false); }} className="flex items-center gap-2.5 p-2 bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/20 rounded-xl cursor-pointer transition-colors">
-                    <Box className="w-5 h-5 text-amber-400 shrink-0" />
-                    <div className="flex flex-col min-w-0">
-                      <span className="text-xs font-bold text-white truncate">VLC Player</span>
-                      <span className="text-[10px] text-gray-400 font-mono">vlc.exe</span>
-                    </div>
-                  </div>
-
-                  <div onClick={() => { openApp('wine', 'Savia WinEmu Studio'); setIsStartMenuOpen(false); }} className="flex items-center gap-2.5 p-2 bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/20 rounded-xl cursor-pointer transition-colors">
-                    <Box className="w-5 h-5 text-amber-400 shrink-0" />
-                    <div className="flex flex-col min-w-0">
-                      <span className="text-xs font-bold text-white truncate">Savia WinEmu Studio</span>
-                      <span className="text-[10px] text-gray-400 font-mono">winemu.exe</span>
+                      <span className="text-xs font-bold text-white truncate">Webamp Player</span>
+                      <span className="text-[10px] text-gray-400 font-mono">Winamp 2.91 HTML5 Core</span>
                     </div>
                   </div>
                 </div>
@@ -2266,7 +2214,7 @@ export default function DesktopEnvironment({ user, onExit }: { user: UserData, o
                   onChange={e => setNewIconAppType(e.target.value as any)}
                   className="bg-[#121214] border border-white/15 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-blue-500 font-medium"
                 >
-                  <option value="wine">Wine 9.0 Subsystem (Win32 / WASM)</option>
+                  <option value="wine">Módulo Rust & WebAssembly (WASM)</option>
                   <option value="calculator">Calculadora Científica</option>
                   <option value="browser">Navegador Web</option>
                   <option value="terminal">Consola Terminal</option>

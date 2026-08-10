@@ -94,7 +94,7 @@ class WebOSGatewayService {
             is_dotnet: payload.filename.toLowerCase().includes('.net') || payload.filename.toLowerCase().endsWith('.exe'),
             arch: payload.filename.includes('64') ? 'x86_64 PE32+' : 'x86 PE32',
             compatibility_level: 'Level1_PortableDotNet',
-            recommendation: 'Ejecutar en Subsystem Wine x86 WebAssembly con integración Seamless Window',
+            recommendation: 'Ejecutar en Entorno de Ejecución Rust WebAssembly Native',
           },
         };
 
@@ -106,7 +106,7 @@ class WebOSGatewayService {
             processes: [
               { pid: 1, name: 'systemd_kernel', cpu: '0.4%', memory: '12 MB', user: 'root' },
               { pid: 2, name: 'savia_desktop_wm', cpu: '1.2%', memory: '28 MB', user: 'user' },
-              { pid: 3, name: 'wine_runner_daemon', cpu: '0.0%', memory: '8 MB', user: 'user' },
+              { pid: 3, name: 'rust_wasm_daemon', cpu: '0.1%', memory: '6 MB', user: 'user' },
             ],
           },
         };

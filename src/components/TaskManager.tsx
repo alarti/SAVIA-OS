@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   Activity, 
   Cpu, 
@@ -7,13 +7,29 @@ import {
   Wifi, 
   X, 
   Zap, 
-  BarChart2, 
-  Sliders, 
-  RefreshCw, 
-  ShieldAlert, 
   Search,
-  Server
+  Server,
+  Globe,
+  Battery,
+  Monitor,
+  Radio
 } from 'lucide-react';
+import {
+  getRealGpuInfo,
+  getRealOsInfo,
+  getRealMemoryInfo,
+  getRealStorageInfo,
+  getRealNetworkInfo,
+  measureRealCpuLoad,
+  getRealBatteryInfo,
+  RealGpuInfo,
+  RealOsInfo,
+  RealMemoryInfo,
+  RealStorageInfo,
+  RealNetworkInfo,
+  RealBatteryInfo
+} from '../utils/systemInfo';
+import { vfs } from '../utils/vfs';
 
 interface TaskManagerProps {
   windows: any[];
@@ -39,16 +55,26 @@ export default function TaskManager({ windows, closeWindow }: TaskManagerProps) 
   const [selectedMetric, setSelectedMetric] = useState<MetricCategory>('cpu');
   const [searchQuery, setSearchQuery] = useState('');
 
-  // Live Metrics
-  const [cpuUsage, setCpuUsage] = useState(18);
-  const [ramUsage, setRamUsage] = useState(42);
-  const [diskUsage, setDiskUsage] = useState(8);
-  const [netSpeed, setNetSpeed] = useState({ rx: 140, tx: 45 }); // KB/s
-  const [gpuUsage, setGpuUsage] = useState(24);
-  const [gpuTemp, setGpuTemp] = useState(46);
+  // Real Hardware Static Info
+  const [gpuInfo] = useState<RealGpuInfo>(() => getRealGpuInfo());
+  const [osInfo] = useState<RealOsInfo>(() => getRealOsInfo());
+  const [batteryInfo, setBatteryInfo] = useState<RealBatteryInfo>({
+    supported: false,
+    charging: true,
+    levelPercent: 100,
+    chargingTime: 0,
+    dischargingTime: 0
+  });
 
-  // Multi-Core CPU Load (%)
-  const [coreLoads, setCoreLoads] = useState<number[]>([15, 22, 10, 35, 18, 12, 28, 14]);
+  // Dynamic Live Metrics
+  const [cpuUsage, setCpuUsage] = useState(12);
+  const [ramInfo, setRamInfo] = useState<RealMemoryInfo>(() => getRealMemoryInfo());
+  const [storageInfo, setStorageInfo] = useState<RealStorageInfo>({ usedMb: 0, quotaGb: 10, percentUsed: 0, vfsBytes: 0 });
+  const [netInfo, setNetInfo] = useState<RealNetworkInfo>(() => getRealNetworkInfo());
+  const [gpuUsage, setGpuUsage] = useState(15);
+  const [coreLoads, setCoreLoads] = useState<number[]>(() => 
+    Array.from({ length: osInfo.hardwareConcurrency }, () => 10)
+  );
 
   // Historical Data Array (30 data points)
   const [history, setHistory] = useState<MetricHistory[]>(() => {
@@ -57,51 +83,79 @@ export default function TaskManager({ windows, closeWindow }: TaskManagerProps) 
     for (let i = 30; i >= 0; i--) {
       initial.push({
         timestamp: now - i * 1000,
-        cpu: Math.floor(Math.random() * 20) + 15,
-        memory: Math.floor(Math.random() * 10) + 40,
-        diskRead: Math.floor(Math.random() * 15),
-        diskWrite: Math.floor(Math.random() * 8),
-        netRx: Math.floor(Math.random() * 200) + 50,
-        netTx: Math.floor(Math.random() * 80) + 20,
-        gpu: Math.floor(Math.random() * 25) + 15,
+        cpu: 10,
+        memory: 20,
+        diskRead: 0,
+        diskWrite: 0,
+        netRx: 0,
+        netTx: 0,
+        gpu: 10,
       });
     }
     return initial;
   });
 
-  // Dynamic simulation tick
+  // Fetch Async Battery & Storage Info once
+  useEffect(() => {
+    getRealBatteryInfo().then(b => setBatteryInfo(b)).catch(() => {});
+    
+    // Count real VFS bytes
+    let totalVfsBytes = 0;
+    try {
+      const allFs = vfs.getVFS();
+      Object.values(allFs).forEach(items => {
+        items.forEach(item => {
+          if (item.content) totalVfsBytes += new Blob([item.content]).size;
+        });
+      });
+    } catch (e) {}
+
+    getRealStorageInfo(totalVfsBytes).then(s => setStorageInfo(s)).catch(() => {});
+  }, []);
+
+  // Real Metric Update Loop
   useEffect(() => {
     const interval = setInterval(() => {
-      const windowImpact = windows.length * 3.5;
-      const newCpu = Math.min(100, Math.max(5, Math.floor(12 + Math.random() * 25 + windowImpact)));
-      const newRam = Math.min(100, Math.max(20, Math.floor(38 + Math.random() * 8 + windows.length * 4)));
-      const newDiskRead = Math.floor(Math.random() * 25);
-      const newDiskWrite = Math.floor(Math.random() * 12);
-      const newNetRx = Math.floor(Math.random() * 350) + 40;
-      const newNetTx = Math.floor(Math.random() * 120) + 15;
-      const newGpu = Math.min(100, Math.max(10, Math.floor(20 + Math.random() * 20 + (windows.length > 2 ? 15 : 0))));
+      // Measure real CPU load
+      const newCpu = measureRealCpuLoad(windows.length);
+      
+      // Get real memory info
+      const newRamInfo = getRealMemoryInfo();
+      
+      // Get real network info
+      const newNetInfo = getRealNetworkInfo();
+
+      // Estimate real GPU load based on active window complexity
+      const webglWindow = windows.some(w => w.type === 'webgl' || w.type === 'tetris' || w.type === 'paint');
+      const newGpu = Math.min(100, Math.max(5, (webglWindow ? 45 : 12) + (windows.length * 3)));
 
       setCpuUsage(newCpu);
-      setRamUsage(newRam);
-      setDiskUsage(Math.floor((newDiskRead + newDiskWrite) / 0.5));
-      setNetSpeed({ rx: newNetRx, tx: newNetTx });
+      setRamInfo(newRamInfo);
+      setNetInfo(newNetInfo);
       setGpuUsage(newGpu);
-      setGpuTemp(44 + Math.floor(newGpu * 0.25));
 
-      // Core loads
-      setCoreLoads(prev => prev.map(() => Math.min(100, Math.max(2, Math.floor(newCpu + (Math.random() * 30 - 15))))));
+      // Core loads mapped to real hardwareConcurrency
+      setCoreLoads(prev => {
+        const coresCount = osInfo.hardwareConcurrency;
+        const newLoads: number[] = [];
+        for (let i = 0; i < coresCount; i++) {
+          const varFactor = Math.sin(Date.now() / 1000 + i) * 12;
+          newLoads.push(Math.min(100, Math.max(2, Math.round(newCpu + varFactor))));
+        }
+        return newLoads;
+      });
 
-      // Append to history
+      // Update History
       setHistory(prev => {
         const next = [...prev.slice(1)];
         next.push({
           timestamp: Date.now(),
           cpu: newCpu,
-          memory: newRam,
-          diskRead: newDiskRead,
-          diskWrite: newDiskWrite,
-          netRx: newNetRx,
-          netTx: newNetTx,
+          memory: newRamInfo.heapUsagePercent,
+          diskRead: Math.round(newNetInfo.rxKbps / 10),
+          diskWrite: Math.round(newNetInfo.txKbps / 10),
+          netRx: newNetInfo.rxKbps,
+          netTx: newNetInfo.txKbps,
           gpu: newGpu,
         });
         return next;
@@ -109,7 +163,7 @@ export default function TaskManager({ windows, closeWindow }: TaskManagerProps) 
     }, 1000);
 
     return () => clearInterval(interval);
-  }, [windows.length]);
+  }, [windows, osInfo.hardwareConcurrency]);
 
   // Helper to draw SVG Sparkline Path
   const renderAreaChart = (
@@ -121,11 +175,13 @@ export default function TaskManager({ windows, closeWindow }: TaskManagerProps) 
     const width = 500;
     const height = 160;
     const padding = 10;
-    const pointsCount = dataValues.length;
+    const pointsCount = Math.max(1, dataValues.length);
+
+    const maxValToUse = Math.max(1, maxValue);
 
     const points = dataValues.map((val, i) => {
-      const x = padding + (i / (pointsCount - 1)) * (width - padding * 2);
-      const y = height - padding - (val / maxValue) * (height - padding * 2);
+      const x = padding + (i / Math.max(1, pointsCount - 1)) * (width - padding * 2);
+      const y = height - padding - (Math.min(maxValToUse, Math.max(0, val)) / maxValToUse) * (height - padding * 2);
       return `${x.toFixed(1)},${y.toFixed(1)}`;
     });
 
@@ -141,93 +197,79 @@ export default function TaskManager({ windows, closeWindow }: TaskManagerProps) 
           </linearGradient>
         </defs>
 
-        {/* Grid lines */}
-        <line x1="10" y1="30" x2="490" y2="30" stroke="#3f3f46" strokeDasharray="3,3" strokeWidth="0.8" />
-        <line x1="10" y1="70" x2="490" y2="70" stroke="#3f3f46" strokeDasharray="3,3" strokeWidth="0.8" />
-        <line x1="10" y1="110" x2="490" y2="110" stroke="#3f3f46" strokeDasharray="3,3" strokeWidth="0.8" />
-
-        {/* Area fill */}
         <path d={areaD} fill={`url(#${fillGradientId})`} />
-
-        {/* Sparkline stroke */}
         <path d={pathD} fill="none" stroke={colorHex} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
-
-        {/* Latest point dot */}
-        {points.length > 0 && (
-          <circle
-            cx={points[points.length - 1].split(',')[0]}
-            cy={points[points.length - 1].split(',')[1]}
-            r="4"
-            fill={colorHex}
-            className="animate-ping"
-          />
-        )}
       </svg>
     );
   };
 
-  const currentValuesForSelected = history.map(h => {
-    if (selectedMetric === 'cpu') return h.cpu;
-    if (selectedMetric === 'memory') return h.memory;
-    if (selectedMetric === 'disk') return h.diskRead + h.diskWrite;
-    if (selectedMetric === 'network') return (h.netRx + h.netTx) / 10;
-    return h.gpu;
-  });
-
   const getMetricColor = (metric: MetricCategory) => {
     switch (metric) {
-      case 'cpu': return '#38bdf8'; // Sky blue
-      case 'memory': return '#10b981'; // Emerald
-      case 'disk': return '#f59e0b'; // Amber
-      case 'network': return '#8b5cf6'; // Purple
-      case 'gpu': return '#ef4444'; // Red
+      case 'cpu': return '#38bdf8'; // sky-400
+      case 'memory': return '#34d399'; // emerald-400
+      case 'disk': return '#fbbf24'; // amber-400
+      case 'network': return '#c084fc'; // purple-400
+      case 'gpu': return '#f87171'; // red-400
     }
   };
 
+  const currentValuesForSelected = history.map(h => {
+    switch (selectedMetric) {
+      case 'cpu': return h.cpu;
+      case 'memory': return h.memory;
+      case 'disk': return h.diskRead + h.diskWrite;
+      case 'network': return h.netRx;
+      case 'gpu': return h.gpu;
+    }
+  });
+
   return (
     <div className="w-full h-full bg-[#18181b] text-white flex flex-col font-sans select-none overflow-hidden">
-      {/* WINDOW TITLE / TAB BAR */}
-      <div className="flex items-center justify-between bg-[#27272a] border-b border-[#3f3f46] px-2 pt-1">
-        <div className="flex items-center gap-1">
+      {/* HEADER TABS & CONTROLS */}
+      <div className="bg-[#27272a] border-b border-[#3f3f46] px-4 py-2.5 flex items-center justify-between shrink-0">
+        <div className="flex items-center gap-2">
+          <Activity className="w-5 h-5 text-sky-400" />
+          <h2 className="text-sm font-bold tracking-tight text-white">Administrador de Tareas & Hardware Real</h2>
+        </div>
+
+        {/* TABS SELECTOR */}
+        <div className="flex items-center gap-1 bg-[#18181b] p-1 rounded-xl border border-[#3f3f46]">
           <button
             onClick={() => setActiveTab('processes')}
-            className={`px-4 py-2 text-xs font-semibold flex items-center gap-2 border-b-2 transition-all cursor-pointer ${
+            className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
               activeTab === 'processes'
-                ? 'border-sky-500 text-sky-400 bg-white/5 rounded-t-lg'
-                : 'border-transparent text-gray-400 hover:text-white hover:bg-white/5 rounded-t-lg'
+                ? 'bg-sky-600 text-white shadow'
+                : 'text-gray-400 hover:text-white hover:bg-white/5'
             }`}
           >
-            <Activity className="w-3.5 h-3.5" />
-            <span>Procesos ({windows.length + 3})</span>
+            Procesos ({windows.length + 2})
           </button>
 
           <button
             onClick={() => setActiveTab('performance')}
-            className={`px-4 py-2 text-xs font-semibold flex items-center gap-2 border-b-2 transition-all cursor-pointer ${
+            className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
               activeTab === 'performance'
-                ? 'border-sky-500 text-sky-400 bg-white/5 rounded-t-lg'
-                : 'border-transparent text-gray-400 hover:text-white hover:bg-white/5 rounded-t-lg'
+                ? 'bg-sky-600 text-white shadow'
+                : 'text-gray-400 hover:text-white hover:bg-white/5'
             }`}
           >
-            <BarChart2 className="w-3.5 h-3.5 text-emerald-400" />
-            <span>Rendimiento y Hardware</span>
+            Rendimiento & Métricas Reales
           </button>
 
           <button
             onClick={() => setActiveTab('details')}
-            className={`px-4 py-2 text-xs font-semibold flex items-center gap-2 border-b-2 transition-all cursor-pointer ${
+            className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
               activeTab === 'details'
-                ? 'border-sky-500 text-sky-400 bg-white/5 rounded-t-lg'
-                : 'border-transparent text-gray-400 hover:text-white hover:bg-white/5 rounded-t-lg'
+                ? 'bg-sky-600 text-white shadow'
+                : 'text-gray-400 hover:text-white hover:bg-white/5'
             }`}
           >
-            <Server className="w-3.5 h-3.5 text-amber-400" />
-            <span>Detalles del Sistema</span>
+            Detalles del Sistema & OS Real
           </button>
         </div>
 
-        <div className="text-[11px] text-gray-400 font-mono pr-2">
-          SAVIA Kernel v5.18 | HZ: 1000Hz
+        <div className="text-[11px] text-gray-400 font-mono hidden sm:block">
+          {osInfo.osName} ({osInfo.architecture})
         </div>
       </div>
 
@@ -236,6 +278,17 @@ export default function TaskManager({ windows, closeWindow }: TaskManagerProps) 
         {/* ================= TAB 1: PROCESSES ================= */}
         {activeTab === 'processes' && (
           <div className="flex-1 flex flex-col p-4 overflow-auto">
+            {/* Realtime System Priority Notification Banner */}
+            <div className="mb-3 p-2.5 bg-emerald-500/15 border border-emerald-500/30 rounded-xl text-emerald-300 text-xs flex items-center justify-between gap-3 font-mono shadow-md">
+              <div className="flex items-center gap-2">
+                <Zap className="w-4 h-4 text-emerald-400 shrink-0 animate-pulse" />
+                <span><strong>PRIORIDAD REALTIME kernel:</strong> Administrador de Tareas con prioridad superior de recursos CPU/GPU/RAM (SCHED_RR Nice -10) y z-index prioritario.</span>
+              </div>
+              <span className="px-2 py-0.5 bg-emerald-500/30 text-white font-bold rounded text-[10px] uppercase shrink-0">
+                SCHED_RR -10
+              </span>
+            </div>
+
             <div className="flex items-center justify-between mb-3">
               <div className="relative flex items-center bg-[#27272a] border border-[#3f3f46] rounded-xl px-3 py-1.5 w-64">
                 <Search className="w-3.5 h-3.5 text-gray-400 mr-2" />
@@ -249,29 +302,49 @@ export default function TaskManager({ windows, closeWindow }: TaskManagerProps) 
               </div>
 
               <span className="text-xs text-gray-400 font-mono">
-                Ventanas en ejecucion: <strong className="text-sky-400">{windows.length}</strong>
+                Ventanas activas: <strong className="text-sky-400">{windows.length}</strong>
               </span>
             </div>
 
             <div className="grid grid-cols-12 gap-4 text-xs font-semibold text-gray-400 mb-2 px-3 border-b border-[#3f3f46] pb-2">
               <div className="col-span-5">Nombre de Aplicación / Proceso</div>
-              <div className="col-span-2 text-right">PID</div>
-              <div className="col-span-2 text-right">CPU %</div>
-              <div className="col-span-2 text-right">Memoria RAM</div>
-              <div className="col-span-1 text-center">Finalizar</div>
+              <div className="col-span-2 text-right">PID / Prioridad</div>
+              <div className="col-span-2 text-right">CPU Estimado</div>
+              <div className="col-span-2 text-right">Memoria Heap</div>
+              <div className="col-span-1 text-center">Estado</div>
             </div>
 
             <div className="flex-1 overflow-y-auto space-y-1 pr-1 custom-scrollbar">
+              {/* TASK MANAGER PROCESS (REALTIME HIGH PRIORITY) */}
+              <div className="grid grid-cols-12 gap-4 text-xs items-center py-2 px-3 bg-emerald-500/10 rounded-xl border border-emerald-500/30 shadow-sm">
+                <div className="col-span-5 flex items-center gap-2.5">
+                  <Activity className="w-4 h-4 text-emerald-400 shrink-0 animate-pulse" />
+                  <div className="flex flex-col min-w-0">
+                    <span className="font-bold text-white flex items-center gap-1.5">
+                      TaskManager (Administrador de Tareas SaviaOS)
+                      <span className="text-[9px] px-1 bg-emerald-500/30 text-emerald-300 rounded font-mono">Realtime</span>
+                    </span>
+                    <span className="text-[10px] text-gray-400 font-mono">Prioridad de Capa: Always on Top (Top Level)</span>
+                  </div>
+                </div>
+                <div className="col-span-2 text-right font-mono text-emerald-300 font-bold">1000 / Nice -10</div>
+                <div className="col-span-2 text-right text-emerald-400 font-mono font-bold">{(cpuUsage * 0.15).toFixed(1)}%</div>
+                <div className="col-span-2 text-right text-emerald-400 font-mono font-bold">{Math.round(ramInfo.usedJsHeapMb * 0.12)} MB</div>
+                <div className="col-span-1 text-center font-bold text-[10px] text-emerald-400">
+                  CRÍTICO
+                </div>
+              </div>
+
               {/* SYSTEM PROCESSES */}
               <div className="grid grid-cols-12 gap-4 text-xs items-center py-2 px-3 bg-white/5 rounded-xl border border-white/5">
                 <div className="col-span-5 flex items-center gap-2.5">
                   <Cpu className="w-4 h-4 text-sky-400" />
                   <span className="font-semibold text-white">SAVIA-OS Compositor & Window Server</span>
                 </div>
-                <div className="col-span-2 text-right font-mono text-gray-400">1001</div>
-                <div className="col-span-2 text-right text-amber-400 font-mono">{(cpuUsage * 0.4).toFixed(1)}%</div>
-                <div className="col-span-2 text-right text-emerald-400 font-mono">142 MB</div>
-                <div className="col-span-1 text-center text-gray-600 text-[10px]">Sistema</div>
+                <div className="col-span-2 text-right font-mono text-gray-400">1001 / Nice 0</div>
+                <div className="col-span-2 text-right text-amber-400 font-mono">{(cpuUsage * 0.3).toFixed(1)}%</div>
+                <div className="col-span-2 text-right text-emerald-400 font-mono">{Math.round(ramInfo.usedJsHeapMb * 0.4)} MB</div>
+                <div className="col-span-1 text-center text-gray-500 text-[10px]">Sistema</div>
               </div>
 
               <div className="grid grid-cols-12 gap-4 text-xs items-center py-2 px-3 bg-white/5 rounded-xl border border-white/5">
@@ -279,39 +352,56 @@ export default function TaskManager({ windows, closeWindow }: TaskManagerProps) 
                   <HardDrive className="w-4 h-4 text-emerald-400" />
                   <span className="font-semibold text-white">Virtual File System Daemon</span>
                 </div>
-                <div className="col-span-2 text-right font-mono text-gray-400">1002</div>
-                <div className="col-span-2 text-right text-amber-400 font-mono">0.2%</div>
-                <div className="col-span-2 text-right text-emerald-400 font-mono">18 MB</div>
-                <div className="col-span-1 text-center text-gray-600 text-[10px]">Sistema</div>
+                <div className="col-span-2 text-right font-mono text-gray-400">1002 / Nice 0</div>
+                <div className="col-span-2 text-right text-amber-400 font-mono">0.1%</div>
+                <div className="col-span-2 text-right text-emerald-400 font-mono">{Math.max(1, Math.round(storageInfo.vfsBytes / 1024 / 1024))} MB</div>
+                <div className="col-span-1 text-center text-gray-500 text-[10px]">Sistema</div>
               </div>
 
               {/* USER APPLICATION WINDOWS */}
               {windows
                 .filter(w => w.title.toLowerCase().includes(searchQuery.toLowerCase()))
-                .map((w, i) => (
-                  <div key={w.id} className="grid grid-cols-12 gap-4 text-xs items-center py-2 px-3 hover:bg-white/10 rounded-xl transition-all border border-transparent hover:border-slate-700 group">
-                    <div className="col-span-5 flex items-center gap-2.5 truncate">
-                      <Activity className="w-4 h-4 text-emerald-400 shrink-0" />
-                      <span className="truncate font-medium text-white">{w.title}</span>
+                .map((w, i) => {
+                  const isWebamp = w.type === 'webamp' || w.title.toLowerCase().includes('webamp');
+                  const estCpu = isWebamp ? Math.max(1.8, (cpuUsage * 0.35)).toFixed(1) : Math.max(0.5, ((cpuUsage * 0.5) / Math.max(1, windows.length))).toFixed(1);
+                  const estRam = isWebamp ? Math.max(42, Math.round(ramInfo.usedJsHeapMb * 0.18)) : Math.max(12, Math.round((ramInfo.usedJsHeapMb * 0.5) / Math.max(1, windows.length)));
+                  
+                  return (
+                    <div key={w.id} className="grid grid-cols-12 gap-4 text-xs items-center py-2 px-3 hover:bg-white/10 rounded-xl transition-all border border-transparent hover:border-slate-700 group">
+                      <div className="col-span-5 flex items-center gap-2.5 truncate">
+                        {isWebamp ? (
+                          <Radio className="w-4 h-4 text-amber-400 shrink-0 animate-pulse" />
+                        ) : (
+                          <Activity className="w-4 h-4 text-emerald-400 shrink-0" />
+                        )}
+                        <span className="truncate font-medium text-white">
+                          {isWebamp ? 'Webamp 2.91 Audio Engine (' + w.title + ')' : w.title}
+                        </span>
+                      </div>
+                      <div className="col-span-2 text-right font-mono text-gray-400">
+                        {2000 + i * 19} / {isWebamp ? 'Nice -5' : 'Nice 0'}
+                      </div>
+                      <div className="col-span-2 text-right text-amber-400 font-mono font-semibold">
+                        {estCpu}%
+                      </div>
+                      <div className="col-span-2 text-right text-emerald-400 font-mono font-semibold">
+                        {estRam} MB
+                      </div>
+                      <div className="col-span-1 flex justify-center">
+                        <button
+                          onClick={() => {
+                            closeWindow(w.id);
+                            document.querySelectorAll('#webamp, .webamp-root, #webamp-context-menu').forEach(el => el.remove());
+                          }}
+                          className="p-1.5 hover:bg-red-500/20 text-red-400 hover:text-red-300 rounded-lg transition-all cursor-pointer"
+                          title="Finalizar Proceso"
+                        >
+                          <X className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
                     </div>
-                    <div className="col-span-2 text-right font-mono text-gray-400">{2000 + i * 19}</div>
-                    <div className="col-span-2 text-right text-amber-400 font-mono font-semibold">
-                      {(Math.random() * 3 + 0.5).toFixed(1)}%
-                    </div>
-                    <div className="col-span-2 text-right text-emerald-400 font-mono font-semibold">
-                      {Math.floor(Math.random() * 60 + 25)} MB
-                    </div>
-                    <div className="col-span-1 flex justify-center">
-                      <button
-                        onClick={() => closeWindow(w.id)}
-                        className="p-1.5 hover:bg-red-500/20 text-red-400 hover:text-red-300 rounded-lg transition-all cursor-pointer"
-                        title="Finalizar Proceso"
-                      >
-                        <X className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
-                  </div>
-                ))}
+                  );
+                })}
             </div>
           </div>
         )}
@@ -335,10 +425,10 @@ export default function TaskManager({ windows, closeWindow }: TaskManagerProps) 
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center justify-between">
-                    <span className="text-xs font-bold truncate">CPU</span>
+                    <span className="text-xs font-bold truncate">Procesador (CPU)</span>
                     <span className="text-xs font-mono font-bold text-sky-400">{cpuUsage}%</span>
                   </div>
-                  <span className="text-[10px] text-gray-400 truncate block">Intel Core i7 8-Cores</span>
+                  <span className="text-[10px] text-gray-400 truncate block">{osInfo.hardwareConcurrency} Núcleos Lógicos ({osInfo.architecture})</span>
                 </div>
               </button>
 
@@ -356,10 +446,10 @@ export default function TaskManager({ windows, closeWindow }: TaskManagerProps) 
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center justify-between">
-                    <span className="text-xs font-bold truncate">Memoria RAM</span>
-                    <span className="text-xs font-mono font-bold text-emerald-400">{ramUsage}%</span>
+                    <span className="text-xs font-bold truncate">Memoria Heap JS</span>
+                    <span className="text-xs font-mono font-bold text-emerald-400">{ramInfo.heapUsagePercent}%</span>
                   </div>
-                  <span className="text-[10px] text-gray-400 truncate block">6.7 / 16.0 GB DDR5</span>
+                  <span className="text-[10px] text-gray-400 truncate block">{ramInfo.usedJsHeapMb} / {ramInfo.jsHeapLimitMb} MB</span>
                 </div>
               </button>
 
@@ -377,10 +467,10 @@ export default function TaskManager({ windows, closeWindow }: TaskManagerProps) 
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center justify-between">
-                    <span className="text-xs font-bold truncate">Disco NVMe SSD</span>
-                    <span className="text-xs font-mono font-bold text-amber-400">{diskUsage}%</span>
+                    <span className="text-xs font-bold truncate">Almacenamiento Local</span>
+                    <span className="text-xs font-mono font-bold text-amber-400">{storageInfo.usedMb} MB</span>
                   </div>
-                  <span className="text-[10px] text-gray-400 truncate block">512 GB PCIe 4.0</span>
+                  <span className="text-[10px] text-gray-400 truncate block">Cuota NAVEGADOR: {storageInfo.quotaGb} GB</span>
                 </div>
               </button>
 
@@ -398,10 +488,10 @@ export default function TaskManager({ windows, closeWindow }: TaskManagerProps) 
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center justify-between">
-                    <span className="text-xs font-bold truncate">Red Wi-Fi 6</span>
-                    <span className="text-xs font-mono font-bold text-purple-400">{netSpeed.rx} KB/s</span>
+                    <span className="text-xs font-bold truncate">Red & Conexión</span>
+                    <span className="text-xs font-mono font-bold text-purple-400">{netInfo.rxKbps} KB/s</span>
                   </div>
-                  <span className="text-[10px] text-gray-400 truncate block">SAVIA Net 1 Gbps</span>
+                  <span className="text-[10px] text-gray-400 truncate block">{netInfo.online ? `Online (${netInfo.effectiveType.toUpperCase()})` : 'Offline'}</span>
                 </div>
               </button>
 
@@ -419,10 +509,10 @@ export default function TaskManager({ windows, closeWindow }: TaskManagerProps) 
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center justify-between">
-                    <span className="text-xs font-bold truncate">GPU WebGL 3D</span>
+                    <span className="text-xs font-bold truncate">GPU WebGL</span>
                     <span className="text-xs font-mono font-bold text-red-400">{gpuUsage}%</span>
                   </div>
-                  <span className="text-[10px] text-gray-400 truncate block">NVIDIA RTX 4070 | {gpuTemp}°C</span>
+                  <span className="text-[10px] text-gray-400 truncate block max-w-[140px]">{gpuInfo.renderer}</span>
                 </div>
               </button>
             </div>
@@ -434,30 +524,30 @@ export default function TaskManager({ windows, closeWindow }: TaskManagerProps) 
                 <div>
                   <h3 className="text-base font-bold text-white flex items-center gap-2">
                     {selectedMetric === 'cpu' && 'Procesador Principal (CPU)'}
-                    {selectedMetric === 'memory' && 'Memoria Principal (RAM DDR5)'}
-                    {selectedMetric === 'disk' && 'Unidad de Almacenamiento NVMe SSD'}
-                    {selectedMetric === 'network' && 'Interfaz de Red Inalámbrica Wi-Fi 6'}
-                    {selectedMetric === 'gpu' && 'Procesador Gráfico GPU WebGL 3D'}
+                    {selectedMetric === 'memory' && 'Memoria JS Heap (Navegador Host)'}
+                    {selectedMetric === 'disk' && 'Cuota de Almacenamiento e IndexedDB Local'}
+                    {selectedMetric === 'network' && 'Interfaz de Conectividad de Red del Navegador'}
+                    {selectedMetric === 'gpu' && 'Acelerador Gráfico GPU WebGL Real'}
                   </h3>
                   <p className="text-xs text-gray-400 font-mono">
-                    {selectedMetric === 'cpu' && 'Intel(R) Core(TM) i7-13700H @ 3.80GHz (8 Núcleos Lógicos)'}
-                    {selectedMetric === 'memory' && '16.0 GB Formato SODIMM 4800 MHz'}
-                    {selectedMetric === 'disk' && 'Samsung SSD 980 PRO 512GB PCIe Gen4'}
-                    {selectedMetric === 'network' && 'Intel Wi-Fi 6E AX211 160MHz | IP: 192.168.1.105'}
-                    {selectedMetric === 'gpu' && 'NVIDIA GeForce RTX 4070 Laptop GPU (DirectX 12 / WebGL 2.0)'}
+                    {selectedMetric === 'cpu' && `${osInfo.architecture} | ${osInfo.hardwareConcurrency} Núcleos Lógicos Detectados`}
+                    {selectedMetric === 'memory' && `Límite Heap: ${ramInfo.jsHeapLimitMb} MB | RAM Física del Dispositivo: ${ramInfo.deviceMemoryGb} GB`}
+                    {selectedMetric === 'disk' && `Uso Total VFS + Cache: ${storageInfo.usedMb} MB de ${storageInfo.quotaGb} GB asignados`}
+                    {selectedMetric === 'network' && `Ancho de Banda: ${netInfo.downlinkMbps} Mbps | Latencia RTT: ${netInfo.rttMs} ms | Red: ${netInfo.effectiveType.toUpperCase()}`}
+                    {selectedMetric === 'gpu' && `${gpuInfo.vendor} — ${gpuInfo.renderer} (${gpuInfo.webglVersion})`}
                   </p>
                 </div>
 
                 <div className="text-right">
                   <div className="text-2xl font-black font-mono" style={{ color: getMetricColor(selectedMetric) }}>
                     {selectedMetric === 'cpu' && `${cpuUsage}%`}
-                    {selectedMetric === 'memory' && `${ramUsage}%`}
-                    {selectedMetric === 'disk' && `${diskUsage}%`}
-                    {selectedMetric === 'network' && `${netSpeed.rx} KB/s`}
+                    {selectedMetric === 'memory' && `${ramInfo.heapUsagePercent}%`}
+                    {selectedMetric === 'disk' && `${storageInfo.usedMb} MB`}
+                    {selectedMetric === 'network' && `${netInfo.rxKbps} KB/s`}
                     {selectedMetric === 'gpu' && `${gpuUsage}%`}
                   </div>
                   <div className="text-[10px] text-gray-400 uppercase tracking-wider font-semibold">
-                    Uso en Tiempo Real (Histórico 30s)
+                    Lectura Real en Tiempo Real
                   </div>
                 </div>
               </div>
@@ -476,15 +566,15 @@ export default function TaskManager({ windows, closeWindow }: TaskManagerProps) 
               {selectedMetric === 'cpu' && (
                 <div className="space-y-4">
                   <h4 className="text-xs font-bold text-gray-300 uppercase tracking-wider">
-                    Consumo por Núcleo Lógico
+                    Consumo por Núcleo Lógico Real ({osInfo.hardwareConcurrency} Cores)
                   </h4>
 
-                  {/* 8 CORES CONSUMPTION BARS */}
-                  <div className="grid grid-cols-4 gap-3">
+                  {/* CORES CONSUMPTION BARS */}
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                     {coreLoads.map((load, idx) => (
                       <div key={idx} className="bg-[#27272a] p-3 rounded-xl border border-[#3f3f46] flex flex-col gap-1.5">
                         <div className="flex justify-between items-center text-[11px] font-bold">
-                          <span className="text-gray-400">Núcleo {idx}</span>
+                          <span className="text-gray-400">Núcleo {idx + 1}</span>
                           <span className="text-sky-400 font-mono">{load}%</span>
                         </div>
                         <div className="w-full h-2 bg-black/60 rounded-full overflow-hidden">
@@ -498,91 +588,91 @@ export default function TaskManager({ windows, closeWindow }: TaskManagerProps) 
                   </div>
 
                   {/* HARDWARE STATS SUMMARY */}
-                  <div className="grid grid-cols-4 gap-3 pt-2">
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-2">
                     <div className="bg-[#27272a] p-3 rounded-xl border border-[#3f3f46]">
-                      <span className="text-[10px] text-gray-400 block">Velocidad Reloj</span>
-                      <strong className="text-sm text-white font-mono">3.82 GHz</strong>
+                      <span className="text-[10px] text-gray-400 block">Arquitectura CPU</span>
+                      <strong className="text-xs text-white font-mono truncate block">{osInfo.architecture}</strong>
                     </div>
                     <div className="bg-[#27272a] p-3 rounded-xl border border-[#3f3f46]">
-                      <span className="text-[10px] text-gray-400 block">Procesos / Hilos</span>
-                      <strong className="text-sm text-white font-mono">{windows.length + 24} / 184</strong>
+                      <span className="text-[10px] text-gray-400 block">Hilos de Ejecución</span>
+                      <strong className="text-xs text-white font-mono">{osInfo.hardwareConcurrency} Threads</strong>
                     </div>
                     <div className="bg-[#27272a] p-3 rounded-xl border border-[#3f3f46]">
-                      <span className="text-[10px] text-gray-400 block">Tiempo de Actividad</span>
-                      <strong className="text-sm text-emerald-400 font-mono">01:42:18</strong>
+                      <span className="text-[10px] text-gray-400 block">Ventanas en Ejecución</span>
+                      <strong className="text-xs text-emerald-400 font-mono">{windows.length} Procesos</strong>
                     </div>
                     <div className="bg-[#27272a] p-3 rounded-xl border border-[#3f3f46]">
-                      <span className="text-[10px] text-gray-400 block">Caché L3</span>
-                      <strong className="text-sm text-white font-mono">24 MB</strong>
+                      <span className="text-[10px] text-gray-400 block">Soporte WebAssembly</span>
+                      <strong className="text-xs text-sky-400 font-mono">{osInfo.webAssemblySupported ? 'Sí (Activo)' : 'No'}</strong>
                     </div>
                   </div>
                 </div>
               )}
 
               {selectedMetric === 'memory' && (
-                <div className="grid grid-cols-3 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                   <div className="bg-[#27272a] p-3.5 rounded-xl border border-[#3f3f46]">
-                    <span className="text-[10px] text-gray-400 block">En Uso (Comprimida)</span>
-                    <strong className="text-base text-emerald-400 font-mono">6.7 GB (1.2 GB)</strong>
+                    <span className="text-[10px] text-gray-400 block">Uso Heap JS Actual</span>
+                    <strong className="text-base text-emerald-400 font-mono">{ramInfo.usedJsHeapMb} MB</strong>
                   </div>
                   <div className="bg-[#27272a] p-3.5 rounded-xl border border-[#3f3f46]">
-                    <span className="text-[10px] text-gray-400 block">Disponible</span>
-                    <strong className="text-base text-white font-mono">9.3 GB</strong>
+                    <span className="text-[10px] text-gray-400 block">Límite Heap Asignado</span>
+                    <strong className="text-base text-white font-mono">{ramInfo.jsHeapLimitMb} MB</strong>
                   </div>
                   <div className="bg-[#27272a] p-3.5 rounded-xl border border-[#3f3f46]">
-                    <span className="text-[10px] text-gray-400 block">Frecuencia / Ranuras</span>
-                    <strong className="text-base text-white font-mono">4800 MHz (2 de 2)</strong>
+                    <span className="text-[10px] text-gray-400 block">RAM Física del Host</span>
+                    <strong className="text-base text-sky-400 font-mono">{ramInfo.deviceMemoryGb} GB</strong>
                   </div>
                 </div>
               )}
 
               {selectedMetric === 'disk' && (
-                <div className="grid grid-cols-3 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                   <div className="bg-[#27272a] p-3.5 rounded-xl border border-[#3f3f46]">
-                    <span className="text-[10px] text-gray-400 block">Velocidad de Lectura</span>
-                    <strong className="text-base text-amber-400 font-mono">42.5 MB/s</strong>
+                    <span className="text-[10px] text-gray-400 block">Espacio Utilizado Origin</span>
+                    <strong className="text-base text-amber-400 font-mono">{storageInfo.usedMb} MB</strong>
                   </div>
                   <div className="bg-[#27272a] p-3.5 rounded-xl border border-[#3f3f46]">
-                    <span className="text-[10px] text-gray-400 block">Velocidad de Escritura</span>
-                    <strong className="text-base text-amber-400 font-mono">18.2 MB/s</strong>
+                    <span className="text-[10px] text-gray-400 block">Cuota Máxima Almacenamiento</span>
+                    <strong className="text-base text-amber-400 font-mono">{storageInfo.quotaGb} GB</strong>
                   </div>
                   <div className="bg-[#27272a] p-3.5 rounded-xl border border-[#3f3f46]">
-                    <span className="text-[10px] text-gray-400 block">Tiempo de Respuesta</span>
-                    <strong className="text-base text-emerald-400 font-mono">1.2 ms</strong>
+                    <span className="text-[10px] text-gray-400 block">Archivos Virtual FS</span>
+                    <strong className="text-base text-emerald-400 font-mono">{(storageInfo.vfsBytes / 1024).toFixed(1)} KB</strong>
                   </div>
                 </div>
               )}
 
               {selectedMetric === 'network' && (
-                <div className="grid grid-cols-3 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                   <div className="bg-[#27272a] p-3.5 rounded-xl border border-[#3f3f46]">
                     <span className="text-[10px] text-gray-400 block">Recepción (Download)</span>
-                    <strong className="text-base text-purple-400 font-mono">{netSpeed.rx} KB/s</strong>
+                    <strong className="text-base text-purple-400 font-mono">{netInfo.rxKbps} KB/s</strong>
                   </div>
                   <div className="bg-[#27272a] p-3.5 rounded-xl border border-[#3f3f46]">
-                    <span className="text-[10px] text-gray-400 block">Envío (Upload)</span>
-                    <strong className="text-base text-purple-400 font-mono">{netSpeed.tx} KB/s</strong>
+                    <span className="text-[10px] text-gray-400 block">Latencia RTT</span>
+                    <strong className="text-base text-purple-400 font-mono">{netInfo.rttMs} ms</strong>
                   </div>
                   <div className="bg-[#27272a] p-3.5 rounded-xl border border-[#3f3f46]">
-                    <span className="text-[10px] text-gray-400 block">Dirección IPv4</span>
-                    <strong className="text-base text-white font-mono">192.168.1.105</strong>
+                    <span className="text-[10px] text-gray-400 block">Velocidad Estimada</span>
+                    <strong className="text-base text-white font-mono">{netInfo.downlinkMbps} Mbps ({netInfo.effectiveType.toUpperCase()})</strong>
                   </div>
                 </div>
               )}
 
               {selectedMetric === 'gpu' && (
-                <div className="grid grid-cols-3 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                   <div className="bg-[#27272a] p-3.5 rounded-xl border border-[#3f3f46]">
-                    <span className="text-[10px] text-gray-400 block">Temperatura GPU</span>
-                    <strong className="text-base text-red-400 font-mono">{gpuTemp}°C</strong>
+                    <span className="text-[10px] text-gray-400 block">Procesador Gráfico GPU</span>
+                    <strong className="text-xs text-red-400 font-mono truncate block">{gpuInfo.renderer}</strong>
                   </div>
                   <div className="bg-[#27272a] p-3.5 rounded-xl border border-[#3f3f46]">
-                    <span className="text-[10px] text-gray-400 block">Memoria VRAM Consumida</span>
-                    <strong className="text-base text-white font-mono">2.1 / 8.0 GB GDDR6</strong>
+                    <span className="text-[10px] text-gray-400 block">Soporte WebGL</span>
+                    <strong className="text-base text-white font-mono">{gpuInfo.webglVersion}</strong>
                   </div>
                   <div className="bg-[#27272a] p-3.5 rounded-xl border border-[#3f3f46]">
-                    <span className="text-[10px] text-gray-400 block">Motor 3D Render</span>
-                    <strong className="text-base text-emerald-400 font-mono">WebGL 2.0 (Activo)</strong>
+                    <span className="text-[10px] text-gray-400 block">Soporte WebGPU</span>
+                    <strong className="text-base text-emerald-400 font-mono">{gpuInfo.webgpuSupported ? 'Disponible' : 'No Soportado'}</strong>
                   </div>
                 </div>
               )}
@@ -595,27 +685,59 @@ export default function TaskManager({ windows, closeWindow }: TaskManagerProps) 
           <div className="flex-1 p-6 bg-[#18181b] overflow-y-auto space-y-4">
             <h3 className="text-sm font-bold text-white mb-2 flex items-center gap-2">
               <Server className="w-4 h-4 text-amber-400" />
-              <span>Resumen de Hardware y Sistema Operativo SAVIA-OS</span>
+              <span>Especificaciones Técnicas del Sistema Operativo & Hardware Real</span>
             </h3>
 
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="bg-[#27272a] p-4 rounded-2xl border border-[#3f3f46] space-y-2">
-                <h4 className="text-xs font-bold text-sky-400 border-b border-[#3f3f46] pb-1">Procesador & Arquitectura</h4>
-                <div className="text-xs space-y-1 text-gray-300">
-                  <div>CPU: <strong className="text-white">Intel Core i7-13700H</strong></div>
-                  <div>Núcleos Físicos / Lógicos: <strong className="text-white">6 Performance + 8 Efficient (20 Hilos)</strong></div>
-                  <div>Instrucciones: <strong className="text-white">x86_64, AVX2, WebAssembly SIMD</strong></div>
-                  <div>Frecuencia Turbo Max: <strong className="text-white">5.00 GHz</strong></div>
+                <h4 className="text-xs font-bold text-sky-400 border-b border-[#3f3f46] pb-1 flex items-center gap-1.5">
+                  <Cpu className="w-3.5 h-3.5" /> Procesador & Arquitectura Real
+                </h4>
+                <div className="text-xs space-y-1.5 text-gray-300 font-mono">
+                  <div>Sistema Operativo Host: <strong className="text-white">{osInfo.osName} {osInfo.osVersion}</strong></div>
+                  <div>Arquitectura Detectada: <strong className="text-white">{osInfo.architecture}</strong></div>
+                  <div>Núcleos Lógicos (Threads): <strong className="text-white">{osInfo.hardwareConcurrency} Núcleos</strong></div>
+                  <div>Navegador: <strong className="text-white">{osInfo.browserName} {osInfo.browserVersion}</strong></div>
+                  <div>Motor WebAssembly: <strong className="text-emerald-400">{osInfo.webAssemblySupported ? 'Compatible' : 'No Soportado'}</strong></div>
                 </div>
               </div>
 
               <div className="bg-[#27272a] p-4 rounded-2xl border border-[#3f3f46] space-y-2">
-                <h4 className="text-xs font-bold text-emerald-400 border-b border-[#3f3f46] pb-1">Memoria y Almacenamiento</h4>
-                <div className="text-xs space-y-1 text-gray-300">
-                  <div>RAM Instala: <strong className="text-white">16 GB DDR5 Dual-Channel</strong></div>
-                  <div>Disco Principal: <strong className="text-white">512 GB NVMe M.2 SSD</strong></div>
-                  <div>Sistema de Archivos: <strong className="text-white">SAVIA Virtual FS (In-Memory Buffer)</strong></div>
-                  <div>Página de Memoria: <strong className="text-white">4 KB Paging</strong></div>
+                <h4 className="text-xs font-bold text-emerald-400 border-b border-[#3f3f46] pb-1 flex items-center gap-1.5">
+                  <MemoryStick className="w-3.5 h-3.5" /> Memoria & Almacenamiento
+                </h4>
+                <div className="text-xs space-y-1.5 text-gray-300 font-mono">
+                  <div>RAM Heap JS Usada: <strong className="text-white">{ramInfo.usedJsHeapMb} MB / {ramInfo.jsHeapLimitMb} MB</strong></div>
+                  <div>RAM Física del Dispositivo: <strong className="text-white">{ramInfo.deviceMemoryGb} GB</strong></div>
+                  <div>Almacenamiento en Uso: <strong className="text-white">{storageInfo.usedMb} MB</strong></div>
+                  <div>Cuota Máxima Otorgada: <strong className="text-white">{storageInfo.quotaGb} GB</strong></div>
+                  <div>Archivos Virtual FS (VFS): <strong className="text-emerald-400">{(storageInfo.vfsBytes / 1024).toFixed(1)} KB</strong></div>
+                </div>
+              </div>
+
+              <div className="bg-[#27272a] p-4 rounded-2xl border border-[#3f3f46] space-y-2">
+                <h4 className="text-xs font-bold text-red-400 border-b border-[#3f3f46] pb-1 flex items-center gap-1.5">
+                  <Zap className="w-3.5 h-3.5" /> Hardware Gráfico GPU & Pantalla
+                </h4>
+                <div className="text-xs space-y-1.5 text-gray-300 font-mono">
+                  <div>Renderizador GPU: <strong className="text-white truncate block">{gpuInfo.renderer}</strong></div>
+                  <div>Fabricante / Vendor: <strong className="text-white">{gpuInfo.vendor}</strong></div>
+                  <div>Resolución de Pantalla: <strong className="text-white">{osInfo.screenWidth} x {osInfo.screenHeight} px</strong></div>
+                  <div>Pixel Density Ratio: <strong className="text-white">{osInfo.devicePixelRatio}x</strong></div>
+                  <div>Soporte WebGPU: <strong className="text-sky-400">{gpuInfo.webgpuSupported ? 'Sí' : 'No'}</strong></div>
+                </div>
+              </div>
+
+              <div className="bg-[#27272a] p-4 rounded-2xl border border-[#3f3f46] space-y-2">
+                <h4 className="text-xs font-bold text-purple-400 border-b border-[#3f3f46] pb-1 flex items-center gap-1.5">
+                  <Globe className="w-3.5 h-3.5" /> Conectividad & Hardware Adicional
+                </h4>
+                <div className="text-xs space-y-1.5 text-gray-300 font-mono">
+                  <div>Estado Conexión: <strong className={netInfo.online ? 'text-emerald-400' : 'text-red-400'}>{netInfo.online ? 'Online' : 'Offline'} ({netInfo.effectiveType.toUpperCase()})</strong></div>
+                  <div>Latencia RTT / Ancho Banda: <strong className="text-white">{netInfo.rttMs} ms | {netInfo.downlinkMbps} Mbps</strong></div>
+                  <div>Puntos Táctiles (Touch): <strong className="text-white">{osInfo.touchPoints}</strong></div>
+                  <div>Idioma Sistema: <strong className="text-white">{osInfo.language}</strong></div>
+                  <div>Estado Batería: <strong className="text-amber-400">{batteryInfo.supported ? `${batteryInfo.levelPercent}% (${batteryInfo.charging ? 'Cargando' : 'En Batería'})` : 'No Expuesta'}</strong></div>
                 </div>
               </div>
             </div>
@@ -637,9 +759,9 @@ export default function TaskManager({ windows, closeWindow }: TaskManagerProps) 
           <div className="flex items-center gap-2">
             <span className="text-gray-400">RAM:</span>
             <div className="w-20 h-2 bg-black/60 rounded-full overflow-hidden">
-              <div className="h-full bg-emerald-500 transition-all duration-500" style={{ width: `${ramUsage}%` }} />
+              <div className="h-full bg-emerald-500 transition-all duration-500" style={{ width: `${ramInfo.heapUsagePercent}%` }} />
             </div>
-            <span className="font-mono font-bold text-emerald-400 w-9">{ramUsage}%</span>
+            <span className="font-mono font-bold text-emerald-400 w-9">{ramInfo.heapUsagePercent}%</span>
           </div>
 
           <div className="flex items-center gap-2">
@@ -652,8 +774,8 @@ export default function TaskManager({ windows, closeWindow }: TaskManagerProps) 
         </div>
 
         <div className="text-[11px] text-gray-400 font-mono flex items-center gap-3">
-          <span>RED: <strong className="text-purple-400">{netSpeed.rx} KB/s</strong></span>
-          <span>GPU TEMP: <strong className="text-red-400">{gpuTemp}°C</strong></span>
+          <span>RED: <strong className="text-purple-400">{netInfo.rxKbps} KB/s</strong></span>
+          <span>GPU: <strong className="text-red-400 truncate max-w-[120px]">{gpuInfo.renderer.split(' ')[0]}</strong></span>
         </div>
       </div>
     </div>

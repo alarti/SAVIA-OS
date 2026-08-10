@@ -211,14 +211,14 @@ export const AVAILABLE_PACKAGES: PackageInfo[] = [
     installedByDefault: true
   },
   {
-    id: 'wine',
-    name: 'Savia WinEmu (Emulador x86 / Binarios Windows)',
-    version: '2.4.0',
-    category: 'windows',
-    description: 'Motor de emulación x86 y ejecución de binarios de Windows (.exe y .msi) sobre WebAssembly v86 Core.',
-    size: '14.2 MB',
-    author: 'SaviaOS Core / v86 Open Source',
-    icon: 'Box',
+    id: 'webamp',
+    name: 'Webamp Winamp Player (Reproductor de Música)',
+    version: '2.9.1',
+    category: 'media',
+    description: 'Reproductor de música estilo Winamp 2.91 con skin clásico, ecualizador gráfico y listas de reproducción MP3.',
+    size: '1.2 MB',
+    author: 'captbaritone / Webamp',
+    icon: 'Music',
     type: 'gui',
     installedByDefault: true
   },

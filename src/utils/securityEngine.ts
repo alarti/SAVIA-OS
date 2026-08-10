@@ -506,152 +506,109 @@ class SecurityEngine {
   }
 
   /**
-   * Real OS Wine Subsystem Control & Security Layer Validator for .exe and .msi
+   * Rust WebAssembly Core Execution Validator & Security Auditor
    */
-  public analyzeAndValidateWineExecution(
+  public analyzeAndValidateRustWasmExecution(
     fileName: string, 
     user: string = 'user',
     fileSizeKB: number = 250
   ): { 
     allowed: boolean; 
     reason?: string; 
-    peHeader: any; 
+    wasmHeader: any; 
     securityAudit: {
       signatureValid: boolean;
       privilegeRequired: 'USER' | 'ADMINISTRATOR' | 'SYSTEM';
       sandboxIsolated: boolean;
-      vfsDriveCMounted: boolean;
       integrityScore: number;
       warnings: string[];
     } 
   } {
-    const isMsi = fileName.toLowerCase().endsWith('.msi');
-    const isBat = fileName.toLowerCase().endsWith('.bat');
-    const lowerName = fileName.toLowerCase();
-
-    // 1. Path & Filename Canonicalization & Injection Check
+    // 1. Rust Path & Filename Canonicalization Check
     const pathCheck = this.canonicalizePath(fileName);
     if (!pathCheck.isSafe) {
       this.recordEvent({
         source: 'KERNEL',
-        action: 'WINE_SECURITY_BLOCKED',
+        action: 'WASM_SECURITY_BLOCKED',
         user,
         riskScore: 90,
         level: 'CRITICAL',
-        details: `Ruta de ejecutable Win32 sospechosa o no válida: "${fileName}"`,
+        details: `Ruta de módulo WebAssembly sospechosa o no válida: "${fileName}"`,
         blocked: true,
       });
       return {
         allowed: false,
-        reason: `Capa de Seguridad SAVIA-OS: ${pathCheck.reason}`,
-        peHeader: null,
+        reason: `Capa de Seguridad Rust WASM: ${pathCheck.reason}`,
+        wasmHeader: null,
         securityAudit: {
           signatureValid: false,
-          privilegeRequired: 'ADMINISTRATOR',
+          privilegeRequired: 'USER',
           sandboxIsolated: true,
-          vfsDriveCMounted: false,
           integrityScore: 0,
           warnings: [pathCheck.reason || 'Ruta inválida']
         }
       };
     }
 
-    // 2. Privilege level check
-    const isAdminReq = isMsi || lowerName.includes('setup') || lowerName.includes('installer') || lowerName.includes('vlc') || lowerName.includes('putty');
-    const userRole = user.toLowerCase();
-
-    if (userRole === 'guest' && isAdminReq) {
-      this.recordEvent({
-        source: 'KERNEL',
-        action: 'WINE_ELEVATION_DENIED',
-        user,
-        riskScore: 80,
-        level: 'HIGH',
-        details: `Instalador Win32 requirió privilegios de Administrador en cuenta convidada: ${fileName}`,
-        blocked: true,
-      });
-      return {
-        allowed: false,
-        reason: 'Control de Cuentas de Usuario (UAC): El instalador requiere credenciales de Administrador del Sistema.',
-        peHeader: null,
-        securityAudit: {
-          signatureValid: true,
-          privilegeRequired: 'ADMINISTRATOR',
-          sandboxIsolated: true,
-          vfsDriveCMounted: true,
-          integrityScore: 65,
-          warnings: ['Privilegios insuficientes en cuenta Guest']
-        }
-      };
-    }
-
-    // 3. Memory allocation verification (Heap limit check)
-    const memCheck = this.validateMemoryAllocation(fileSizeKB * 1024 * 4, `WinePE32 Loader [${fileName}]`);
+    // 2. Memory allocation verification (Rust WASM Heap limit check)
+    const memCheck = this.validateMemoryAllocation(fileSizeKB * 1024, `Rust WASM Module [${fileName}]`);
     if (!memCheck.allowed) {
       return {
         allowed: false,
         reason: memCheck.reason,
-        peHeader: null,
+        wasmHeader: null,
         securityAudit: {
           signatureValid: false,
           privilegeRequired: 'USER',
           sandboxIsolated: true,
-          vfsDriveCMounted: true,
           integrityScore: 30,
-          warnings: ['Límite de memoria asignada en el Kernel superado']
+          warnings: ['Límite de memoria asignada en el Heap WASM superado']
         }
       };
     }
 
-    // 4. Genuine PE32 Header & Section Parser Generation
-    const is64 = lowerName.includes('x64') || lowerName.includes('64bit') || lowerName.includes('win64');
-    const peHeader = {
-      signature: 'PE\\0\\0 (Portable Executable 32/64-bit)',
-      machine: is64 ? '0x8664 (AMD64 / x86-64)' : '0x014C (Intel i386 / WASM-x86)',
-      subsystem: isMsi ? 'IMAGE_SUBSYSTEM_WINDOWS_MSI_INSTALLER' : 'IMAGE_SUBSYSTEM_WINDOWS_GUI',
-      entryPoint: isMsi ? '0x00010000' : '0x00018F40',
-      imageBase: is64 ? '0x0000000140000000' : '0x00400000',
-      numberOfSections: 5,
+    // 3. Genuine WASM Magic Header & Memory Section Metadata
+    const wasmHeader = {
+      magic: '\\0asm (WebAssembly Binary Magic Header)',
+      target: 'wasm32-unknown-unknown (Compiled from Rust)',
+      memoryPages: 16,
+      maxHeapBytes: '64 MB',
       sections: [
-        '.text (Executable Instructions / Code)', 
-        '.rdata (Read-Only Data & IAT)', 
-        '.data (Global Variables & Heap)', 
-        '.rsrc (Icons, Bitmaps, Dialogs & Manifest)',
-        '.reloc (Base Relocations)'
-      ],
-      imports: [
-        'KERNEL32.dll (GetModuleHandleW, HeapAlloc, VirtualAlloc, CreateThread)',
-        'USER32.dll (CreateWindowExW, DispatchMessageW, MessageBoxW, SendMessageW)',
-        'GDI32.dll (BitBlt, CreateCompatibleDC, SelectObject, SetPixel)',
-        'ADVAPI32.dll (RegOpenKeyExW, RegQueryValueExW, RegSetValueExW)',
-        'SHELL32.dll (ShellExecuteW, SHGetFolderPathW, SHFileOperationW)',
-        'COMCTL32.dll (InitCommonControlsEx, CreatePropertySheetPageW)'
+        'Type Section (Function Signatures)',
+        'Import Section (Environment & Memory)',
+        'Function Section (Index Declarations)',
+        'Export Section (Exported Rust Symbols)',
+        'Code Section (Bytecode Opcodes)'
       ]
     };
 
-    // 5. SIEM Cryptographic Ledger Event Record
+    // 4. SIEM Cryptographic Ledger Event Record
     this.recordEvent({
       source: 'KERNEL',
-      action: 'WINE_EXEC_APPROVED',
+      action: 'WASM_EXEC_APPROVED',
       user,
-      riskScore: isAdminReq ? 25 : 10,
+      riskScore: 5,
       level: 'LOW',
-      details: `Wine 9.0 Subsystem: Carga y ejecución validada para ${fileName} (C:\\Program Files\\).`,
+      details: `Rust WASM Subsystem: Carga y ejecución segura aprobada para ${fileName}.`,
       blocked: false,
     });
 
     return {
       allowed: true,
-      peHeader,
+      wasmHeader,
       securityAudit: {
         signatureValid: true,
-        privilegeRequired: isAdminReq ? 'ADMINISTRATOR' : 'USER',
+        privilegeRequired: 'USER',
         sandboxIsolated: true,
-        vfsDriveCMounted: true,
-        integrityScore: 98,
+        integrityScore: 100,
         warnings: []
       }
     };
+  }
+
+  // Alias for legacy compatibility
+  public analyzeAndValidateWineExecution(fileName: string, user: string = 'user', fileSizeKB: number = 250) {
+    return this.analyzeAndValidateRustWasmExecution(fileName, user, fileSizeKB);
   }
 
   /**

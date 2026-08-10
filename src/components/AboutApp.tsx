@@ -1,8 +1,13 @@
 import React from 'react';
-import { User, ShieldCheck, Cpu, Code, ExternalLink, Zap, Terminal, Music, Box, Globe } from 'lucide-react';
+import { User, ShieldCheck, Cpu, Code, ExternalLink, Zap, Terminal, Music, Box, Globe, Server, MemoryStick } from 'lucide-react';
 import { soundEngine } from '../utils/soundEngine';
+import { getRealOsInfo, getRealGpuInfo, getRealMemoryInfo } from '../utils/systemInfo';
 
 export default function AboutApp() {
+  const osInfo = getRealOsInfo();
+  const gpuInfo = getRealGpuInfo();
+  const memInfo = getRealMemoryInfo();
+
   const handleOpenLinkedIn = () => {
     soundEngine.playNotification();
     window.open('https://www.linkedin.com/in/albertoarce', '_blank', 'noopener,noreferrer');
@@ -73,14 +78,14 @@ export default function AboutApp() {
       <div className="mt-6 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
         <div className="bg-[#1A1A1E] p-4 rounded-xl border border-white/10 flex flex-col gap-2">
           <Cpu className="w-6 h-6 text-blue-400" />
-          <h3 className="text-xs font-bold text-white">Kernel & Execution</h3>
-          <p className="text-[11px] text-gray-400">Boxedwine, v86 & Wine 9.0 WASM Core x86 de 32/64-bits (inspirado en la arquitectura daedalOS).</p>
+          <h3 className="text-xs font-bold text-white">Kernel & Rust WASM Core</h3>
+          <p className="text-[11px] text-gray-400">Motor de WebAssembly compilado desde Rust para procesamiento seguro de alto rendimiento en el navegador.</p>
         </div>
 
         <div className="bg-[#1A1A1E] p-4 rounded-xl border border-white/10 flex flex-col gap-2">
           <Box className="w-6 h-6 text-emerald-400" />
-          <h3 className="text-xs font-bold text-white">APT / ExeBrowser Repo</h3>
-          <p className="text-[11px] text-gray-400">Carga directa de ejecutables PE32 (.exe, .msi) y repositorio de software local / remoto.</p>
+          <h3 className="text-xs font-bold text-white">Gestor de Paquetes WASM</h3>
+          <p className="text-[11px] text-gray-400">Ejecución aislada de módulos binarios .wasm y scripts optimizados en la memoria virtual del navegador.</p>
         </div>
 
         <div className="bg-[#1A1A1E] p-4 rounded-xl border border-white/10 flex flex-col gap-2">
@@ -93,6 +98,36 @@ export default function AboutApp() {
           <ShieldCheck className="w-6 h-6 text-purple-400" />
           <h3 className="text-xs font-bold text-white">Escudo de Seguridad</h3>
           <p className="text-[11px] text-gray-400">Sanitización de comandos bash, sandboxing POSIX y aislamiento CORS.</p>
+        </div>
+      </div>
+
+      {/* Real Host Hardware & OS Specs Box */}
+      <div className="mt-6 bg-[#1A1A1E] p-5 rounded-2xl border border-white/10 shadow-xl space-y-3">
+        <h3 className="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-2">
+          <Server className="w-4 h-4 text-sky-400" />
+          <span>Información de Hardware y Sistema Operativo Real Anfitrión</span>
+        </h3>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 text-xs font-mono">
+          <div className="bg-black/30 p-3 rounded-xl border border-white/5">
+            <span className="text-[10px] text-gray-400 block">Sistema Operativo</span>
+            <strong className="text-white text-xs">{osInfo.osName} {osInfo.osVersion}</strong>
+          </div>
+
+          <div className="bg-black/30 p-3 rounded-xl border border-white/5">
+            <span className="text-[10px] text-gray-400 block">CPU & Cores</span>
+            <strong className="text-sky-400 text-xs">{osInfo.hardwareConcurrency} Cores ({osInfo.architecture})</strong>
+          </div>
+
+          <div className="bg-black/30 p-3 rounded-xl border border-white/5">
+            <span className="text-[10px] text-gray-400 block">Memoria RAM / Heap</span>
+            <strong className="text-emerald-400 text-xs">{memInfo.usedJsHeapMb} MB / {memInfo.jsHeapLimitMb} MB</strong>
+          </div>
+
+          <div className="bg-black/30 p-3 rounded-xl border border-white/5">
+            <span className="text-[10px] text-gray-400 block">Aceleración GPU</span>
+            <strong className="text-amber-400 text-xs truncate block" title={gpuInfo.renderer}>{gpuInfo.renderer}</strong>
+          </div>
         </div>
       </div>
 

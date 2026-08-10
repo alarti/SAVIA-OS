@@ -17,6 +17,8 @@
     "@tailwindcss/vite": "^4.1.14",
     "@types/three": "^0.185.4",
     "@vitejs/plugin-react": "^5.0.4",
+    "butterchurn": "^2.6.7",
+    "butterchurn-presets": "^2.4.7",
     "dotenv": "^17.2.3",
     "emulators": "^8.4.1",
     "express": "^4.21.2",
@@ -28,7 +30,8 @@
     "react-tetris": "^0.4.0",
     "three": "^0.185.1",
     "v86": "^0.5.432",
-    "vite": "^6.2.3"
+    "vite": "^6.2.3",
+    "webamp": "^2.3.1"
   },
   "devDependencies": {
     "@types/node": "^22.14.0",

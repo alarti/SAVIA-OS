@@ -33,7 +33,12 @@ const DEFAULT_VFS: VFSMap = {
     { id: 'u_music', name: 'Music', type: 'folder', iconType: 'folder', date: 'Hoy 09:00', permissions: 'drwxr-xr-x', owner: 'user' },
     { id: 'u_videos', name: 'Videos', type: 'folder', iconType: 'folder', date: 'Hoy 09:00', permissions: 'drwxr-xr-x', owner: 'user' },
     { id: 'u_notes', name: 'Notas_SaviaOS.txt', type: 'file', iconType: 'text', size: '2 KB', date: 'Hoy 14:20', permissions: '-rw-r--r--', owner: 'user', content: 'Bienvenido a SAVIA-OS.\nEditor de Código y Archivos Savia Nano.\nSistema de Archivos Virtual VFS.' },
-    { id: 'u_manual', name: 'Manual_Sistema.pdf', type: 'file', iconType: 'file', size: '1.4 MB', date: 'Ayer 16:20', permissions: '-rw-r--r--', owner: 'user' },
+    { id: 'u_manual', name: 'Manual_Sistema.pdf', type: 'file', iconType: 'file', size: '1.4 MB', date: 'Ayer 16:20', permissions: '-rw-r--r--', owner: 'user', content: 'https://raw.githubusercontent.com/mozilla/pdf.js/ba2edeae/web/compressed.tracemonkey-pldi-09.pdf' },
+  ],
+  '/home/user/Music': [
+    { id: 'm_1', name: 'ACDC_Back_In_Black.mp3', type: 'file', iconType: 'file', size: '2.5 MB', date: 'Hoy 10:00', permissions: '-rw-r--r--', owner: 'user', content: 'https://cdn.freesound.org/previews/682/682123_14838638-lq.mp3' },
+    { id: 'm_2', name: 'Thunderstruck_Rock.mp3', type: 'file', iconType: 'file', size: '3.1 MB', date: 'Hoy 10:05', permissions: '-rw-r--r--', owner: 'user', content: 'https://cdn.freesound.org/previews/512/512132_10820462-lq.mp3' },
+    { id: 'm_3', name: 'Winamp_Llama_Intro.mp3', type: 'file', iconType: 'file', size: '120 KB', date: 'Hoy 10:10', permissions: '-rw-r--r--', owner: 'user', content: 'https://raw.githubusercontent.com/captbaritone/webamp/master/demo/mp3/llama-2.91.mp3' },
   ],
   '/home/user/Desktop': [
     { id: 'dt_readme', name: 'Leeme_SaviaOS.txt', type: 'file', iconType: 'text', size: '1 KB', date: 'Hoy 09:00', permissions: '-rw-r--r--', owner: 'user', content: 'Bienvenido a SaviaOS. Todas las apps de productividad (SaviaDoc, SaviaXls, SaviaPpt, SaviaPdf, Savia Paint y Savia Nano) permiten guardar y guardar como en cualquier directorio del sistema.' },
@@ -44,6 +49,7 @@ const DEFAULT_VFS: VFSMap = {
     { id: 'doc2', name: 'nuevo documento.xlsx', type: 'file', iconType: 'text', size: '18 KB', date: 'Hoy 10:05', permissions: '-rw-r--r--', owner: 'user' },
     { id: 'doc3', name: 'nuevo documento.pptx', type: 'file', iconType: 'text', size: '24 KB', date: 'Hoy 10:10', permissions: '-rw-r--r--', owner: 'user' },
     { id: 'doc4', name: 'Informe_SaviaOS.txt', type: 'file', iconType: 'text', size: '3.5 KB', date: 'Hoy 11:30', permissions: '-rw-r--r--', owner: 'user', content: 'Informe ejecutivo de SAVIA-OS.' },
+    { id: 'doc5', name: 'Documento_PDF_Ejemplo.pdf', type: 'file', iconType: 'file', size: '1.2 MB', date: 'Hoy 12:00', permissions: '-rw-r--r--', owner: 'user', content: 'https://raw.githubusercontent.com/mozilla/pdf.js/ba2edeae/web/compressed.tracemonkey-pldi-09.pdf' },
   ],
   '/home/user/Downloads': [
     { id: 'dl4', name: 'archivos_proyecto.zip', type: 'file', iconType: 'file', size: '4.2 MB', date: 'Hoy 11:15', permissions: '-rw-r--r--', owner: 'user' },

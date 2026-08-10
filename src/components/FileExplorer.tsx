@@ -72,7 +72,7 @@ const INITIAL_FS: Record<string, FileItem[]> = {
     { id: 'u_pictures', name: 'Pictures', type: 'folder', iconType: 'folder', date: 'Hoy 09:00', permissions: 'drwxr-xr-x', owner: 'user' },
     { id: 'u_music', name: 'Music', type: 'folder', iconType: 'folder', date: 'Hoy 09:00', permissions: 'drwxr-xr-x', owner: 'user' },
     { id: 'u_videos', name: 'Videos', type: 'folder', iconType: 'folder', date: 'Hoy 09:00', permissions: 'drwxr-xr-x', owner: 'user' },
-    { id: 'u_wine', name: '.wine', type: 'folder', iconType: 'folder', date: 'Hoy 09:00', permissions: 'drwxr-xr-x', owner: 'user' },
+    { id: 'u_wasm', name: 'WASM_Modules', type: 'folder', iconType: 'folder', date: 'Hoy 09:00', permissions: 'drwxr-xr-x', owner: 'user' },
     { id: 'u_notes', name: 'Notas_SaviaOS.txt', type: 'file', iconType: 'text', size: '2 KB', date: 'Hoy 14:20', permissions: '-rw-r--r--', owner: 'user' },
     { id: 'u_manual', name: 'Manual_Sistema.pdf', type: 'file', iconType: 'file', size: '1.4 MB', date: 'Ayer 16:20', permissions: '-rw-r--r--', owner: 'user' },
     { id: 'u_bench', name: 'System_Bench.sh', type: 'executable', iconType: 'terminal', size: '12 KB', date: 'Oct 15 10:00', permissions: '-rwxr-xr-x', owner: 'user' },
@@ -89,9 +89,9 @@ const INITIAL_FS: Record<string, FileItem[]> = {
     { id: 'doc4', name: 'Informe_SaviaOS.txt', type: 'file', iconType: 'text', size: '3.5 KB', date: 'Hoy 11:30', permissions: '-rw-r--r--', owner: 'user' },
   ],
   '/home/user/Downloads': [
-    { id: 'dl1', name: 'putty-0.81-setup.exe', type: 'executable', iconType: 'wine', size: '3.2 MB', date: 'Hoy 11:00', permissions: '-rwxr-xr-x', owner: 'user' },
-    { id: 'dl2', name: 'vlc-3.0.20-win32.exe', type: 'executable', iconType: 'wine', size: '18.5 MB', date: 'Hoy 11:05', permissions: '-rwxr-xr-x', owner: 'user' },
-    { id: 'dl3', name: 'winrar-x64-700.exe', type: 'executable', iconType: 'wine', size: '3.5 MB', date: 'Hoy 11:10', permissions: '-rwxr-xr-x', owner: 'user' },
+    { id: 'dl1', name: 'security_engine.wasm', type: 'executable', iconType: 'cpu', size: '48 KB', date: 'Hoy 11:00', permissions: '-rwxr-xr-x', owner: 'user' },
+    { id: 'dl2', name: 'crypto_hasher.wasm', type: 'executable', iconType: 'cpu', size: '32 KB', date: 'Hoy 11:05', permissions: '-rwxr-xr-x', owner: 'user' },
+    { id: 'dl3', name: 'math_benchmark.wasm', type: 'executable', iconType: 'cpu', size: '28 KB', date: 'Hoy 11:10', permissions: '-rwxr-xr-x', owner: 'user' },
     { id: 'dl4', name: 'archivos_proyecto.zip', type: 'file', iconType: 'file', size: '4.2 MB', date: 'Hoy 11:15', permissions: '-rw-r--r--', owner: 'user' },
   ],
   '/home/user/Pictures': [
@@ -104,31 +104,11 @@ const INITIAL_FS: Record<string, FileItem[]> = {
   '/home/user/Videos': [
     { id: 'vid1', name: 'Demo_SaviaOS.mp4', type: 'file', iconType: 'file', size: '12.4 MB', date: 'Ayer 14:00', permissions: '-rw-r--r--', owner: 'user' },
   ],
-  '/home/user/.wine': [
-    { id: 'w_drivec', name: 'drive_c', type: 'folder', iconType: 'folder', date: 'Hoy 09:00', permissions: 'drwxr-xr-x', owner: 'user' },
-  ],
-  '/home/user/.wine/drive_c': [
-    { id: 'wc_pf', name: 'Program Files', type: 'folder', iconType: 'folder', date: 'Hoy 09:00', permissions: 'drwxr-xr-x', owner: 'user' },
-    { id: 'wc_win', name: 'Windows', type: 'folder', iconType: 'folder', date: 'Hoy 09:00', permissions: 'drwxr-xr-x', owner: 'user' },
-    { id: 'wc_usr', name: 'users', type: 'folder', iconType: 'folder', date: 'Hoy 09:00', permissions: 'drwxr-xr-x', owner: 'user' },
-  ],
-  '/home/user/.wine/drive_c/Program Files': [
-    { id: 'pf_putty', name: 'PuTTY', type: 'folder', iconType: 'folder', date: 'Hoy 09:00', permissions: 'drwxr-xr-x', owner: 'user' },
-    { id: 'pf_vlc', name: 'VideoLAN', type: 'folder', iconType: 'folder', date: 'Hoy 09:00', permissions: 'drwxr-xr-x', owner: 'user' },
-    { id: 'pf_winrar', name: 'WinRAR', type: 'folder', iconType: 'folder', date: 'Hoy 09:00', permissions: 'drwxr-xr-x', owner: 'user' },
-  ],
-  '/home/user/.wine/drive_c/Windows': [
-    { id: 'win_sys32', name: 'System32', type: 'folder', iconType: 'folder', date: 'Hoy 09:00', permissions: 'drwxr-xr-x', owner: 'user' },
-    { id: 'win_winmine', name: 'winmine.exe', type: 'executable', iconType: 'wine', size: '120 KB', date: 'Hoy 09:00', permissions: '-rwxr-xr-x', owner: 'user' },
-    { id: 'win_notepad', name: 'notepad.exe', type: 'executable', iconType: 'wine', size: '85 KB', date: 'Hoy 09:00', permissions: '-rwxr-xr-x', owner: 'user' },
-    { id: 'win_cmd', name: 'cmd.exe', type: 'executable', iconType: 'wine', size: '280 KB', date: 'Hoy 09:00', permissions: '-rwxr-xr-x', owner: 'user' },
-    { id: 'win_taskmgr', name: 'taskmgr.exe', type: 'executable', iconType: 'wine', size: '180 KB', date: 'Hoy 09:00', permissions: '-rwxr-xr-x', owner: 'user' },
-    { id: 'win_mspaint', name: 'mspaint.exe', type: 'executable', iconType: 'wine', size: '340 KB', date: 'Hoy 09:00', permissions: '-rwxr-xr-x', owner: 'user' },
-  ],
-  '/home/user/.wine/drive_c/Windows/System32': [
-    { id: 'sys_kernel32', name: 'kernel32.dll', type: 'file', iconType: 'file', size: '1.2 MB', date: 'Hoy 09:00', permissions: '-rw-r--r--', owner: 'user' },
-    { id: 'sys_user32', name: 'user32.dll', type: 'file', iconType: 'file', size: '980 KB', date: 'Hoy 09:00', permissions: '-rw-r--r--', owner: 'user' },
-    { id: 'sys_gdi32', name: 'gdi32.dll', type: 'file', iconType: 'file', size: '640 KB', date: 'Hoy 09:00', permissions: '-rw-r--r--', owner: 'user' },
+  '/home/user/WASM_Modules': [
+    { id: 'w_sec', name: 'security_engine.wasm', type: 'executable', iconType: 'cpu', size: '48 KB', date: 'Hoy 09:00', permissions: '-rwxr-xr-x', owner: 'user' },
+    { id: 'w_cry', name: 'crypto_hasher.wasm', type: 'executable', iconType: 'cpu', size: '32 KB', date: 'Hoy 09:00', permissions: '-rwxr-xr-x', owner: 'user' },
+    { id: 'w_img', name: 'image_processor.wasm', type: 'executable', iconType: 'cpu', size: '64 KB', date: 'Hoy 09:00', permissions: '-rwxr-xr-x', owner: 'user' },
+    { id: 'w_math', name: 'math_benchmark.wasm', type: 'executable', iconType: 'cpu', size: '28 KB', date: 'Hoy 09:00', permissions: '-rwxr-xr-x', owner: 'user' },
   ],
   '/home/guest': [
     { id: 'g_desktop', name: 'Desktop', type: 'folder', iconType: 'folder', date: 'Hoy 08:00', permissions: 'drwxr-xr-x', owner: 'guest' },
@@ -359,22 +339,10 @@ export default function FileExplorer({ user, onOpenFile }: { user?: UserData; on
     const nameLower = item.name.toLowerCase();
     let appTypeForRecent = 'texteditor';
     
-    if (nameLower.endsWith('.exe') || nameLower.endsWith('.msi') || nameLower.endsWith('.bat') || item.iconType === 'wine') {
-      let win32AppId = item.name;
-      if (nameLower.includes('mine')) win32AppId = 'winmine';
-      else if (nameLower.includes('pinball')) win32AppId = 'pinball';
-      else if (nameLower.includes('sol')) win32AppId = 'solitaire';
-      else if (nameLower.includes('putty')) win32AppId = 'putty';
-      else if (nameLower.includes('vlc')) win32AppId = 'vlc_win32';
-      else if (nameLower.includes('rar') || nameLower.includes('7z')) win32AppId = 'winrar';
-      else if (nameLower.includes('note')) win32AppId = 'notepad_win32';
-      else if (nameLower.includes('cmd')) win32AppId = 'cmd_win32';
-      else if (nameLower.includes('paint')) win32AppId = 'mspaint_win32';
-      else if (nameLower.includes('task')) win32AppId = 'taskmgr_win32';
-
-      appTypeForRecent = 'wine';
+    if (nameLower.endsWith('.mp3') || nameLower.endsWith('.wav') || nameLower.endsWith('.ogg') || nameLower.endsWith('.flac') || nameLower.endsWith('.aac')) {
+      appTypeForRecent = 'webamp';
       if (onOpenFile) {
-        onOpenFile('wine', `Wine 9.0 Win32 Subsystem - ${item.name}`, win32AppId);
+        onOpenFile('webamp', `Webamp Music Player - ${item.name}`, currentPath === '/' ? `/${item.name}` : `${currentPath}/${item.name}`);
       }
     } else if (nameLower.endsWith('.txt') || nameLower.endsWith('.js') || nameLower.endsWith('.json') || nameLower.endsWith('.html') || nameLower.endsWith('.md')) {
       appTypeForRecent = 'texteditor';
@@ -384,7 +352,7 @@ export default function FileExplorer({ user, onOpenFile }: { user?: UserData; on
     } else if (nameLower.endsWith('.pdf')) {
       appTypeForRecent = 'pdfviewer';
       if (onOpenFile) {
-        onOpenFile('pdfviewer', `Visor PDF - ${item.name}`);
+        onOpenFile('pdfviewer', `Visor PDF - ${item.name}`, currentPath === '/' ? `/${item.name}` : `${currentPath}/${item.name}`);
       }
     } else if (nameLower.endsWith('.png') || nameLower.endsWith('.jpg') || nameLower.endsWith('.jpeg')) {
       appTypeForRecent = 'imageviewer';
@@ -844,7 +812,7 @@ export default function FileExplorer({ user, onOpenFile }: { user?: UserData; on
       case 'wine':
         return <Box className={`${className} text-amber-500 drop-shadow-md`} />;
       default:
-        return <File className={`${className} text-gray-400 drop-shadow-md`} />;
+        return <File className={`${className} text-red-400 drop-shadow-md`} />;
     }
   };
 
@@ -863,7 +831,6 @@ export default function FileExplorer({ user, onOpenFile }: { user?: UserData; on
     { label: 'Imágenes', path: `${userHomePath}/Pictures`, icon: ImageIcon, color: 'text-purple-400' },
     { label: 'Música', path: `${userHomePath}/Music`, icon: Music, color: 'text-pink-400' },
     { label: 'Vídeos', path: `${userHomePath}/Videos`, icon: Film, color: 'text-red-400' },
-    { label: 'Disco C: (Wine)', path: `${userHomePath}/.wine/drive_c`, icon: HardDrive, color: 'text-amber-500' },
     { label: 'Raíz del Sistema', path: '/', icon: Folder, color: 'text-gray-400' },
   ];
 
@@ -1243,12 +1210,20 @@ export default function FileExplorer({ user, onOpenFile }: { user?: UserData; on
               >
                 <Play className="w-4 h-4 text-emerald-400" /> Abrir / Ejecutar
               </button>
-              {(contextMenu.item.name.toLowerCase().endsWith('.exe') || contextMenu.item.name.toLowerCase().endsWith('.msi') || contextMenu.item.iconType === 'wine') && (
+              {contextMenu.item.name.toLowerCase().endsWith('.pdf') && (
+                <button 
+                  onClick={() => { setContextMenu(null); handleOpenItem(contextMenu.item!); }} 
+                  className="w-full text-left px-4 py-2 hover:bg-blue-600 hover:text-white flex items-center gap-2.5 transition-colors font-semibold text-red-300"
+                >
+                  <FileImage className="w-4 h-4 text-red-400" /> Abrir en Savia Pdf
+                </button>
+              )}
+              {(contextMenu.item.name.toLowerCase().endsWith('.wasm') || contextMenu.item.iconType === 'wine') && (
                 <button 
                   onClick={() => { setContextMenu(null); handleOpenItem(contextMenu.item!); }} 
                   className="w-full text-left px-4 py-2 hover:bg-blue-600 hover:text-white flex items-center gap-2.5 transition-colors font-semibold text-amber-300"
                 >
-                  <Box className="w-4 h-4 text-amber-400" /> Ejecutar con Savia WinEmu (x86)
+                  <Box className="w-4 h-4 text-amber-400" /> Ejecutar en Savia Rust WASM Studio
                 </button>
               )}
               <button 
@@ -1298,6 +1273,12 @@ export default function FileExplorer({ user, onOpenFile }: { user?: UserData; on
                     <Plus className="w-4 h-4 text-emerald-400" /> Crear Nuevo Fichero
                   </button>
                   <button 
+                    onClick={() => { setContextMenu(null); setNewModal({ type: 'file' }); setNewItemName('documento.pdf'); }} 
+                    className="w-full text-left px-4 py-2 hover:bg-blue-600 hover:text-white flex items-center gap-2.5 transition-colors text-red-300 font-medium"
+                  >
+                    <FileImage className="w-4 h-4 text-red-400" /> Crear Documento PDF (.pdf)
+                  </button>
+                  <button 
                     onClick={() => { setContextMenu(null); setNewModal({ type: 'wine' }); setNewItemName('programa.exe'); }} 
                     className="w-full text-left px-4 py-2 hover:bg-blue-600 hover:text-white flex items-center gap-2.5 transition-colors text-amber-300 font-medium"
                   >
@@ -1344,7 +1325,7 @@ export default function FileExplorer({ user, onOpenFile }: { user?: UserData; on
             <div className="flex items-center justify-between border-b border-white/10 pb-3">
               <h3 className="text-sm font-bold text-white flex items-center gap-2">
                 {newModal.type === 'folder' ? <Folder className="w-4 h-4 text-amber-400" fill="currentColor" /> : (newModal.type === 'wine' ? <Box className="w-4 h-4 text-amber-400" /> : <FileText className="w-4 h-4 text-emerald-400" />)}
-                Crear {newModal.type === 'folder' ? 'Nueva Carpeta' : (newModal.type === 'wine' ? 'Ejecutable Win32' : 'Nuevo Fichero')}
+                Crear {newModal.type === 'folder' ? 'Nueva Carpeta' : (newModal.type === 'wine' ? 'Módulo WebAssembly' : 'Nuevo Fichero')}
               </h3>
               <button onClick={() => setNewModal(null)} className="text-gray-400 hover:text-white">
                 <X className="w-4 h-4" />

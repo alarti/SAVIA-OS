@@ -14,6 +14,9 @@ export default function LoginScreen({ onLogin, onPowerOff }: { onLogin: (user: U
 
   // Lockout countdown timer
   useEffect(() => {
+    // Ensure any leftover Webamp floating windows or elements are completely removed on login screen
+    document.querySelectorAll('#webamp, .webamp-root, #webamp-context-menu').forEach(el => el.remove());
+
     if (lockoutRemaining <= 0) return;
     const interval = setInterval(() => {
       setLockoutRemaining(prev => {

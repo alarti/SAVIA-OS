@@ -9,6 +9,7 @@ import { getInstalledPackageIds, AVAILABLE_PACKAGES, installPackage, uninstallPa
 import { verifyUserPassword, saveUserPassword, DEFAULT_USERS, UserData } from '../utils/auth';
 import { securityEngine, SecurityEvent } from '../utils/securityEngine';
 import { userStorage } from '../utils/userStorage';
+import { getRealOsInfo, getRealGpuInfo, getRealMemoryInfo } from '../utils/systemInfo';
 import SudoDialog from './SudoDialog';
 
 type TabType = 'security' | 'appstore' | 'appearance' | 'sound' | 'devices' | 'accounts' | 'network';
@@ -982,24 +983,41 @@ export default function ControlPanelApp({ user, onOpenApp }: { user?: UserData; 
               </div>
 
               <div className="bg-[#1C1C1F] p-5 rounded-2xl border border-white/10 flex flex-col gap-3">
-                <h3 className="text-xs font-bold text-white uppercase tracking-wider text-gray-400">Especificaciones Técnicas</h3>
+                <h3 className="text-xs font-bold text-white uppercase tracking-wider text-gray-400">Especificaciones Técnicas del Sistema Real</h3>
                 <div className="text-xs text-gray-300 flex flex-col gap-2 font-mono">
-                  <div className="flex justify-between border-b border-white/5 pb-1">
-                    <span className="text-gray-400">Arquitectura:</span>
-                    <span className="text-white font-bold">WASM 64-bit POSIX</span>
-                  </div>
-                  <div className="flex justify-between border-b border-white/5 pb-1">
-                    <span className="text-gray-400">Motor Gráfico:</span>
-                    <span className="text-white font-bold">WebGL 2.0 / WebGPU Ready</span>
-                  </div>
-                  <div className="flex justify-between border-b border-white/5 pb-1">
-                    <span className="text-gray-400">Servidor de Audio:</span>
-                    <span className="text-white font-bold">Web Audio Synthesizer</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-gray-400">Creador de SaviaOS:</span>
-                    <span className="text-blue-400 font-bold">Alberto Arce</span>
-                  </div>
+                  {(() => {
+                    const realOs = getRealOsInfo();
+                    const realGpu = getRealGpuInfo();
+                    const realMem = getRealMemoryInfo();
+                    return (
+                      <>
+                        <div className="flex justify-between border-b border-white/5 pb-1">
+                          <span className="text-gray-400">Sistema Operativo:</span>
+                          <span className="text-white font-bold">{realOs.osName} {realOs.osVersion}</span>
+                        </div>
+                        <div className="flex justify-between border-b border-white/5 pb-1">
+                          <span className="text-gray-400">CPU & Cores:</span>
+                          <span className="text-white font-bold">{realOs.hardwareConcurrency} Núcleos ({realOs.architecture})</span>
+                        </div>
+                        <div className="flex justify-between border-b border-white/5 pb-1">
+                          <span className="text-gray-400">Memoria RAM / Heap:</span>
+                          <span className="text-white font-bold">{realMem.usedJsHeapMb} MB / {realMem.jsHeapLimitMb} MB</span>
+                        </div>
+                        <div className="flex justify-between border-b border-white/5 pb-1">
+                          <span className="text-gray-400">Renderizador GPU:</span>
+                          <span className="text-white font-bold truncate max-w-[200px]" title={realGpu.renderer}>{realGpu.renderer}</span>
+                        </div>
+                        <div className="flex justify-between border-b border-white/5 pb-1">
+                          <span className="text-gray-400">Navegador:</span>
+                          <span className="text-white font-bold">{realOs.browserName}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-gray-400">Creador de SaviaOS:</span>
+                          <span className="text-blue-400 font-bold">Alberto Arce</span>
+                        </div>
+                      </>
+                    );
+                  })()}
                 </div>
               </div>
             </div>
