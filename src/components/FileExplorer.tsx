@@ -5,7 +5,7 @@ import {
   File, Play, ExternalLink, ShieldAlert, Plus, Upload, Clipboard, 
   Check, X, HardDrive, Box, Image as ImageIcon, Music, Film, Home, 
   Monitor, Zap, Settings, RefreshCcw, ExternalLink as LinkIcon, Clock,
-  Undo2, RotateCcw
+  Undo2, RotateCcw, CheckCircle2, Cloud
 } from 'lucide-react';
 import type { UserData } from '../utils/auth';
 import { soundEngine } from '../utils/soundEngine';
@@ -20,12 +20,14 @@ export type FileItem = {
   id: string;
   name: string;
   type: 'folder' | 'file' | 'executable';
-  iconType: 'folder' | 'text' | 'image' | 'cpu' | 'terminal' | 'file' | 'wine';
+  iconType: 'folder' | 'text' | 'image' | 'cpu' | 'terminal' | 'file' | 'wine' | string;
   size?: string;
   date?: string;
   permissions?: string;
   owner?: string;
   content?: string;
+  appType?: string;
+  docData?: any;
 };
 
 const INITIAL_FS: Record<string, FileItem[]> = {
@@ -142,7 +144,7 @@ export default function FileExplorer({ user, onOpenFile, initialPath }: { user?:
 
   const [fs, setFs] = useState<Record<string, FileItem[]>>(() => {
     try {
-      return vfs.getVFS();
+      return vfs.getVFS() as any;
     } catch {}
     return INITIAL_FS;
   });
@@ -157,14 +159,14 @@ export default function FileExplorer({ user, onOpenFile, initialPath }: { user?:
     setHistory([defaultHome]);
     setHistoryIndex(0);
     try {
-      setFs(vfs.getVFS());
+      setFs(vfs.getVFS() as any);
     } catch {}
   }, [activeUsername]);
 
   useEffect(() => {
     const refreshVFSData = () => {
       try {
-        setFs(vfs.getVFS());
+        setFs(vfs.getVFS() as any);
       } catch {}
     };
     window.addEventListener('savia_os_vfs_updated', refreshVFSData);
@@ -305,7 +307,7 @@ export default function FileExplorer({ user, onOpenFile, initialPath }: { user?:
     navigateTo(parentPath);
   };
 
-  const handleLocalFileUploadToFS = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleLocalFileUploadToFS = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
@@ -322,6 +324,8 @@ export default function FileExplorer({ user, onOpenFile, initialPath }: { user?:
     if (nameLower.endsWith('.exe') || nameLower.endsWith('.msi')) iconType = 'wine';
     else if (nameLower.endsWith('.sh')) iconType = 'terminal';
 
+    const fileContent = await file.text();
+
     const newItem: FileItem = {
       id: Date.now().toString(),
       name: fileName,
@@ -330,7 +334,8 @@ export default function FileExplorer({ user, onOpenFile, initialPath }: { user?:
       size: sizeFormatted,
       date: 'Ahora mismo',
       permissions: (iconType === 'wine' || iconType === 'terminal') ? '-rwxr-xr-x' : '-rw-r--r--',
-      owner: user?.username || 'user'
+      owner: user?.username || 'user',
+      content: fileContent
     };
 
     const updated = {
@@ -339,6 +344,7 @@ export default function FileExplorer({ user, onOpenFile, initialPath }: { user?:
     };
 
     saveFs(updated);
+    vfs.syncFileToLocalDisk(currentPath, fileName, fileContent);
     soundEngine.playSuccessTone();
   };
 
@@ -349,10 +355,38 @@ export default function FileExplorer({ user, onOpenFile, initialPath }: { user?:
       return;
     }
 
+    const fullItemPath = currentPath === '/' ? `/${item.name}` : `${currentPath}/${item.name}`;
+
+    // Handle items with explicit appType (e.g. desktop app shortcuts)
+    const rawItem = item as any;
+    if (rawItem.appType) {
+      if (rawItem.appType === 'equipo') {
+        navigateTo('/');
+        return;
+      }
+      if (rawItem.appType === 'trash') {
+        navigateTo('/trash');
+        return;
+      }
+      if (rawItem.appType === 'folder') {
+        const targetPath = rawItem.docData || fullItemPath;
+        navigateTo(targetPath);
+        return;
+      }
+      if (onOpenFile) {
+        onOpenFile(rawItem.appType, item.name, rawItem.docData || fullItemPath);
+      }
+      userStorage.addRecent(activeUsername, {
+        name: item.name,
+        path: fullItemPath,
+        appType: rawItem.appType,
+        iconType: item.iconType
+      });
+      return;
+    }
+
     const nameLower = item.name.toLowerCase();
     let appTypeForRecent = 'texteditor';
-    
-    const fullItemPath = currentPath === '/' ? `/${item.name}` : `${currentPath}/${item.name}`;
 
     if (nameLower.endsWith('.mp3') || nameLower.endsWith('.wav') || nameLower.endsWith('.ogg') || nameLower.endsWith('.flac') || nameLower.endsWith('.aac')) {
       appTypeForRecent = 'webamp';
@@ -542,7 +576,7 @@ export default function FileExplorer({ user, onOpenFile, initialPath }: { user?:
       setSelectedItemId(null);
       setSelectedItemIds([]);
       soundEngine.playButtonClick();
-      setFs(vfs.getVFS());
+      setFs(vfs.getVFS() as any);
     }
   };
 
@@ -583,7 +617,7 @@ export default function FileExplorer({ user, onOpenFile, initialPath }: { user?:
         e.preventDefault();
         trashAndUndo.undo();
         soundEngine.playButtonClick();
-        setFs(vfs.getVFS());
+        setFs(vfs.getVFS() as any);
       } else if (e.key === 'Delete' || e.key === 'Supr') {
         if (selectedItemIds.length > 0) {
           e.preventDefault();
@@ -807,17 +841,32 @@ export default function FileExplorer({ user, onOpenFile, initialPath }: { user?:
       return;
     }
     trashAndUndo.moveToTrash([item], currentPath);
+    if (currentPath.endsWith('/Desktop')) {
+      const existingIcons = userStorage.getDesktopIcons(activeUsername);
+      const updatedIcons = existingIcons.filter(ic => ic.title.toLowerCase() !== item.name.toLowerCase() && ic.id !== item.id);
+      userStorage.setDesktopIcons(activeUsername, updatedIcons);
+    }
     setSelectedItemId(null);
     soundEngine.playButtonClick();
-    setFs(vfs.getVFS());
+    setFs(vfs.getVFS() as any);
   };
 
-  const getIcon = (type: FileItem['iconType'], className = 'w-10 h-10') => {
+  const getIcon = (type: FileItem['iconType'] | string, className = 'w-10 h-10') => {
     switch (type) {
       case 'folder':
         return <Folder className={`${className} text-amber-400 drop-shadow-md`} fill="currentColor" />;
       case 'text':
+      case 'editor':
         return <FileText className={`${className} text-blue-400 drop-shadow-md`} />;
+      case 'doc':
+      case 'office':
+        return <FileText className={`${className} text-blue-500 drop-shadow-md`} />;
+      case 'xls':
+        return <FileText className={`${className} text-emerald-500 drop-shadow-md`} />;
+      case 'ppt':
+        return <FileText className={`${className} text-amber-500 drop-shadow-md`} />;
+      case 'pdf':
+        return <File className={`${className} text-rose-500 drop-shadow-md`} />;
       case 'image':
         return <FileImage className={`${className} text-purple-400 drop-shadow-md`} />;
       case 'cpu':
@@ -826,8 +875,30 @@ export default function FileExplorer({ user, onOpenFile, initialPath }: { user?:
         return <TerminalIcon className={`${className} text-gray-300 drop-shadow-md`} />;
       case 'wine':
         return <Box className={`${className} text-amber-500 drop-shadow-md`} />;
+      case 'equipo':
+        return <Monitor className={`${className} text-cyan-400 drop-shadow-md`} />;
+      case 'trash':
+        return <Trash2 className={`${className} text-rose-400 drop-shadow-md`} />;
+      case 'browser':
+        return <ExternalLink className={`${className} text-blue-400 drop-shadow-md`} />;
+      case 'paint':
+        return <FileImage className={`${className} text-pink-400 drop-shadow-md`} />;
+      case 'calc':
+        return <Zap className={`${className} text-amber-400 drop-shadow-md`} />;
+      case 'calendar':
+        return <Clock className={`${className} text-cyan-400 drop-shadow-md`} />;
+      case 'game':
+        return <Box className={`${className} text-purple-400 drop-shadow-md`} />;
+      case 'music':
+        return <Music className={`${className} text-pink-400 drop-shadow-md`} />;
+      case 'controlpanel':
+        return <Settings className={`${className} text-gray-400 drop-shadow-md`} />;
+      case 'appstore':
+        return <Cloud className={`${className} text-blue-400 drop-shadow-md`} />;
+      case 'theme':
+        return <ImageIcon className={`${className} text-indigo-400 drop-shadow-md`} />;
       default:
-        return <File className={`${className} text-red-400 drop-shadow-md`} />;
+        return <File className={`${className} text-blue-400 drop-shadow-md`} />;
     }
   };
 
@@ -1141,6 +1212,7 @@ export default function FileExplorer({ user, onOpenFile, initialPath }: { user?:
 
               {currentItems.map(item => {
                 const isSelected = selectedItemIds.includes(item.id);
+                const isSyncedItem = currentPath.startsWith('/mnt/local') || item.name.startsWith('📂 ') || item.owner === 'local_user';
                 return (
                   <div 
                     key={item.id}
@@ -1154,7 +1226,14 @@ export default function FileExplorer({ user, onOpenFile, initialPath }: { user?:
                         : 'hover:bg-white/10 border border-transparent'
                     }`}
                   >
-                    {getIcon(item.iconType, isTouch ? 'w-12 h-12' : 'w-10 h-10')}
+                    <div className="relative">
+                      {getIcon(item.iconType, isTouch ? 'w-12 h-12' : 'w-10 h-10')}
+                      {isSyncedItem && (
+                        <div className="absolute -bottom-1 -right-1 bg-slate-900 border border-slate-700 rounded-full p-0.5 shadow-md" title="Sincronizado en tiempo real (OneDrive Mode)">
+                          <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+                        </div>
+                      )}
+                    </div>
                     <span className={`text-center font-medium truncate w-full ${isTouch ? 'text-xs' : 'text-[11px]'} ${isSelected ? 'text-white font-bold' : 'text-gray-200'}`}>
                       {item.name}
                     </span>

@@ -5,6 +5,8 @@ import { soundEngine } from '../utils/soundEngine';
 import { securityEngine } from '../utils/securityEngine';
 import { verifyUserPassword } from '../utils/auth';
 import { networkManager } from '../utils/networkManager';
+import { sessionManager } from '../utils/sessionManager';
+import { fileLockEngine } from '../utils/fileLockEngine';
 
 type FileSystem = {
   [path: string]: {
@@ -377,6 +379,55 @@ export default function TerminalApp({ user, onOpenApp }: { user: UserData; onOpe
 
       case 'whoami':
         setOutput(prev => [...prev, activeTerminalUser]);
+        break;
+
+      case 'who':
+      case 'w':
+      case 'users':
+        const activeSess = sessionManager.getActiveSessions();
+        if (cmd === 'users') {
+          setOutput(prev => [...prev, activeSess.map(s => s.username).join(' ')]);
+        } else {
+          setOutput(prev => [
+            ...prev,
+            'USER     TTY      LOGIN TIME  STATUS     PROCESSES / WINDOWS',
+            '----     ---      ----------  ------     -------------------',
+            ...activeSess.map(s => 
+              `${s.username.padEnd(8)} ${s.tty.padEnd(8)} ${(s.loginTime || '10:00').padEnd(11)} ${(s.status || 'active').padEnd(10)} ${s.windows?.length || 0} ventanas activas`
+            )
+          ]);
+        }
+        break;
+
+      case 'loginctl':
+        const loginctlSess = sessionManager.getActiveSessions();
+        setOutput(prev => [
+          ...prev,
+          'SESSION  UID   USER     SEAT     TTY    STATE',
+          '-------  ----  ----     ----     ---    -----',
+          ...loginctlSess.map((s, idx) => 
+            `${(idx + 1).toString().padEnd(8)} ${(s.username === 'root' ? '0' : s.username === 'guest' ? '1001' : '1000').padEnd(5)} ${s.username.padEnd(8)} seat0    ${(s.tty || 'tty1').padEnd(6)} ${s.status}`
+          ),
+          '',
+          `${loginctlSess.length} sesiones activas en concurrencia registratas.`
+        ]);
+        break;
+
+      case 'locks':
+      case 'filelocks':
+        const activeLocks = fileLockEngine.getAllActiveLocks();
+        if (activeLocks.length === 0) {
+          setOutput(prev => [...prev, 'No hay bloqueos de archivos activos en las sesiones concurrentes.']);
+        } else {
+          setOutput(prev => [
+            ...prev,
+            'RUTA DE ARCHIVO                             USUARIO    APLICACIÓN        HORA BLOQUEO',
+            '------------------------------------------  ---------  ----------------  ------------',
+            ...activeLocks.map(l => 
+              `${l.filePath.padEnd(42)} ${l.username.padEnd(10)} ${l.appName.padEnd(16)} ${new Date(l.lockedAt).toLocaleTimeString()}`
+            )
+          ]);
+        }
         break;
 
       case 'id':

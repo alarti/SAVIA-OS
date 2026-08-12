@@ -12,6 +12,7 @@ import { userStorage } from '../utils/userStorage';
 import type { UserData } from '../utils/auth';
 import { vfs } from '../utils/vfs';
 import SaveFileDialogModal from './SaveFileDialogModal';
+import OpenFileDialogModal from './OpenFileDialogModal';
 
 type SuiteMode = 'writer' | 'calc' | 'impress';
 type ActiveTab = 'archivo' | 'inicio' | 'insertar' | 'diseno' | 'formulas' | 'ver' | 'ayuda';
@@ -83,6 +84,7 @@ export default function OfficeApp({ initialFile, user }: { initialFile?: string;
   const [isFullscreenSlideshow, setIsFullscreenSlideshow] = useState(false);
   const [isPrintModalOpen, setIsPrintModalOpen] = useState(false);
   const [isSaveModalOpen, setIsSaveModalOpen] = useState(false);
+  const [isOpenFileModalOpen, setIsOpenFileModalOpen] = useState(false);
   const [saveLocationPath, setSaveLocationPath] = useState<string>(`/home/${username}/Documents`);
 
   // Status message
@@ -121,37 +123,101 @@ export default function OfficeApp({ initialFile, user }: { initialFile?: string;
     }, 800);
   };
 
-  // Load document content whenever docTitle or mode changes
-  useEffect(() => {
-    try {
-      const existing = userStorage.getOfficeDocs(username);
-      const savedDoc = existing[docTitle];
-
-      if (mode === 'writer') {
-        if (writerEditorRef.current) {
-          const content = savedDoc && savedDoc.content ? savedDoc.content : DEFAULT_WRITER_HTML;
-          writerEditorRef.current.innerHTML = content;
-          updateWriterStats();
-        }
-      } else if (mode === 'calc') {
-        if (savedDoc && savedDoc.content) {
-          try {
-            const parsedSheets = JSON.parse(savedDoc.content);
-            if (Array.isArray(parsedSheets)) setSheets(parsedSheets);
-          } catch {}
-        }
-      } else if (mode === 'impress') {
-        if (savedDoc && savedDoc.content) {
-          try {
-            const parsedSlides = JSON.parse(savedDoc.content);
-            if (Array.isArray(parsedSlides)) setSlides(parsedSlides);
-          } catch {}
+  const loadContentIntoOffice = (content: string, fileName: string) => {
+    const ext = fileName.split('.').pop()?.toLowerCase() || '';
+    if (['xlsx', 'xls', 'csv'].includes(ext)) {
+      setMode('calc');
+      if (ext === 'csv' || (content.includes(',') && !content.trim().startsWith('['))) {
+        const lines = content.split('\n');
+        const newData: Record<string, string> = {};
+        lines.forEach((line, rIdx) => {
+          if (rIdx >= 25) return;
+          const cells = line.split(/,(?=(?:(?:[^"]*"){2})*[^"]*$)/);
+          cells.forEach((cellVal, cIdx) => {
+            if (cIdx >= COLS.length) return;
+            const colLetter = COLS[cIdx];
+            const cleanVal = cellVal.replace(/^"|"$/g, '').trim();
+            if (cleanVal) {
+              newData[`${colLetter}${rIdx + 1}`] = cleanVal;
+            }
+          });
+        });
+        setSheets([{ name: 'Hoja Importada', data: newData }]);
+      } else {
+        try {
+          const parsed = JSON.parse(content);
+          if (Array.isArray(parsed)) setSheets(parsed);
+          else setSheets([{ name: 'Hoja 1', data: { A1: content } }]);
+        } catch {
+          setSheets([{ name: 'Hoja 1', data: { A1: content } }]);
         }
       }
-    } catch (err) {
-      console.error('Error loading document:', err);
+    } else if (['pptx', 'ppt', 'odp'].includes(ext)) {
+      setMode('impress');
+      try {
+        const parsed = JSON.parse(content);
+        if (Array.isArray(parsed)) setSlides(parsed);
+        else setSlides([{ id: 'slide-1', title: fileName, subtitle: content, bgColor: '#ffffff' }]);
+      } catch {
+        setSlides([{ id: 'slide-1', title: fileName, subtitle: content, bgColor: '#ffffff' }]);
+      }
+    } else {
+      // Writer (.docx, .doc, .txt, .html, .md, etc)
+      setMode('writer');
+      if (writerEditorRef.current) {
+        if (content.includes('<p>') || content.includes('<div>') || content.includes('<span>') || content.includes('<br>')) {
+          writerEditorRef.current.innerHTML = content;
+        } else {
+          writerEditorRef.current.innerText = content;
+        }
+        updateWriterStats();
+      }
     }
-  }, [docTitle, mode]);
+  };
+
+  // Load document content whenever docTitle, initialFile or mode changes
+  useEffect(() => {
+    let active = true;
+
+    async function loadDoc() {
+      try {
+        let loadedContent: string | null = null;
+        const targetPath = initialFile || docTitle;
+
+        if (targetPath) {
+          const vfsResult = await vfs.readTextFileAsync(targetPath);
+          if (vfsResult && vfsResult.content) {
+            loadedContent = vfsResult.content;
+            if (vfsResult.name) {
+              setDocTitle(vfsResult.name);
+            }
+          }
+        }
+
+        if (!loadedContent) {
+          const existing = userStorage.getOfficeDocs(username);
+          const savedDoc = existing[docTitle];
+          if (savedDoc && savedDoc.content) {
+            loadedContent = savedDoc.content;
+          }
+        }
+
+        if (!active) return;
+
+        if (loadedContent) {
+          loadContentIntoOffice(loadedContent, docTitle || initialFile || 'documento.docx');
+        } else if (mode === 'writer' && writerEditorRef.current) {
+          writerEditorRef.current.innerHTML = DEFAULT_WRITER_HTML;
+          updateWriterStats();
+        }
+      } catch (err) {
+        console.error('Error loading document in OfficeApp:', err);
+      }
+    }
+
+    loadDoc();
+    return () => { active = false; };
+  }, [initialFile, docTitle, username]);
 
   // Keyboard shortcut Ctrl+S
   useEffect(() => {
@@ -802,6 +868,14 @@ export default function OfficeApp({ initialFile, user }: { initialFile?: string;
             >
               <Upload className="w-4 h-4 text-emerald-600" />
               <span>Subir / Abrir archivo local (.docx, .xlsx...)</span>
+            </button>
+
+            <button
+              onClick={() => { setIsMenuDrawerOpen(false); setIsOpenFileModalOpen(true); }}
+              className="flex items-center gap-2.5 px-3 py-2 hover:bg-blue-50 text-blue-800 rounded-lg text-left font-bold"
+            >
+              <FolderOpen className="w-4 h-4 text-blue-600" />
+              <span>Abrir Fichero desde VFS / Carpeta Sincronizada</span>
             </button>
 
             <div className="h-px bg-gray-200 my-1" />
@@ -1622,6 +1696,26 @@ export default function OfficeApp({ initialFile, user }: { initialFile?: string;
         username={username}
         title={`Guardar Fichero - ${mode === 'writer' ? 'SaviaDoc' : mode === 'calc' ? 'SaviaXls' : 'SaviaPpt'}`}
       />
+
+      {isOpenFileModalOpen && (
+        <OpenFileDialogModal
+          isOpen={isOpenFileModalOpen}
+          username={username}
+          title="Abrir Documento desde VFS"
+          filterExtension="all"
+          onClose={() => setIsOpenFileModalOpen(false)}
+          onOpenFile={async (filePath, fileName) => {
+            setDocTitle(fileName);
+            const parent = filePath.substring(0, filePath.lastIndexOf('/')) || '/';
+            setSaveLocationPath(parent);
+            const loaded = await vfs.readTextFileAsync(filePath);
+            if (loaded && loaded.content) {
+              loadContentIntoOffice(loaded.content, fileName);
+              flashStatus(`Documento cargado: ${fileName}`);
+            }
+          }}
+        />
+      )}
     </div>
   );
 }

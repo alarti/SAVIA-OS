@@ -23,3 +23,118 @@
     break-after: page !important;
   }
 }
+
+/* Windows 11 Light Theme Overrides for SAVIA-OS */
+.savia-theme-light, .light-mode {
+  color-scheme: light;
+}
+
+.savia-theme-light,
+.light-mode {
+  background-color: #f3f4f6 !important;
+  color: #0f172a !important;
+}
+
+/* Background overrides for Windows 11 Light Mode */
+.savia-theme-light .bg-\[\#0A0B10\],
+.savia-theme-light .bg-\[\#121214\],
+.savia-theme-light .bg-\[\#18181C\],
+.savia-theme-light .bg-\[\#1C1C1F\],
+.savia-theme-light .bg-\[\#18181B\],
+.savia-theme-light .bg-\[\#09090B\],
+.savia-theme-light .bg-\[\#1a1c1e\],
+.savia-theme-light .bg-\[\#16181a\],
+.savia-theme-light .bg-\[\#26292d\],
+.savia-theme-light .bg-\[\#1e1e22\],
+.savia-theme-light .bg-\[\#27272a\],
+.savia-theme-light .bg-\[\#0d0e12\],
+.savia-theme-light .bg-\[\#1e2023\],
+.savia-theme-light .bg-\[\#04050a\],
+.savia-theme-light .bg-black,
+.savia-theme-light .bg-black\/40,
+.savia-theme-light .bg-black\/60,
+.savia-theme-light .bg-black\/80,
+.savia-theme-light .bg-zinc-900,
+.savia-theme-light .bg-zinc-800,
+.savia-theme-light .bg-slate-900,
+.savia-theme-light .bg-slate-850,
+.savia-theme-light .bg-slate-800 {
+  background-color: #ffffff !important;
+  color: #0f172a !important;
+}
+
+.savia-theme-light .bg-\[\#1C1C1F\],
+.savia-theme-light .bg-\[\#18181C\],
+.savia-theme-light .bg-\[\#27272a\],
+.savia-theme-light .bg-\[\#16181a\],
+.savia-theme-light .bg-\[\#1C1C20\],
+.savia-theme-light .bg-\[\#26292d\] {
+  background-color: #f8fafc !important;
+}
+
+.savia-theme-light .bg-\[\#16161A\],
+.savia-theme-light .bg-\[\#18181c\],
+.savia-theme-light .bg-\[\#18181c\]\/95 {
+  background-color: #f1f5f9 !important;
+}
+
+/* Text overrides for Windows 11 Light Mode */
+.savia-theme-light .text-white,
+.savia-theme-light .text-gray-100,
+.savia-theme-light .text-gray-200,
+.savia-theme-light .text-gray-300,
+.savia-theme-light .text-zinc-100,
+.savia-theme-light .text-zinc-200,
+.savia-theme-light .text-zinc-300,
+.savia-theme-light .text-slate-100,
+.savia-theme-light .text-slate-200,
+.savia-theme-light .text-slate-300 {
+  color: #0f172a !important;
+}
+
+.savia-theme-light .text-gray-400,
+.savia-theme-light .text-gray-500,
+.savia-theme-light .text-zinc-400,
+.savia-theme-light .text-zinc-500,
+.savia-theme-light .text-slate-400 {
+  color: #475569 !important;
+}
+
+/* Border overrides */
+.savia-theme-light .border-white\/10,
+.savia-theme-light .border-white\/15,
+.savia-theme-light .border-white\/20,
+.savia-theme-light .border-white\/5,
+.savia-theme-light .border-\[\#3f3f46\],
+.savia-theme-light .border-\[\#3F3F46\],
+.savia-theme-light .border-black\/40 {
+  border-color: #e2e8f0 !important;
+}
+
+/* Hover state overrides */
+.savia-theme-light .hover\:bg-white\/10:hover,
+.savia-theme-light .hover\:bg-white\/5:hover,
+.savia-theme-light .hover\:bg-white\/20:hover {
+  background-color: rgba(15, 23, 42, 0.08) !important;
+}
+
+/* Input, Textarea, Select controls */
+.savia-theme-light input,
+.savia-theme-light textarea,
+.savia-theme-light select {
+  background-color: #f8fafc !important;
+  color: #0f172a !important;
+  border-color: #cbd5e1 !important;
+}
+
+.savia-theme-light input::placeholder,
+.savia-theme-light textarea::placeholder {
+  color: #94a3b8 !important;
+}
+
+/* Dialogs & Menus */
+.savia-theme-light .shadow-2xl {
+  box-shadow: 0 20px 35px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.05) !important;
+}
+
+

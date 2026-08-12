@@ -60,12 +60,9 @@ export default function WebampPlayerApp({ initialFile, onClose }: WebampPlayerAp
     if (initialFile) {
       const parts = initialFile.split('/');
       const fileName = parts.pop() || 'Musica.mp3';
-      let trackUrl = 'https://raw.githubusercontent.com/captbaritone/webamp/master/demo/mp3/llama-2.91.mp3';
 
-      if (initialFile.startsWith('http') || initialFile.startsWith('blob:') || initialFile.startsWith('data:')) {
-        trackUrl = initialFile;
-      } else {
-        const vfsFile = vfs.readFile(initialFile);
+      vfs.readTextFileAsync(initialFile).then(vfsFile => {
+        let trackUrl = 'https://raw.githubusercontent.com/captbaritone/webamp/master/demo/mp3/llama-2.91.mp3';
         if (vfsFile && vfsFile.content) {
           if (vfsFile.content.startsWith('http') || vfsFile.content.startsWith('blob:') || vfsFile.content.startsWith('data:')) {
             trackUrl = vfsFile.content;
@@ -74,16 +71,15 @@ export default function WebampPlayerApp({ initialFile, onClose }: WebampPlayerAp
             trackUrl = URL.createObjectURL(blob);
           }
         }
-      }
-
-      initialTracks.unshift({
-        metaData: {
-          artist: "Savia VFS",
-          title: fileName.replace(/\.[^/.]+$/, ""),
-          album: "Archivos SaviaOS"
-        },
-        url: trackUrl,
-        duration: 180,
+        initialTracks.unshift({
+          metaData: {
+            artist: "Savia VFS",
+            title: fileName.replace(/\.[^/.]+$/, ""),
+            album: "Archivos SaviaOS"
+          },
+          url: trackUrl,
+          duration: 180,
+        });
       });
     }
 

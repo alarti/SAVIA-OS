@@ -1,13 +1,19 @@
+import { userStorage } from './userStorage';
+import { fileLockEngine } from './fileLockEngine';
+import { securityEngine } from './securityEngine';
+
 export interface VFSFileItem {
   id: string;
   name: string;
   type: 'folder' | 'file' | 'executable';
-  iconType: 'folder' | 'text' | 'image' | 'cpu' | 'terminal' | 'file' | 'wine';
+  iconType: 'folder' | 'text' | 'image' | 'cpu' | 'terminal' | 'file' | 'wine' | string;
   size?: string;
   date?: string;
   permissions?: string;
   owner?: string;
   content?: string;
+  appType?: string;
+  docData?: any;
 }
 
 export type VFSMap = Record<string, VFSFileItem[]>;
@@ -94,7 +100,133 @@ const DEFAULT_VFS: VFSMap = {
   ],
 };
 
+const localDirHandles: Record<string, any> = {};
+
+export async function getFileContent(file: File): Promise<string> {
+  if (!file) return '';
+  const nameLower = file.name.toLowerCase();
+  const isTextExt = /\.(txt|js|ts|jsx|tsx|json|csv|md|markdown|html|htm|css|scss|less|py|c|cpp|h|hpp|sh|bash|xml|yaml|yml|ini|cfg|conf|log|env|sql|rb|php|java|go|rs|swift|kt|bat|cmd|ps1)$/.test(nameLower) || file.type.startsWith('text/');
+
+  const isImageOrMedia = file.type.startsWith('image/') || file.type.startsWith('audio/') || file.type.startsWith('video/') || file.type === 'application/pdf';
+  const isBinaryExt = /\.(png|jpe?g|gif|webp|ico|svg|bmp|pdf|mp3|wav|mp4|webm|zip|tar|gz|7z|rar|exe|dll|so|dylib)$/.test(nameLower);
+
+  if (!isTextExt && (isImageOrMedia || isBinaryExt)) {
+    return URL.createObjectURL(file);
+  }
+
+  try {
+    const text = await file.text();
+    return text;
+  } catch (err) {
+    console.warn('Failed to read text file:', file.name, err);
+    return '';
+  }
+}
+
+export async function resolveTextContent(rawContent?: string): Promise<string> {
+  if (!rawContent) return '';
+  if (rawContent.startsWith('blob:') || rawContent.startsWith('data:text/') || rawContent.startsWith('data:application/json')) {
+    try {
+      const res = await fetch(rawContent);
+      if (res.ok) {
+        return await res.text();
+      }
+    } catch (err) {
+      console.warn('Failed to resolve blob text content:', err);
+    }
+    if (rawContent.startsWith('blob:')) {
+      return '';
+    }
+  }
+  return rawContent;
+}
+
 export const vfs = {
+  registerLocalDirHandle(mountPointPath: string, handle: any): void {
+    localDirHandles[mountPointPath] = handle;
+    // Immediately run background poll for this handle
+    this.syncLocalDiskToVFS(mountPointPath);
+  },
+
+  getLocalDirHandle(mountPointPath: string): any {
+    return localDirHandles[mountPointPath];
+  },
+
+  async syncFileToLocalDisk(folderPath: string, fileName: string, content: string): Promise<void> {
+    try {
+      let targetMount = folderPath;
+      if (folderPath.includes('/Desktop/')) {
+        const parts = folderPath.split('/Desktop/');
+        const folderName = parts[1]?.replace(/^📂\s*/, '');
+        if (folderName) targetMount = `/mnt/local/${folderName}`;
+      }
+      const handle = localDirHandles[targetMount];
+      if (handle && handle.getFileHandle) {
+        const fileHandle = await handle.getFileHandle(fileName, { create: true });
+        if (fileHandle && fileHandle.createWritable) {
+          const writable = await fileHandle.createWritable();
+          await writable.write(content);
+          await writable.close();
+        }
+      }
+    } catch (err) {
+      console.warn('Sync to disk error:', err);
+    }
+  },
+
+  async syncLocalDiskToVFS(mountPointPath: string): Promise<void> {
+    try {
+      const handle = localDirHandles[mountPointPath];
+      if (!handle || !handle.values) return;
+      const files: File[] = [];
+      for await (const entry of handle.values()) {
+        if (entry.kind === 'file') {
+          const file = await entry.getFile();
+          files.push(file);
+        }
+      }
+      if (files.length === 0) return;
+
+      const map = this.getVFS();
+      const currentItems = map[mountPointPath] || [];
+
+      let updated = false;
+      for (const file of files) {
+        const existing = currentItems.find(i => i.name === file.name);
+        const content = await getFileContent(file);
+        const sizeStr = `${Math.round(file.size / 1024)} KB`;
+        const dateStr = new Date(file.lastModified).toLocaleDateString();
+
+        if (!existing) {
+          currentItems.push({
+            id: 'real_local_' + Date.now() + '_' + Math.random().toString(36).substring(2, 7),
+            name: file.name,
+            type: 'file',
+            iconType: file.type.startsWith('image/') ? 'image' : 'text',
+            size: sizeStr,
+            date: dateStr,
+            permissions: '-rw-r--r--',
+            owner: 'local_user',
+            content
+          });
+          updated = true;
+        } else if (existing.content !== content) {
+          existing.content = content;
+          existing.size = sizeStr;
+          existing.date = dateStr;
+          updated = true;
+        }
+      }
+
+      if (updated) {
+        map[mountPointPath] = currentItems;
+        this.saveVFS(map);
+      }
+    } catch (err) {
+      console.warn('Sync from disk error:', err);
+    }
+  },
+
   getVFS(): VFSMap {
     try {
       const saved = localStorage.getItem('savia_os_mock_fs');
@@ -114,6 +246,29 @@ export const vfs = {
         if (!map['/mnt/local']) map['/mnt/local'] = [];
         if (!map['/home/guest/Desktop'] || map['/home/guest/Desktop'].length === 0) {
           map['/home/guest/Desktop'] = DEFAULT_VFS['/home/guest/Desktop'];
+        }
+      }
+
+      // Clean stale blob URLs for text files from localStorage
+      let needsResave = false;
+      for (const [, items] of Object.entries(map)) {
+        if (!Array.isArray(items)) continue;
+        for (const item of items) {
+          if (item && item.type !== 'folder' && typeof item.content === 'string' && item.content.startsWith('blob:')) {
+            const nameLower = item.name.toLowerCase();
+            const isText = item.iconType === 'text' || item.iconType === 'code' || /\.(txt|js|ts|jsx|tsx|json|csv|md|html|css|py|c|cpp|h|sh|xml|yaml|yml)$/.test(nameLower);
+            if (isText) {
+              item.content = '';
+              needsResave = true;
+            }
+          }
+        }
+      }
+      if (needsResave) {
+        try {
+          localStorage.setItem('savia_os_mock_fs', JSON.stringify(map));
+        } catch (err) {
+          console.warn('Failed to sanitize VFS localStorage:', err);
         }
       }
 
@@ -149,11 +304,50 @@ export const vfs = {
         });
       }
 
+      // Sync Desktop Icons for all users into their corresponding VFS Desktop folder
+      ['guest', 'user', 'root'].forEach(uname => {
+        const desktopPath = uname === 'root' ? '/root/Desktop' : `/home/${uname}/Desktop`;
+        if (!map[desktopPath]) map[desktopPath] = [];
+
+        try {
+          const icons = userStorage.getDesktopIcons(uname);
+          icons.forEach(ic => {
+            const exists = map[desktopPath].some(item => item.id === ic.id || item.name === ic.title || (ic.docData && item.name === ic.docData));
+            if (!exists) {
+              map[desktopPath].push({
+                id: ic.id,
+                name: ic.title,
+                type: ic.appType === 'folder' ? 'folder' : 'executable',
+                iconType: (ic.iconType as any) || 'file',
+                size: 'Acceso Directo',
+                date: 'Sistema',
+                permissions: '-rwxr-xr-x',
+                owner: uname,
+                appType: ic.appType,
+                docData: ic.docData
+              });
+            }
+          });
+        } catch (err) {
+          console.warn(`Error syncing desktop icons for ${uname}:`, err);
+        }
+      });
+
       return map;
     } catch (e) {
       console.error('Error reading VFS', e);
     }
     return DEFAULT_VFS;
+  },
+
+  removeFileOrFolder(folderPath: string, itemName: string): void {
+    const map = this.getVFS();
+    const cleanFolder = folderPath.endsWith('/') && folderPath !== '/' ? folderPath.slice(0, -1) : folderPath;
+    if (map[cleanFolder]) {
+      map[cleanFolder] = map[cleanFolder].filter(i => i.name.toLowerCase() !== itemName.toLowerCase() && i.id !== itemName && i.name !== `📂 ${itemName}`);
+      this.saveVFS(map);
+      window.dispatchEvent(new CustomEvent('savia_os_vfs_updated'));
+    }
   },
 
   saveVFS(map: VFSMap): void {
@@ -237,25 +431,150 @@ export const vfs = {
 
     map[cleanFolder] = items;
     this.saveVFS(map);
+    this.syncFileToLocalDisk(cleanFolder, fileName, content);
+    window.dispatchEvent(new CustomEvent('savia_os_vfs_updated'));
 
     const fullPath = cleanFolder === '/' ? `/${fileName}` : `${cleanFolder}/${fileName}`;
+
+    // Active session concurrency lock check
+    fileLockEngine.acquireLock(fullPath, owner, 'VFS File Engine');
+
     return { fullPath, fileName, folderPath: cleanFolder };
   },
 
-  readFile(filePath: string): { content: string; name: string } | null {
+  readFile(filePath: string): { content: string; name: string; fullPath?: string } | null {
+    if (!filePath) return null;
     const map = this.getVFS();
-    const parts = filePath.split('/');
+
+    let cleanPath = filePath.replace(/\/+/g, '/').replace(/\/$/, '') || '/';
+
+    // Handle desktop alias folder path: e.g. /home/guest/Desktop/📂 MisCarpeta/nota.txt
+    if (cleanPath.includes('/Desktop/')) {
+      const match = cleanPath.match(/\/Desktop\/(?:📂\s*)?([^\/]+)\/(.+)$/);
+      if (match) {
+        const folderName = match[1];
+        const subFile = match[2];
+        const mntAlt = `/mnt/local/${folderName}/${subFile}`;
+        if (map[`/mnt/local/${folderName}`]) {
+          cleanPath = mntAlt;
+        }
+      }
+    }
+
+    const parts = cleanPath.split('/');
     const fileName = parts.pop() || '';
     const folderPath = parts.join('/') || '/';
 
-    const items = map[folderPath];
-    if (!items) return null;
-
-    const found = items.find(i => i.name.toLowerCase() === fileName.toLowerCase());
-    if (found) {
-      return { content: found.content || '', name: found.name };
+    if (localDirHandles[folderPath]) {
+      this.syncLocalDiskToVFS(folderPath).catch(() => {});
     }
+
+    // 1. Direct folder lookup
+    const items = map[folderPath];
+    if (items) {
+      const found = items.find(i => i.name.toLowerCase() === fileName.toLowerCase());
+      if (found) {
+        return { content: found.content ?? '', name: found.name, fullPath: cleanPath };
+      }
+    }
+
+    // 2. Global search across all VFS directories by filename
+    const targetName = fileName.replace(/^📂\s*/, '').toLowerCase();
+    for (const [dirPath, dirItems] of Object.entries(map)) {
+      if (!Array.isArray(dirItems)) continue;
+      const found = dirItems.find(i => i.type !== 'folder' && i.name.toLowerCase() === targetName);
+      if (found) {
+        const full = dirPath === '/' ? `/${found.name}` : `${dirPath}/${found.name}`;
+        return { content: found.content ?? '', name: found.name, fullPath: full };
+      }
+    }
+
     return null;
+  },
+
+  async readTextFileAsync(filePath: string): Promise<{ content: string; name: string; fullPath?: string } | null> {
+    if (!filePath) return null;
+
+    let cleanPath = filePath.replace(/\/+/g, '/').replace(/\/$/, '') || '/';
+    let targetMount = '';
+    let fileName = '';
+
+    if (cleanPath.includes('/Desktop/')) {
+      const match = cleanPath.match(/\/Desktop\/(?:📂\s*)?([^\/]+)\/(.+)$/);
+      if (match) {
+        const folderName = match[1];
+        const subFile = match[2];
+        cleanPath = `/mnt/local/${folderName}/${subFile}`;
+        targetMount = `/mnt/local/${folderName}`;
+        fileName = subFile;
+      }
+    }
+
+    if (!targetMount) {
+      const parts = cleanPath.split('/');
+      fileName = parts.pop() || '';
+      targetMount = parts.join('/') || '/';
+    }
+
+    // 1. Try reading directly from FileSystemDirectoryHandle
+    const handle = localDirHandles[targetMount];
+    if (handle && handle.getFileHandle && fileName) {
+      try {
+        const fileHandle = await handle.getFileHandle(fileName);
+        const file = await fileHandle.getFile();
+        const freshContent = await getFileContent(file);
+
+        // Sync fresh content into VFS localStorage
+        const map = this.getVFS();
+        const items = map[targetMount] || [];
+        const item = items.find(i => i.name.toLowerCase() === fileName.toLowerCase());
+        const sizeStr = `${Math.max(1, Math.round(file.size / 1024))} KB`;
+        const dateStr = new Date(file.lastModified).toLocaleDateString();
+
+        if (item) {
+          item.content = freshContent;
+          item.size = sizeStr;
+          item.date = dateStr;
+        } else {
+          items.push({
+            id: 'real_local_' + Date.now() + '_' + Math.random().toString(36).substring(2, 6),
+            name: fileName,
+            type: 'file',
+            iconType: file.type.startsWith('image/') ? 'image' : 'text',
+            size: sizeStr,
+            date: dateStr,
+            permissions: '-rw-r--r--',
+            owner: 'local_user',
+            content: freshContent
+          });
+        }
+        map[targetMount] = items;
+        this.saveVFS(map);
+
+        return { content: freshContent, name: fileName, fullPath: cleanPath };
+      } catch (e) {
+        console.warn('Direct file handle read failed:', e);
+      }
+    }
+
+    // 2. Fallback to synchronous VFS map read
+    const syncResult = this.readFile(filePath);
+    if (!syncResult) return null;
+
+    let content = syncResult.content;
+
+    if (!content || content.startsWith('blob:') || content.startsWith('data:')) {
+      const resolved = await resolveTextContent(content);
+      if (resolved && !resolved.startsWith('blob:')) {
+        content = resolved;
+      }
+    }
+
+    if (content.startsWith('blob:')) {
+      content = '';
+    }
+
+    return { ...syncResult, content };
   }
 };
 

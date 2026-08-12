@@ -53,10 +53,10 @@ export default function OpenFileDialogModal({
     setSelectedFile(null);
   };
 
-  const handleConfirmOpen = () => {
+  const handleConfirmOpen = async () => {
     if (!selectedFile) return;
     const fullPath = currentPath === '/' ? `/${selectedFile.name}` : `${currentPath}/${selectedFile.name}`;
-    const fileData = vfs.readFile(fullPath);
+    const fileData = await vfs.readTextFileAsync(fullPath);
     onOpenFile(fullPath, selectedFile.name, fileData?.content);
     onClose();
   };
@@ -183,17 +183,17 @@ export default function OpenFileDialogModal({
               {filteredItems
                 .filter(i => i.type !== 'folder')
                 .map(file => {
-                  const isMatchFilter = file.name.toLowerCase().endsWith(cleanFilter);
+                  const isMatchFilter = !filterExtension || filterExtension === 'all' || filterExtension === '*' || filterExtension === '.*' || file.name.toLowerCase().endsWith(cleanFilter);
                   const isSelected = selectedFile?.id === file.id;
 
                   return (
                     <div
                       key={file.id}
                       onClick={() => setSelectedFile(file)}
-                      onDoubleClick={() => {
+                      onDoubleClick={async () => {
                         setSelectedFile(file);
                         const fullPath = currentPath === '/' ? `/${file.name}` : `${currentPath}/${file.name}`;
-                        const fileData = vfs.readFile(fullPath);
+                        const fileData = await vfs.readTextFileAsync(fullPath);
                         onOpenFile(fullPath, file.name, fileData?.content);
                         onClose();
                       }}

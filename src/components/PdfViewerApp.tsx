@@ -35,20 +35,17 @@ export default function PdfViewerApp({ initialFile, user }: PdfViewerAppProps) {
       const name = parts.pop() || 'Documento.pdf';
       setFileName(name);
 
-      const fileData = vfs.readFile(initialFile);
-      if (fileData && fileData.content && fileData.content.startsWith('http')) {
-        setPdfUrl(fileData.content);
-        setInputUrl(fileData.content);
-      } else if (fileData && fileData.content && fileData.content.startsWith('data:application/pdf')) {
-        setPdfUrl(fileData.content);
-      } else {
-        // Default sample if content is plain text or binary simulation
-        setPdfUrl(SAMPLE_PDF_URL);
-        setInputUrl(SAMPLE_PDF_URL);
-      }
+      vfs.readTextFileAsync(initialFile).then(fileData => {
+        if (fileData && fileData.content && (fileData.content.startsWith('http') || fileData.content.startsWith('data:application/pdf') || fileData.content.startsWith('blob:'))) {
+          setPdfUrl(fileData.content);
+          setInputUrl(fileData.content);
+        } else {
+          setPdfUrl(SAMPLE_PDF_URL);
+          setInputUrl(SAMPLE_PDF_URL);
+        }
+      });
       setIsOpenPromptModalOpen(false);
     } else {
-      // Opened app directly without file -> Ask for file to open!
       setPdfUrl('');
       setFileName('Sin Documento.pdf');
       setIsOpenPromptModalOpen(true);
@@ -85,13 +82,22 @@ export default function PdfViewerApp({ initialFile, user }: PdfViewerAppProps) {
 
   const handleOpenVFSFile = (filePath: string, selectedFileName: string, fileContent?: string) => {
     setFileName(selectedFileName);
-    if (fileContent && (fileContent.startsWith('http') || fileContent.startsWith('data:application/pdf') || fileContent.startsWith('blob:'))) {
-      setPdfUrl(fileContent);
-      setInputUrl(fileContent);
+    const applyContent = (content?: string) => {
+      if (content && (content.startsWith('http') || content.startsWith('data:application/pdf') || content.startsWith('blob:'))) {
+        setPdfUrl(content);
+        setInputUrl(content);
+      } else {
+        setPdfUrl(SAMPLE_PDF_URL);
+        setInputUrl(SAMPLE_PDF_URL);
+      }
+    };
+
+    if (fileContent) {
+      applyContent(fileContent);
     } else {
-      setPdfUrl(SAMPLE_PDF_URL);
-      setInputUrl(SAMPLE_PDF_URL);
+      vfs.readTextFileAsync(filePath).then(loaded => applyContent(loaded?.content));
     }
+
     setIsOpenPromptModalOpen(false);
     userStorage.addRecent(username, {
       name: selectedFileName,

@@ -13,10 +13,12 @@ type Tab = {
 
 export default function BrowserApp({ user }: { user?: UserData }) {
   const [isOnline, setIsOnline] = useState(() => networkManager.isOnline());
-  const [tabs, setTabs] = useState<Tab[]>([{ id: '1', url: '/api/proxy?url=' + encodeURIComponent('https://www.wikipedia.org'), displayUrl: 'https://www.wikipedia.org', title: 'Wikipedia' }]);
+  const DEFAULT_HOME_URL = 'https://alarti.github.io/SAVIA-OS/';
+  const [tabs, setTabs] = useState<Tab[]>([{ id: '1', url: '/api/proxy?url=' + encodeURIComponent(DEFAULT_HOME_URL), displayUrl: DEFAULT_HOME_URL, title: 'SAVIA-OS' }]);
   const [activeTabId, setActiveTabId] = useState<string>('1');
-  const [inputUrl, setInputUrl] = useState('https://www.wikipedia.org');
+  const [inputUrl, setInputUrl] = useState(DEFAULT_HOME_URL);
   const [bookmarks, setBookmarks] = useState<{url: string, title: string}[]>([
+    { url: 'https://alarti.github.io/SAVIA-OS/', title: 'SAVIA-OS Official' },
     { url: 'https://www.wikipedia.org', title: 'Wikipedia' },
     { url: 'https://github.com', title: 'GitHub' }
   ]);
@@ -75,7 +77,7 @@ export default function BrowserApp({ user }: { user?: UserData }) {
 
   const addNewTab = () => {
     const newId = Math.random().toString();
-    const defaultUrl = 'https://www.wikipedia.org';
+    const defaultUrl = DEFAULT_HOME_URL;
     setTabs([...tabs, { id: newId, url: `/api/proxy?url=${encodeURIComponent(defaultUrl)}`, displayUrl: defaultUrl, title: 'New Tab' }]);
     setActiveTabId(newId);
     setInputUrl(defaultUrl);
@@ -145,7 +147,7 @@ export default function BrowserApp({ user }: { user?: UserData }) {
           <button className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-gray-100 text-gray-600 transition-colors" onClick={() => handleNavigate(activeTab.displayUrl)} title="Reload">
             <RotateCw className="w-4 h-4" />
           </button>
-          <button className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-gray-100 text-gray-600 transition-colors" onClick={() => handleNavigate('https://www.wikipedia.org')} title="Home">
+          <button className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-gray-100 text-gray-600 transition-colors" onClick={() => handleNavigate(DEFAULT_HOME_URL)} title="Home">
             <Home className="w-4 h-4" />
           </button>
         </div>

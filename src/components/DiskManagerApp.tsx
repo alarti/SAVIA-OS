@@ -5,7 +5,8 @@ import {
   FolderPlus, UploadCloud, Laptop
 } from 'lucide-react';
 import { soundEngine } from '../utils/soundEngine';
-import { vfs } from '../utils/vfs';
+import { vfs, getFileContent } from '../utils/vfs';
+import { syncService } from '../utils/syncService';
 
 export interface MountedDrive {
   id: string;
@@ -123,11 +124,11 @@ export default function DiskManagerApp({
 
   const localDirectoryInputRef = useRef<HTMLInputElement>(null);
 
-  const processAndMountLocalFiles = (folderName: string, filesArray: File[]) => {
+  const processAndMountLocalFiles = async (folderName: string, filesArray: File[], dirHandle?: any) => {
     if (filesArray.length === 0) return;
 
     let totalBytes = 0;
-    const itemsToSave = filesArray.map((file, idx) => {
+    const itemsToSave = await Promise.all(filesArray.map(async (file, idx) => {
       totalBytes += file.size;
       const isImg = file.type.startsWith('image/') || /\.(png|jpg|jpeg|webp|gif|svg)$/i.test(file.name);
       const isPdf = file.name.endsWith('.pdf');
@@ -136,6 +137,8 @@ export default function DiskManagerApp({
       let iconType: 'folder' | 'text' | 'image' | 'cpu' | 'terminal' | 'file' | 'wine' = 'text';
       if (isImg) iconType = 'image';
       else if (isPdf || isAudio) iconType = 'file';
+
+      const fileContent = await getFileContent(file);
 
       return {
         file,
@@ -146,14 +149,22 @@ export default function DiskManagerApp({
         size: Math.round(file.size / 1024) + ' KB',
         date: new Date(file.lastModified).toLocaleDateString(),
         permissions: '-rw-r--r--',
-        owner: 'local_user'
+        owner: 'local_user',
+        content: fileContent
       };
-    });
+    }));
 
     // Save in VFS
     const currentVFS = vfs.getVFS();
     const cleanFolderName = folderName.replace(/[^a-zA-Z0-9_-]/g, '_') || 'Disco_Local';
     const mountPointPath = `/mnt/local/${cleanFolderName}`;
+
+    if (dirHandle) {
+      vfs.registerLocalDirHandle(mountPointPath, dirHandle);
+      syncService.registerHandle(mountPointPath, dirHandle);
+    } else {
+      syncService.registerVFSFolder(mountPointPath);
+    }
 
     if (!currentVFS['/mnt']) {
       currentVFS['/mnt'] = [
@@ -185,7 +196,7 @@ export default function DiskManagerApp({
       date: item.date,
       permissions: item.permissions,
       owner: item.owner,
-      content: URL.createObjectURL(item.file)
+      content: item.content
     }));
 
     vfs.saveVFS(currentVFS);
@@ -229,7 +240,7 @@ export default function DiskManagerApp({
           }
         }
         if (files.length > 0) {
-          processAndMountLocalFiles(dirHandle.name, files);
+          processAndMountLocalFiles(dirHandle.name, files, dirHandle);
           return;
         }
       }

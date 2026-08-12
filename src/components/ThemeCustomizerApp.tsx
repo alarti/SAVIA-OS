@@ -56,7 +56,7 @@ export const DESKTOP_THEMES = [
   { id: 'dark-glass', name: 'SAVIA Dark Glass', description: 'Cristal translúcido oscuro estándar', mode: 'dark' },
   { id: 'neon-cyber', name: 'Cyberpunk Neon', description: 'Bordes cian y acentos vibrantes', mode: 'dark' },
   { id: 'emerald-sonoma', name: 'Emerald Sonoma', description: 'Tonos verdes y acabado suave', mode: 'dark' },
-  { id: 'minimal-light', name: 'Nordic Clean Light', description: 'Interfaz clara y luminosa', mode: 'light' },
+  { id: 'minimal-light', name: 'Windows 11 Light', description: 'Interfaz clara inspirada en Windows 11', mode: 'light' },
 ];
 
 export default function ThemeCustomizerApp({ user }: { user?: UserData }) {

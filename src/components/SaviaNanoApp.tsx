@@ -2,7 +2,8 @@ import React, { useState, useEffect, useRef } from 'react';
 import Editor from '@monaco-editor/react';
 import { Save, FolderOpen, FileText, Code2, Play, Check, RefreshCcw, Sparkles, Download, Layers } from 'lucide-react';
 import SaveFileDialogModal from './SaveFileDialogModal';
-import { vfs } from '../utils/vfs';
+import OpenFileDialogModal from './OpenFileDialogModal';
+import { vfs, resolveTextContent } from '../utils/vfs';
 import { userStorage } from '../utils/userStorage';
 import type { UserData } from '../utils/auth';
 
@@ -60,47 +61,47 @@ bienvenidoSaviaNano();
   // Load file content if initialFilePath provided
   useEffect(() => {
     if (initialFilePath) {
-      let loaded = vfs.readFile(initialFilePath);
-      let foundPath = initialFilePath;
-
-      if (!loaded) {
-        const cleanName = initialFilePath.split('/').pop() || initialFilePath;
-        const candidates = [
-          `/home/${activeUsername}/Desktop/${cleanName}`,
-          `/home/${activeUsername}/Documents/${cleanName}`,
-          `/home/${activeUsername}/${cleanName}`,
-          `/home/user/Desktop/${cleanName}`,
-          `/home/guest/Desktop/${cleanName}`,
-          `/${cleanName}`
-        ];
-        for (const cPath of candidates) {
-          const attempt = vfs.readFile(cPath);
-          if (attempt) {
-            loaded = attempt;
-            foundPath = cPath;
-            break;
-          }
+      vfs.readTextFileAsync(initialFilePath).then(loaded => {
+        if (loaded) {
+          setCode(loaded.content ?? '');
+          setFileName(loaded.name);
+          setCurrentFilePath(loaded.fullPath || initialFilePath);
+          setLanguage(detectLanguageFromFilename(loaded.name));
+          setStatusMsg(`Cargado: ${loaded.name}`);
+        } else {
+          const parts = initialFilePath.split('/');
+          const fName = parts.pop() || 'archivo.txt';
+          setFileName(fName);
+          setCurrentFilePath(initialFilePath);
+          setCode('');
+          setLanguage(detectLanguageFromFilename(fName));
+          setStatusMsg(`Fichero: ${fName}`);
         }
-      }
-
-      if (loaded) {
-        setCode(loaded.content);
-        setFileName(loaded.name);
-        setCurrentFilePath(foundPath);
-        setLanguage(detectLanguageFromFilename(loaded.name));
-      } else if (initialFilePath) {
-        const parts = initialFilePath.split('/');
-        const fName = parts.pop() || 'archivo.txt';
-        setFileName(fName);
-        setCurrentFilePath(initialFilePath);
-        setLanguage(detectLanguageFromFilename(fName));
-      }
+      });
     }
   }, [initialFilePath, activeUsername]);
 
   const flashStatus = (msg: string) => {
     setStatusMsg(msg);
     setTimeout(() => setStatusMsg('Listo'), 3000);
+  };
+
+  const handleOpenFileFromModal = (filePath: string, openFileName: string) => {
+    vfs.readTextFileAsync(filePath).then(loaded => {
+      if (loaded) {
+        setCode(loaded.content ?? '');
+        setFileName(loaded.name);
+        setCurrentFilePath(loaded.fullPath || filePath);
+        setLanguage(detectLanguageFromFilename(loaded.name));
+        flashStatus(`Archivo abierto: ${loaded.name}`);
+      } else {
+        setCode('');
+        setFileName(openFileName);
+        setCurrentFilePath(filePath);
+        setLanguage(detectLanguageFromFilename(openFileName));
+        flashStatus(`Archivo abierto: ${openFileName}`);
+      }
+    });
   };
 
   const handleSaveClick = () => {
@@ -188,6 +189,15 @@ bienvenidoSaviaNano();
           </button>
 
           <button
+            onClick={() => setIsOpenFileModalOpen(true)}
+            className="px-2.5 py-1.5 bg-[#333333] hover:bg-[#444444] text-xs text-gray-200 rounded-lg font-medium transition-colors cursor-pointer flex items-center gap-1.5"
+            title="Abrir Archivo"
+          >
+            <FolderOpen className="w-3.5 h-3.5 text-amber-400" />
+            <span>Abrir</span>
+          </button>
+
+          <button
             onClick={handleSaveClick}
             className="px-3 py-1.5 bg-sky-600 hover:bg-sky-500 text-white rounded-lg text-xs font-semibold transition-all cursor-pointer flex items-center gap-1.5 shadow-sm"
             title="Guardar archivo"
@@ -267,6 +277,16 @@ bienvenidoSaviaNano();
         defaultFolder={currentFilePath ? currentFilePath.substring(0, currentFilePath.lastIndexOf('/')) : undefined}
         username={activeUsername}
         title="Guardar Fichero - Savia Nano"
+      />
+
+      {/* OPEN FILE DIALOG MODAL */}
+      <OpenFileDialogModal
+        isOpen={isOpenFileModalOpen}
+        onClose={() => setIsOpenFileModalOpen(false)}
+        onOpenFile={handleOpenFileFromModal}
+        username={activeUsername}
+        filterExtension="all"
+        title="Abrir Fichero en Savia Nano"
       />
     </div>
   );

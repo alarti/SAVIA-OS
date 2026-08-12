@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Image as ImageIcon, ZoomIn, ZoomOut, RotateCw, Download, Layers } from 'lucide-react';
+import { vfs } from '../utils/vfs';
 
 const SAMPLE_IMAGES = [
   { title: 'SAVIA Wallpapers - Cyberpunk Neon', url: 'https://images.unsplash.com/photo-1550684848-fac1c5b4e853?q=80&w=2070&auto=format&fit=crop' },
@@ -8,12 +9,28 @@ const SAMPLE_IMAGES = [
   { title: 'Tecnología & Microchips', url: 'https://images.unsplash.com/photo-1518770660439-4636190af475?q=80&w=2070&auto=format&fit=crop' }
 ];
 
-export default function ImageViewerApp() {
+interface ImageViewerAppProps {
+  initialFile?: string;
+}
+
+export default function ImageViewerApp({ initialFile }: ImageViewerAppProps) {
   const [selectedIdx, setSelectedIdx] = useState(0);
+  const [customImg, setCustomImg] = useState<{ title: string; url: string } | null>(null);
   const [zoom, setZoom] = useState(1);
   const [rotation, setRotation] = useState(0);
 
-  const currentImg = SAMPLE_IMAGES[selectedIdx];
+  useEffect(() => {
+    if (initialFile) {
+      const name = initialFile.split('/').pop() || 'Imagen.png';
+      vfs.readTextFileAsync(initialFile).then(vfsImg => {
+        if (vfsImg && vfsImg.content) {
+          setCustomImg({ title: name, url: vfsImg.content });
+        }
+      });
+    }
+  }, [initialFile]);
+
+  const currentImg = customImg || SAMPLE_IMAGES[selectedIdx];
 
   const handleZoomIn = () => setZoom(prev => Math.min(prev + 0.25, 3));
   const handleZoomOut = () => setZoom(prev => Math.max(prev - 0.25, 0.5));

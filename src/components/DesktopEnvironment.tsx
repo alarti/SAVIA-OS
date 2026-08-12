@@ -1,6 +1,8 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Terminal, Folder, Globe, Cpu, X, Square, Minus, Zap, User, Monitor, Search, FileText, FileImage, Power, Activity, Gamepad2, Volume2, VolumeX, Box, Radio, Palette, Download, Sliders, ShieldCheck, ShieldAlert, Info, Settings, Wifi, WifiOff, Battery, CheckCircle, Image as ImageIcon, Calculator as CalcIcon, Calendar as CalendarIcon, Move, Maximize2, Minimize2, RefreshCcw, Plus, Trash2, Edit2, Play, ChevronRight, ChevronLeft, Grid, Sparkles, Trophy, Rocket, FileCode } from 'lucide-react';
+import { Terminal, Folder, Globe, Cpu, X, Square, Minus, Zap, User, Users, Lock, Monitor, Search, FileText, FileImage, Power, Activity, Gamepad2, Volume2, VolumeX, Box, Radio, Palette, Download, Sliders, ShieldCheck, ShieldAlert, Info, Settings, Wifi, WifiOff, Battery, CheckCircle, Image as ImageIcon, Calculator as CalcIcon, Calendar as CalendarIcon, Move, Maximize2, Minimize2, RefreshCcw, Plus, Trash2, Edit2, Play, ChevronRight, ChevronLeft, Grid, Sparkles, Trophy, Rocket, FileCode, Cloud, RefreshCw, AlertTriangle } from 'lucide-react';
 import { networkManager } from '../utils/networkManager';
+import { sessionManager } from '../utils/sessionManager';
+import UserSessionSwitcherModal from './UserSessionSwitcherModal';
 import Editor from '@monaco-editor/react';
 import type { UserData } from '../utils/auth';
 import TerminalApp from './Terminal';
@@ -23,6 +25,8 @@ import ImageViewerApp from './ImageViewerApp';
 import WebampPlayerApp from './WebampPlayerApp';
 import ThreeGamesApp from './ThreeGamesApp';
 import DiskManagerApp from './DiskManagerApp';
+import SaviaSyncCenterModal from './SaviaSyncCenterModal';
+import { syncService } from '../utils/syncService';
 import { TrashApp } from './TrashApp';
 import { soundEngine } from '../utils/soundEngine';
 import { getInstalledPackageIds, AVAILABLE_PACKAGES } from '../utils/packageRegistry';
@@ -306,26 +310,56 @@ export const DESKTOP_THEME_STYLES: Record<string, DesktopThemeStyle> = {
   },
   'minimal-light': {
     id: 'minimal-light',
-    name: 'Nordic Clean Light',
+    name: 'Windows 11 Light',
     isLight: true,
-    iconCardHover: 'hover:bg-white/80 hover:border-slate-300 shadow-md',
-    iconCardSelected: 'bg-white/95 border-2 border-slate-400 shadow-xl ring-2 ring-slate-400/30',
-    iconTitleStyle: 'bg-white/90 text-slate-900 font-bold text-[11px] px-2 py-0.5 rounded-lg border border-slate-300/80 shadow-md backdrop-blur-md text-center leading-tight',
-    taskbarBg: 'bg-slate-100/95 backdrop-blur-2xl border-slate-300/80 shadow-2xl',
+    iconCardHover: 'hover:bg-slate-200/80 hover:border-slate-300/80 shadow-md',
+    iconCardSelected: 'bg-white/95 border-2 border-sky-500 shadow-xl ring-2 ring-sky-500/20',
+    iconTitleStyle: 'bg-white/90 text-slate-900 font-semibold text-[11px] px-2 py-0.5 rounded-md border border-slate-300/80 shadow-sm backdrop-blur-md text-center leading-tight',
+    taskbarBg: 'bg-slate-100/90 backdrop-blur-2xl border-slate-200 shadow-2xl',
     taskbarText: 'text-slate-800',
-    startMenuBg: 'bg-slate-50/98 backdrop-blur-3xl border-slate-300 shadow-2xl',
+    startMenuBg: 'bg-slate-50/95 backdrop-blur-3xl border-slate-200 shadow-2xl',
     startMenuText: 'text-slate-900',
-    startMenuBorder: 'border-slate-300',
+    startMenuBorder: 'border-slate-200',
     windowBg: 'bg-white',
-    windowHeaderBg: 'bg-slate-100 border-b border-slate-200',
+    windowHeaderBg: 'bg-slate-100/90 border-b border-slate-200',
     windowText: 'text-slate-900',
-    windowBorder: 'border-slate-300 shadow-2xl',
+    windowBorder: 'border-slate-300 shadow-xl',
   },
 };
 
-export default function DesktopEnvironment({ user, onExit }: { user: UserData, onExit: () => void }) {
-  const [windows, setWindows] = useState<WindowData[]>([]);
-  const [activeId, setActiveId] = useState<string>('');
+export default function DesktopEnvironment({ 
+  user, 
+  onExit,
+  onSwitchUser
+}: { 
+  user: UserData; 
+  onExit: () => void;
+  onSwitchUser?: (targetUser: UserData) => void;
+}) {
+  const [windows, setWindows] = useState<WindowData[]>(() => {
+    const currentSess = sessionManager.getCurrentSession();
+    return currentSess && currentSess.windows && currentSess.windows.length > 0 ? currentSess.windows : [];
+  });
+  const [activeId, setActiveId] = useState<string>(() => {
+    const currentSess = sessionManager.getCurrentSession();
+    return currentSess?.activeWindowId || '';
+  });
+  const [isSessionSwitcherOpen, setIsSessionSwitcherOpen] = useState(false);
+  const [activeSessionsCount, setActiveSessionsCount] = useState(() => sessionManager.getActiveSessions().length);
+
+  // Sync window state to sessionManager for multi-user session concurrency
+  useEffect(() => {
+    sessionManager.saveSessionWindows(user.username, windows, activeId);
+  }, [windows, activeId, user.username]);
+
+  useEffect(() => {
+    const handleSessionsUpdated = () => {
+      setActiveSessionsCount(sessionManager.getActiveSessions().length);
+    };
+    window.addEventListener('savia_sessions_updated', handleSessionsUpdated);
+    return () => window.removeEventListener('savia_sessions_updated', handleSessionsUpdated);
+  }, []);
+
   const [isStartMenuOpen, setIsStartMenuOpen] = useState(false);
   const [startMenuViewMode, setStartMenuViewMode] = useState<'pinned' | 'all'>('pinned');
   const [startMenuSearch, setStartMenuSearch] = useState('');
@@ -436,43 +470,130 @@ export default function DesktopEnvironment({ user, onExit }: { user: UserData, o
     };
   }, [user.username]);
 
-  // Sync local mounted directories from /mnt/local to Desktop Icons
+  // Sync VFS /home/${user.username}/Desktop files and /mnt/local directories to Desktop Icons
   useEffect(() => {
-    const syncLocalMountedDirs = () => {
+    const syncDesktopItems = () => {
       const map = vfs.getVFS();
+      const userDesktopPath = user.username === 'root' ? '/root/Desktop' : `/home/${user.username}/Desktop`;
+      const vfsDesktopItems = map[userDesktopPath] || [];
       const localDirs = map['/mnt/local'] || [];
-      if (localDirs.length > 0) {
-        setDesktopIcons(prev => {
-          let updated = [...prev];
-          let changed = false;
-          localDirs.forEach((dir, index) => {
-            const folderPath = `/mnt/local/${dir.name}`;
-            if (!updated.some(ic => ic.docData === folderPath || ic.title === dir.name || ic.title === `📂 ${dir.name}`)) {
-              updated.push({
-                id: `synced_dir_${dir.name}_${index}`,
-                title: `📂 ${dir.name}`,
-                appType: 'folder',
-                iconType: 'folder',
-                docData: folderPath,
-                x: 350,
-                y: 420
-              });
-              changed = true;
+
+      setDesktopIcons(prev => {
+        let updated = [...prev];
+        let changed = false;
+
+        const GRID_X = 110;
+        const GRID_Y = 100;
+        const START_X = 20;
+        const START_Y = 20;
+        const maxRows = Math.max(3, Math.floor((window.innerHeight - 100) / GRID_Y));
+
+        const getNextPosition = (currIcons: DesktopIcon[]) => {
+          const occupied = new Set(currIcons.map(ic => `${Math.round((ic.x - START_X) / GRID_X)},${Math.round((ic.y - START_Y) / GRID_Y)}`));
+          let col = 0;
+          let row = 0;
+          while (occupied.has(`${col},${row}`)) {
+            row++;
+            if (row >= maxRows) {
+              row = 0;
+              col++;
             }
-          });
-          if (changed) {
-            userStorage.setDesktopIcons(user.username, updated);
-            return updated;
           }
-          return prev;
+          return { x: START_X + col * GRID_X, y: START_Y + row * GRID_Y };
+        };
+
+        // 1. Sync VFS files in user's desktop path
+        vfsDesktopItems.forEach(vfsItem => {
+          const exists = updated.some(ic => ic.id === vfsItem.id || ic.title.toLowerCase() === vfsItem.name.toLowerCase() || (ic.docData && ic.docData === vfsItem.name));
+          if (!exists) {
+            const pos = getNextPosition(updated);
+            let appType: WindowData['type'] = 'texteditor';
+            let iconType = vfsItem.iconType || 'file';
+            const nameLower = vfsItem.name.toLowerCase();
+
+            if (vfsItem.type === 'folder' || iconType === 'folder') {
+              appType = 'folder';
+              iconType = 'folder';
+            } else if ((vfsItem as any).appType) {
+              appType = (vfsItem as any).appType;
+            } else if (nameLower.endsWith('.docx') || nameLower.endsWith('.xlsx') || nameLower.endsWith('.pptx')) {
+              appType = 'office';
+              iconType = nameLower.endsWith('.docx') ? 'doc' : nameLower.endsWith('.xlsx') ? 'xls' : 'ppt';
+            } else if (nameLower.endsWith('.pdf')) {
+              appType = 'pdfviewer';
+              iconType = 'pdf';
+            } else if (nameLower.endsWith('.png') || nameLower.endsWith('.jpg') || nameLower.endsWith('.jpeg')) {
+              appType = 'imageviewer';
+              iconType = 'image';
+            } else if (nameLower.endsWith('.mp3') || nameLower.endsWith('.wav') || nameLower.endsWith('.ogg')) {
+              appType = 'webamp';
+              iconType = 'music';
+            } else if (nameLower.endsWith('.sh') || vfsItem.type === 'executable') {
+              appType = 'terminal';
+              iconType = 'terminal';
+            } else if (nameLower.endsWith('.exe') || nameLower.endsWith('.msi')) {
+              appType = 'wine';
+              iconType = 'wine';
+            }
+
+            const newIcon: DesktopIcon = {
+              id: vfsItem.id || `vfs_icon_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+              title: vfsItem.name,
+              appType,
+              iconType,
+              docData: (vfsItem as any).docData || vfsItem.name,
+              x: pos.x,
+              y: pos.y
+            };
+            updated.push(newIcon);
+            changed = true;
+          }
         });
-      }
+
+        // 2. Sync local mounted directories in /mnt/local
+        localDirs.forEach((dir, index) => {
+          const folderPath = `/mnt/local/${dir.name}`;
+          if (!updated.some(ic => ic.docData === folderPath || ic.title === dir.name || ic.title === `📂 ${dir.name}`)) {
+            const pos = getNextPosition(updated);
+            updated.push({
+              id: `synced_dir_${dir.name}_${index}`,
+              title: `📂 ${dir.name}`,
+              appType: 'folder',
+              iconType: 'folder',
+              docData: folderPath,
+              x: pos.x,
+              y: pos.y
+            });
+            changed = true;
+          }
+        });
+
+        if (changed) {
+          userStorage.setDesktopIcons(user.username, updated);
+          return updated;
+        }
+        return prev;
+      });
     };
 
-    syncLocalMountedDirs();
-    window.addEventListener('savia_os_vfs_updated', syncLocalMountedDirs);
-    return () => window.removeEventListener('savia_os_vfs_updated', syncLocalMountedDirs);
+    syncDesktopItems();
+    syncService.init();
+
+    const handleSyncStatusUpdate = () => {
+      setOverallSyncStatus(syncService.getOverallStatus());
+    };
+    window.addEventListener('savia_os_vfs_updated', syncDesktopItems);
+    window.addEventListener('savia_sync_status_updated', handleSyncStatusUpdate);
+
+    return () => {
+      window.removeEventListener('savia_os_vfs_updated', syncDesktopItems);
+      window.removeEventListener('savia_sync_status_updated', handleSyncStatusUpdate);
+    };
   }, [user.username]);
+
+  // Sync Center State
+  const [isSyncCenterOpen, setIsSyncCenterOpen] = useState(false);
+  const [overallSyncStatus, setOverallSyncStatus] = useState<'idle' | 'syncing' | 'synced' | 'conflict' | 'error'>(syncService.getOverallStatus());
 
   // Desktop Icon Context Menu & Creation Modals State
   const [iconContextMenu, setIconContextMenu] = useState<{ icon: DesktopIcon, x: number, y: number } | null>(null);
@@ -516,6 +637,20 @@ export default function DesktopEnvironment({ user, onExit }: { user: UserData, o
 
       const updated = [...prevIcons, newIcon];
       userStorage.setDesktopIcons(user.username, updated);
+
+      // Save file/folder into VFS desktop folder
+      const userDesktopPath = user.username === 'root' ? '/root/Desktop' : `/home/${user.username}/Desktop`;
+      let initialContent = '';
+      if (iconType === 'doc') initialContent = 'Nuevo documento SaviaDoc';
+      else if (iconType === 'xls') initialContent = 'Nuevo libro SaviaXls';
+      else if (iconType === 'ppt') initialContent = 'Nueva presentación SaviaPpt';
+      else if (iconType === 'editor' || iconType === 'text') initialContent = 'Nuevo archivo de texto';
+
+      vfs.saveFile(userDesktopPath, title, initialContent, {
+        iconType: iconType as any,
+        owner: user.username
+      });
+
       soundEngine.playSuccessTone();
       return updated;
     });
@@ -529,6 +664,10 @@ export default function DesktopEnvironment({ user, onExit }: { user: UserData, o
         return;
       }
       trashAndUndo.moveDesktopIconsToTrash(user.username, [iconToDelete]);
+      
+      const userDesktopPath = user.username === 'root' ? '/root/Desktop' : `/home/${user.username}/Desktop`;
+      vfs.removeFileOrFolder(userDesktopPath, iconToDelete.title);
+
       soundEngine.playButtonClick();
     } else {
       setDesktopIcons(prev => {
@@ -542,6 +681,17 @@ export default function DesktopEnvironment({ user, onExit }: { user: UserData, o
 
   const renameDesktopIcon = (id: string, newTitle: string) => {
     if (!newTitle.trim()) return;
+    const icon = desktopIcons.find(i => i.id === id);
+    if (icon) {
+      const userDesktopPath = user.username === 'root' ? '/root/Desktop' : `/home/${user.username}/Desktop`;
+      const map = vfs.getVFS();
+      const items = map[userDesktopPath] || [];
+      const itemToRename = items.find(i => i.name.toLowerCase() === icon.title.toLowerCase());
+      if (itemToRename) {
+        itemToRename.name = newTitle.trim();
+        vfs.saveVFS(map);
+      }
+    }
     setDesktopIcons(prev => {
       const updated = prev.map(i => i.id === id ? { ...i, title: newTitle.trim() } : i);
       userStorage.setDesktopIcons(user.username, updated);
@@ -567,11 +717,15 @@ export default function DesktopEnvironment({ user, onExit }: { user: UserData, o
     document.documentElement.style.setProperty('--savia-accent-text', accentObj.text);
 
     if (themeObj.isLight) {
-      document.documentElement.classList.add('savia-theme-light');
-      document.documentElement.classList.remove('savia-theme-dark');
+      document.documentElement.classList.add('savia-theme-light', 'light-mode');
+      document.documentElement.classList.remove('savia-theme-dark', 'dark-mode');
+      document.body.classList.add('savia-theme-light', 'light-mode');
+      document.body.classList.remove('savia-theme-dark', 'dark-mode');
     } else {
-      document.documentElement.classList.add('savia-theme-dark');
-      document.documentElement.classList.remove('savia-theme-light');
+      document.documentElement.classList.add('savia-theme-dark', 'dark-mode');
+      document.documentElement.classList.remove('savia-theme-light', 'light-mode');
+      document.body.classList.add('savia-theme-dark', 'dark-mode');
+      document.body.classList.remove('savia-theme-light', 'light-mode');
     }
   }, [currentAccent, currentTheme]);
 
@@ -1470,7 +1624,7 @@ export default function DesktopEnvironment({ user, onExit }: { user: UserData, o
               </div>
             </div>
             {/* Window Content */}
-            <div className="flex-1 relative bg-black overflow-hidden cursor-auto" onMouseDown={e => e.stopPropagation()}>
+            <div className={`flex-1 relative ${activeThemeStyle.windowBg} ${activeThemeStyle.windowText} overflow-hidden cursor-auto`} onMouseDown={e => e.stopPropagation()}>
               {w.type === 'about' && <AboutApp />}
               {w.type === 'controlpanel' && <ControlPanelApp user={user} onOpenApp={(type, title) => openApp(type as any, title)} />}
               {w.type === 'terminal' && <TerminalApp user={user} onOpenApp={(type, title) => openApp(type as any, title)} />}
@@ -2021,11 +2175,38 @@ export default function DesktopEnvironment({ user, onExit }: { user: UserData, o
               <div className={`w-8 h-8 rounded-full flex items-center justify-center ${user.avatar} text-white shadow-sm`}>
                 <User className="w-4 h-4" />
               </div>
-              <span className="text-xs font-medium">{user.name}</span>
+              <div className="flex flex-col">
+                <span className="text-xs font-medium text-white">{user.name}</span>
+                <span className="text-[9px] text-gray-400 font-mono">@{user.username}</span>
+              </div>
             </div>
-            <button onClick={onExit} className="p-2 hover:bg-red-500/20 rounded-full transition-colors text-gray-300 hover:text-red-400">
-              <Power className="w-4 h-4" />
-            </button>
+
+            <div className="flex items-center gap-1">
+              <button 
+                onClick={() => { setIsSessionSwitcherOpen(true); setIsStartMenuOpen(false); }} 
+                className="p-2 hover:bg-blue-500/20 rounded-xl transition-colors text-blue-300 hover:text-blue-200 flex items-center gap-1"
+                title="Gestor de Sesiones Multiusuario (Concurrencia Activa)"
+              >
+                <Users className="w-4 h-4 text-blue-400" />
+                <span className="text-[10px] font-bold bg-blue-500/30 px-1.5 py-0.5 rounded-full">{activeSessionsCount}</span>
+              </button>
+
+              <button 
+                onClick={() => { sessionManager.lockSession(user.username); setIsSessionSwitcherOpen(true); setIsStartMenuOpen(false); }} 
+                className="p-2 hover:bg-amber-500/20 rounded-xl transition-colors text-amber-300 hover:text-amber-200"
+                title="Bloquear mi Sesión"
+              >
+                <Lock className="w-4 h-4 text-amber-400" />
+              </button>
+
+              <button 
+                onClick={onExit} 
+                className="p-2 hover:bg-red-500/20 rounded-xl transition-colors text-gray-300 hover:text-red-400"
+                title="Cerrar mi Sesión"
+              >
+                <Power className="w-4 h-4 text-red-400" />
+              </button>
+            </div>
           </div>
         </div>
       )}
@@ -2117,6 +2298,27 @@ export default function DesktopEnvironment({ user, onExit }: { user: UserData, o
 
         {/* Taskbar Audio, Network & Tray */}
         <div className="flex items-center gap-1.5 relative">
+          {/* Sync Center (OneDrive Mode) Button */}
+          <button
+            onClick={() => {
+              setIsSyncCenterOpen(true);
+              soundEngine.playButtonClick();
+            }}
+            className="p-2 hover:bg-white/10 rounded-xl transition-all relative text-sky-400 hover:text-sky-300"
+            title="SaviaOS Sync Center (Sincronización en Vivo OneDrive)"
+          >
+            {overallSyncStatus === 'syncing' ? (
+              <RefreshCw className="w-4 h-4 text-sky-400 animate-spin" />
+            ) : overallSyncStatus === 'conflict' ? (
+              <AlertTriangle className="w-4 h-4 text-amber-400 animate-bounce" />
+            ) : (
+              <Cloud className="w-4 h-4 text-sky-400" />
+            )}
+            {overallSyncStatus === 'conflict' && (
+              <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-amber-500 rounded-full animate-ping" />
+            )}
+          </button>
+
           {/* Network Tray Icon */}
           <button
             onClick={() => {
@@ -2136,6 +2338,16 @@ export default function DesktopEnvironment({ user, onExit }: { user: UserData, o
                 <span className="text-[9px] font-mono font-bold text-red-300 hidden sm:inline uppercase">OFFLINE</span>
               </>
             )}
+          </button>
+
+          {/* Active Concurrent Sessions Badge */}
+          <button
+            onClick={() => { setIsSessionSwitcherOpen(!isSessionSwitcherOpen); setIsStartMenuOpen(false); }}
+            className="px-2.5 py-1.5 bg-blue-600/20 hover:bg-blue-600/30 border border-blue-500/30 text-blue-300 rounded-xl transition-all relative flex items-center gap-1.5"
+            title="Gestor de Sesiones Multiusuario Unix (Concurrencia Activa)"
+          >
+            <Users className="w-3.5 h-3.5 text-blue-400" />
+            <span className="text-[10px] font-bold font-mono">{activeSessionsCount}</span>
           </button>
 
           <button
@@ -2455,6 +2667,36 @@ export default function DesktopEnvironment({ user, onExit }: { user: UserData, o
           </div>
         </div>
       )}
+      {/* Savia Sync Center Modal */}
+      {isSyncCenterOpen && (
+        <SaviaSyncCenterModal onClose={() => setIsSyncCenterOpen(false)} />
+      )}
+
+      {/* Multi-User Session Switcher & Concurrency Manager Modal */}
+      {isSessionSwitcherOpen && (
+        <UserSessionSwitcherModal
+          currentUser={user}
+          onSwitchToUser={(targetUser) => {
+            if (onSwitchUser) {
+              onSwitchUser(targetUser);
+            }
+            setIsSessionSwitcherOpen(false);
+          }}
+          onLockCurrentSession={() => {
+            sessionManager.lockSession(user.username);
+            setIsSessionSwitcherOpen(true);
+          }}
+          onLogoutSession={(usernameToLogout) => {
+            if (usernameToLogout.toLowerCase() === user.username.toLowerCase()) {
+              onExit();
+            } else {
+              sessionManager.terminateSession(usernameToLogout);
+            }
+          }}
+          onClose={() => setIsSessionSwitcherOpen(false)}
+        />
+      )}
+
       {/* System Protection Floating Toast Banner */}
       {systemToast && (
         <div className="fixed top-5 right-5 z-[10000] bg-[#1C1C1F]/95 text-rose-200 border border-rose-500/40 px-4 py-3 rounded-2xl shadow-2xl flex items-center gap-3 backdrop-blur-md animate-in fade-in slide-in-from-top-4 duration-200 max-w-md">
