@@ -342,7 +342,7 @@ export const userStorage = {
 
     // Reset mock file system for guest in localStorage
     try {
-      const savedFsStr = localStorage.getItem('savia_os_mock_fs');
+      const savedFsStr = localStorage.getItem('savia_os_vfs_data');
       if (savedFsStr) {
         const fs = JSON.parse(savedFsStr);
 
@@ -444,7 +444,7 @@ export const userStorage = {
           { id: 'gpic_guest', name: 'Foto_Invitado.png', type: 'file', iconType: 'image', size: '220 KB', date: 'Hoy 08:00', permissions: '-rw-r--r--', owner: 'guest' },
         ];
 
-        localStorage.setItem('savia_os_mock_fs', JSON.stringify(fs));
+        localStorage.setItem('savia_os_vfs_data', JSON.stringify(fs));
       }
     } catch (e) {
       console.error('Error resetting guest mock filesystem:', e);

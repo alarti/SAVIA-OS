@@ -1,4 +1,4 @@
-import { vfs, VFSFileItem, getFileContent } from './vfs';
+import { vfs, VFSFileItem, getFileContent, writeContentToHandle } from './vfs';
 
 export interface SyncLogItem {
   id: string;
@@ -227,7 +227,7 @@ export const syncService = {
           if (!existingItems.some(i => i.name === file.name)) {
             const fileContent = await getFileContent(file);
             existingItems.push({
-              id: 'real_local_' + Date.now() + '_' + Math.random().toString(36).substring(2, 6),
+              id: 'real_local_' + Date.now() + '_' + crypto.randomUUID().substring(0, 8),
               name: file.name,
               type: 'file',
               iconType: file.type.startsWith('image/') ? 'image' : 'text',
@@ -259,7 +259,7 @@ export const syncService = {
 
   addLog(type: SyncLogItem['type'], message: string, mountPath: string): void {
     const newItem: SyncLogItem = {
-      id: 'log_' + Date.now() + '_' + Math.random().toString(36).substring(2, 6),
+      id: 'log_' + Date.now() + '_' + crypto.randomUUID().substring(0, 8),
       timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
       type,
       message,
@@ -377,7 +377,7 @@ export const syncService = {
       if (!vfsItem) {
         // New file added on physical disk -> Add to VFS
         vfsItems.push({
-          id: 'sync_real_' + Date.now() + '_' + Math.random().toString(36).substring(2, 6),
+          id: 'sync_real_' + Date.now() + '_' + crypto.randomUUID().substring(0, 8),
           name: diskFile.name,
           type: 'file',
           iconType: diskFile.name.match(/\.(png|jpg|jpeg|svg|gif)$/i) ? 'image' : 'text',
@@ -420,9 +420,7 @@ export const syncService = {
           try {
             if (handle.getFileHandle) {
               const confFileHandle = await handle.getFileHandle(conflictName, { create: true });
-              const writable = await confFileHandle.createWritable();
-              await writable.write(vfsItem.content);
-              await writable.close();
+              await writeContentToHandle(confFileHandle, vfsItem.content || '');
             }
           } catch (writeConfErr) {
             console.warn('Could not write conflict file to disk:', writeConfErr);
@@ -462,9 +460,7 @@ export const syncService = {
           try {
             if (handle.getFileHandle) {
               const fileHandle = await handle.getFileHandle(diskFile.name, { create: true });
-              const writable = await fileHandle.createWritable();
-              await writable.write(vfsItem.content || '');
-              await writable.close();
+              await writeContentToHandle(fileHandle, vfsItem.content || '');
               const refreshed = await fileHandle.getFile();
               catalog[diskFile.name] = { content: vfsItem.content || '', mtime: refreshed.lastModified, status: 'synced' };
               this.addLog('success', `📤 Cambios de SaviaOS guardados en Disco Local: "${diskFile.name}"`, mountPath);
@@ -488,9 +484,7 @@ export const syncService = {
           try {
             if (handle.getFileHandle) {
               const fileHandle = await handle.getFileHandle(vfsItem.name, { create: true });
-              const writable = await fileHandle.createWritable();
-              await writable.write(vfsItem.content || '');
-              await writable.close();
+              await writeContentToHandle(fileHandle, vfsItem.content || '');
 
               const refreshed = await fileHandle.getFile();
               catalog[vfsItem.name] = { content: vfsItem.content || '', mtime: refreshed.lastModified, status: 'synced' };
@@ -524,9 +518,7 @@ export const syncService = {
         const handle = activeHandles[conflict.mountPath];
         if (handle && handle.getFileHandle) {
           const fileHandle = await handle.getFileHandle(conflict.fileName, { create: true });
-          const writable = await fileHandle.createWritable();
-          await writable.write(conflict.vfsContent);
-          await writable.close();
+          await writeContentToHandle(fileHandle, conflict.vfsContent || '');
         }
       } else if (choice === 'keep_local') {
         item.content = conflict.localContent;

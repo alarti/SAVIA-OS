@@ -75,7 +75,7 @@ export const trashAndUndo = {
     const trashedIds: string[] = [];
 
     allowedIcons.forEach(icon => {
-      const trashId = 'trash_icon_' + Date.now() + '_' + Math.floor(Math.random() * 10000);
+      const trashId = 'trash_icon_' + Date.now() + '_' + crypto.randomUUID().substring(0, 8);
       trashedIds.push(trashId);
 
       newTrashRecords.push({
@@ -142,7 +142,7 @@ export const trashAndUndo = {
     const trashedIds: string[] = [];
 
     allowedItems.forEach(item => {
-      const trashId = 'trash_' + Date.now() + '_' + Math.floor(Math.random() * 10000);
+      const trashId = 'trash_' + Date.now() + '_' + crypto.randomUUID().substring(0, 8);
       trashedIds.push(trashId);
 
       let subFolderContents: Record<string, VFSFileItem[]> | undefined = undefined;

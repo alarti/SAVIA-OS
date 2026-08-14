@@ -36,8 +36,8 @@ export default function UserSessionSwitcherModal({
 
   const handleSwitch = (session: UserSession) => {
     soundEngine.playButtonClick();
-    if (session.status === 'locked') {
-      // Need password to unlock
+    if (session.username.toLowerCase() !== 'guest') {
+      // Need password to unlock/switch
       setShowNewLogin(true);
       setNewUsernameInput(session.username);
       setNewPasswordInput('');
@@ -93,7 +93,7 @@ export default function UserSessionSwitcherModal({
               <Users className="w-6 h-6" />
             </div>
             <div>
-              <h2 className="text-lg font-bold tracking-wide text-white">Gestor de Sesiones Multiusuario Unix</h2>
+              <h2 className="text-lg font-bold tracking-wide text-white">Gestor de Sesiones Multiusuario SAVIA</h2>
               <p className="text-xs text-gray-400">Concurrencia activa y aislamiento estricto de espacio personal</p>
             </div>
           </div>
@@ -142,6 +142,8 @@ export default function UserSessionSwitcherModal({
                         </div>
                         <div className="flex items-center gap-3 text-[11px] text-gray-400 mt-0.5 font-mono">
                           <span>TTY: {session.tty}</span>
+                          <span>•</span>
+                          <span>IP: {session.originIp}</span>
                           <span>•</span>
                           <span>Ventanas: {session.windows?.length || 0}</span>
                           <span>•</span>

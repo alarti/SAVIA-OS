@@ -1,11 +1,10 @@
 /**
  * Savia OS - Multi-User Active Session & Concurrency Manager
  * 
- * Provides Unix loginctl / systemd-logind style concurrent session isolation.
+ * Provides concurrent session isolation.
  * Allows multiple logged-in active user sessions (e.g. 'user', 'guest', 'root') 
  * to run concurrently in background memory without closing apps or losing window state.
  */
-
 import { UserData, DEFAULT_USERS, verifyUserPassword } from './auth';
 import { fileLockEngine } from './fileLockEngine';
 
@@ -16,6 +15,7 @@ export interface UserSession {
   user: UserData;
   loginTime: string;
   tty: string;
+  originIp: string;
   status: SessionStatus;
   windows: any[];
   activeWindowId: string | null;
@@ -40,12 +40,35 @@ class SessionManager {
         if (saved) {
           const list: UserSession[] = JSON.parse(saved);
           list.forEach(s => {
+            // Guarantee originIp is present for old cached sessions
+            if (!s.originIp || s.originIp.startsWith('192.168.')) {
+              s.originIp = 'Obteniendo IP...';
+              this.fetchRealIp(s.username);
+            }
             this.sessions.set(s.username.toLowerCase(), s);
           });
         }
       }
     } catch (e) {
       console.error('Error restoring active sessions:', e);
+    }
+  }
+
+  private async fetchRealIp(username: string) {
+    try {
+      const response = await fetch('https://api.ipify.org?format=json');
+      const data = await response.json();
+      const session = this.sessions.get(username.toLowerCase());
+      if (session) {
+        session.originIp = data.ip;
+        this.persistSessions();
+      }
+    } catch (err) {
+      const session = this.sessions.get(username.toLowerCase());
+      if (session && (session.originIp === 'Obteniendo IP...' || !session.originIp)) {
+        session.originIp = 'Desconocida (Error de red)';
+        this.persistSessions();
+      }
     }
   }
 
@@ -84,16 +107,22 @@ class SessionManager {
         user,
         loginTime: new Date().toLocaleTimeString(),
         tty: `tty${this.ttyCounter++}`,
+        originIp: 'Obteniendo IP...',
         status: 'active',
         windows: initialWindows,
         activeWindowId: null,
         lastActiveTime: Date.now()
       };
       this.sessions.set(username, session);
+      this.fetchRealIp(username);
     } else {
       session.user = user;
       session.status = 'active';
       session.lastActiveTime = Date.now();
+      if (!session.originIp || session.originIp.startsWith('192.168.')) {
+        session.originIp = 'Obteniendo IP...';
+        this.fetchRealIp(username);
+      }
       if (initialWindows.length > 0 && session.windows.length === 0) {
         session.windows = initialWindows;
       }

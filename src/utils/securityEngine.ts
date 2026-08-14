@@ -635,7 +635,7 @@ class SecurityEngine {
   }
 
   public recordEvent(eventData: Omit<SecurityEvent, 'id' | 'timestamp' | 'prevHash' | 'hash'>) {
-    const id = Math.random().toString(36).substr(2, 9);
+    const id = crypto.randomUUID();
     const timestamp = new Date().toLocaleTimeString();
     const prevHash = this.lastLedgerHash;
 

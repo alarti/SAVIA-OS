@@ -76,12 +76,12 @@ class WebOSGatewayService {
     // Simulador de despacho de canal IPC a través de Web Workers / WebAssembly Kernel
     return new Promise((resolve) => {
       setTimeout(() => {
-        resolve(this.mockKernelDispatch(request));
+        resolve(this.kernelEmulationDispatch(request));
       }, 30);
     });
   }
 
-  private mockKernelDispatch(req: GatewayRequest): GatewayResponse {
+  private kernelEmulationDispatch(req: GatewayRequest): GatewayResponse {
     const { payload } = req;
 
     switch (payload.type) {

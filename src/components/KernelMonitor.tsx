@@ -57,7 +57,7 @@ export default function KernelMonitor({ onStartX }: { onStartX: () => void }) {
             {/* Layer 3 */}
             <div className="p-2 sm:p-3 border-b border-[#2A2A2E] bg-[#1A1A1D]">
               <div className="flex justify-between items-center mb-1">
-                <span className="text-[10px] sm:text-xs font-semibold text-white">L2: Unix VFS</span>
+                <span className="text-[10px] sm:text-xs font-semibold text-white">L2: SAVIA VFS</span>
                 <span className="text-[7px] sm:text-[9px] bg-emerald-500/10 text-emerald-500 px-1 rounded">Active</span>
               </div>
               <p className="text-[9px] sm:text-[11px] text-[#6B7280] italic">Inodes & Mounting</p>

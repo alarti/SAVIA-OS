@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { 
   Folder, FileText, FileImage, Cpu, Terminal as TerminalIcon, 
   ChevronLeft, ChevronRight, ChevronUp, Copy, Trash2, Edit2, Info, 
-  File, Play, ExternalLink, ShieldAlert, Plus, Upload, Clipboard, 
+  File, Play, ExternalLink, ShieldAlert, Plus, Upload, Download, Clipboard, 
   Check, X, HardDrive, Box, Image as ImageIcon, Music, Film, Home, 
   Monitor, Zap, Settings, RefreshCcw, ExternalLink as LinkIcon, Clock,
   Undo2, RotateCcw, CheckCircle2, Cloud
@@ -13,6 +13,7 @@ import { securityEngine } from '../utils/securityEngine';
 import { userStorage } from '../utils/userStorage';
 import { trashAndUndo } from '../utils/trashAndUndo';
 import { vfs, isSystemFileOrFolder } from '../utils/vfs';
+import { isTouchDevice } from '../utils/deviceUtils';
 import SudoDialog from './SudoDialog';
 import { TrashApp } from './TrashApp';
 
@@ -207,7 +208,8 @@ export default function FileExplorer({ user, onOpenFile, initialPath }: { user?:
       lastItemClickRef.current = { id: '', time: 0 };
     } else {
       setSelectedItemIds([item.id]);
-      if (isDoubleTap) {
+      const isTouchMode = isTouch || isTouchDevice();
+      if (isDoubleTap || isTouchMode) {
         handleOpenItem(item);
         lastItemClickRef.current = { id: '', time: 0 };
       } else {
@@ -236,7 +238,7 @@ export default function FileExplorer({ user, onOpenFile, initialPath }: { user?:
   const saveFs = (newFs: Record<string, FileItem[]>) => {
     setFs(newFs);
     try {
-      localStorage.setItem('savia_os_mock_fs', JSON.stringify(newFs));
+      localStorage.setItem('savia_os_vfs_data', JSON.stringify(newFs));
     } catch {}
   };
 
@@ -307,44 +309,118 @@ export default function FileExplorer({ user, onOpenFile, initialPath }: { user?:
     navigateTo(parentPath);
   };
 
-  const handleLocalFileUploadToFS = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  // Drag and Drop between Local PC and FileExplorer
+  const [isExternalDragOver, setIsExternalDragOver] = useState(false);
+
+  const handleExternalDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsExternalDragOver(true);
+  };
+
+  const handleExternalDragLeave = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsExternalDragOver(false);
+  };
+
+  const handleExternalDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsExternalDragOver(false);
+
+    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+      for (let i = 0; i < e.dataTransfer.files.length; i++) {
+        const file = e.dataTransfer.files[i];
+        const fileName = file.name;
+        const nameLower = fileName.toLowerCase();
+
+        let iconType: FileItem['iconType'] = 'text';
+        if (nameLower.endsWith('.pdf')) iconType = 'file';
+        else if (nameLower.endsWith('.docx')) iconType = 'doc';
+        else if (nameLower.endsWith('.xlsx')) iconType = 'xls';
+        else if (nameLower.endsWith('.pptx')) iconType = 'ppt';
+        else if (nameLower.endsWith('.png') || nameLower.endsWith('.jpg') || nameLower.endsWith('.jpeg')) iconType = 'image';
+
+        const reader = new FileReader();
+        reader.onload = (evt) => {
+          const content = evt.target?.result as string;
+          if (content) {
+            vfs.saveFile(currentPath, fileName, content, {
+              iconType: iconType as any,
+              owner: user?.username || 'user'
+            });
+            setFs(vfs.getVFS() as any);
+            soundEngine.playSuccessTone();
+          }
+        };
+
+        if (file.type.startsWith('image/') || file.type === 'application/pdf' || nameLower.endsWith('.docx') || nameLower.endsWith('.xlsx') || nameLower.endsWith('.pptx')) {
+          reader.readAsDataURL(file);
+        } else {
+          reader.readAsText(file);
+        }
+      }
+    }
+  };
+
+  const handleLocalFileUploadToFS = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    const currentList = fs[currentPath] || [];
     const fileName = file.name;
-    const sizeFormatted = file.size > 1024 * 1024
-      ? `${(file.size / (1024 * 1024)).toFixed(1)} MB`
-      : `${Math.ceil(file.size / 1024)} KB`;
+    const nameLower = fileName.toLowerCase();
 
     let iconType: FileItem['iconType'] = 'text';
-    const nameLower = fileName.toLowerCase();
     if (nameLower.endsWith('.pdf')) iconType = 'file';
-    if (nameLower.endsWith('.png') || nameLower.endsWith('.jpg') || nameLower.endsWith('.jpeg') || nameLower.endsWith('.svg')) iconType = 'image';
-    if (nameLower.endsWith('.exe') || nameLower.endsWith('.msi')) iconType = 'wine';
-    else if (nameLower.endsWith('.sh')) iconType = 'terminal';
+    else if (nameLower.endsWith('.docx')) iconType = 'doc';
+    else if (nameLower.endsWith('.xlsx')) iconType = 'xls';
+    else if (nameLower.endsWith('.pptx')) iconType = 'ppt';
+    else if (nameLower.endsWith('.png') || nameLower.endsWith('.jpg') || nameLower.endsWith('.jpeg')) iconType = 'image';
 
-    const fileContent = await file.text();
-
-    const newItem: FileItem = {
-      id: Date.now().toString(),
-      name: fileName,
-      type: (iconType === 'wine' || iconType === 'terminal') ? 'executable' : 'file',
-      iconType,
-      size: sizeFormatted,
-      date: 'Ahora mismo',
-      permissions: (iconType === 'wine' || iconType === 'terminal') ? '-rwxr-xr-x' : '-rw-r--r--',
-      owner: user?.username || 'user',
-      content: fileContent
+    const reader = new FileReader();
+    reader.onload = (evt) => {
+      const content = evt.target?.result as string;
+      if (content) {
+        vfs.saveFile(currentPath, fileName, content, {
+          iconType: iconType as any,
+          owner: user?.username || 'user'
+        });
+        setFs(vfs.getVFS() as any);
+        soundEngine.playSuccessTone();
+      }
     };
 
-    const updated = {
-      ...fs,
-      [currentPath]: [...currentList, newItem]
-    };
+    if (file.type.startsWith('image/') || file.type === 'application/pdf' || nameLower.endsWith('.docx') || nameLower.endsWith('.xlsx') || nameLower.endsWith('.pptx')) {
+      reader.readAsDataURL(file);
+    } else {
+      reader.readAsText(file);
+    }
+  };
 
-    saveFs(updated);
-    vfs.syncFileToLocalDisk(currentPath, fileName, fileContent);
+  const handleExportToLocalPC = (item: FileItem) => {
+    const fullItemPath = currentPath === '/' ? `/${item.name}` : `${currentPath}/${item.name}`;
+    const fileRes = vfs.readFile(fullItemPath);
+    const content = fileRes ? fileRes.content : (item.content || '');
+
+    if (content.startsWith('data:') || content.startsWith('blob:')) {
+      const a = document.createElement('a');
+      a.href = content;
+      a.download = item.name;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+    } else {
+      const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = item.name;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    }
     soundEngine.playSuccessTone();
   };
 
@@ -533,7 +609,7 @@ export default function FileExplorer({ user, onOpenFile, initialPath }: { user?:
 
       const pastedItem: FileItem = {
         ...srcItem,
-        id: 'item_' + Date.now() + '_' + Math.floor(Math.random() * 1000),
+        id: 'item_' + Date.now() + '_' + crypto.randomUUID().substring(0, 8),
         name: newName,
         date: 'Ahora mismo'
       };
@@ -923,10 +999,21 @@ export default function FileExplorer({ user, onOpenFile, initialPath }: { user?:
 
   return (
     <div 
+      onDragOver={handleExternalDragOver}
+      onDragLeave={handleExternalDragLeave}
+      onDrop={handleExternalDrop}
       className="w-full h-full flex flex-col bg-[#121214] text-white overflow-hidden relative text-sm select-none" 
       onClick={() => setSelectedItemId(null)}
       onContextMenu={(e) => handleContextMenu(e, null)}
     >
+      {/* External Drag & Drop Overlay */}
+      {isExternalDragOver && (
+        <div className="absolute inset-0 bg-sky-950/85 backdrop-blur-md z-50 flex flex-col items-center justify-center border-4 border-dashed border-sky-400 p-8 text-center animate-pulse pointer-events-none">
+          <Upload className="w-16 h-16 text-sky-300 mb-3 animate-bounce" />
+          <h2 className="text-xl font-black text-white uppercase tracking-wider">Transferir a {currentPath}</h2>
+          <p className="text-sm text-sky-200 mt-1">Suelta tus archivos locales aquí para guardarlos en este directorio de SaviaOS</p>
+        </div>
+      )}
       {/* Toolbar Navigation & Quick Actions */}
       {systemNotice && (
         <div className="bg-rose-950/90 border-b border-rose-500/40 px-3 py-2 text-xs text-rose-200 flex items-center justify-between animate-fadeIn z-20">
@@ -993,7 +1080,7 @@ export default function FileExplorer({ user, onOpenFile, initialPath }: { user?:
                   trashAndUndo.undo();
                   soundEngine.playButtonClick();
                   try {
-                    const saved = localStorage.getItem('savia_os_mock_fs');
+                    const saved = localStorage.getItem('savia_os_vfs_data');
                     if (saved) setFs(JSON.parse(saved));
                   } catch {}
                 }}
@@ -1113,6 +1200,16 @@ export default function FileExplorer({ user, onOpenFile, initialPath }: { user?:
                 {selectedItem.size && <span className="text-[10px] text-gray-400">({selectedItem.size})</span>}
               </div>
               <div className="flex items-center gap-3">
+                {selectedItem.type !== 'folder' && (
+                  <button 
+                    onClick={(e) => { e.stopPropagation(); handleExportToLocalPC(selectedItem); }}
+                    className="text-xs text-sky-400 hover:text-sky-300 flex items-center gap-1 font-semibold bg-sky-900/30 px-2 py-0.5 rounded border border-sky-500/30"
+                    title="Exportar y descargar archivo a tu PC local"
+                  >
+                    <Download className="w-3.5 h-3.5" />
+                    <span>Exportar a PC</span>
+                  </button>
+                )}
                 <button 
                   onClick={(e) => { e.stopPropagation(); addShortcutToDesktop(selectedItem); }}
                   className="text-xs text-amber-400 hover:text-amber-300 flex items-center gap-1 font-medium"
@@ -1145,6 +1242,11 @@ export default function FileExplorer({ user, onOpenFile, initialPath }: { user?:
               {userStorage.getRecents(activeUsername).map((rec, idx) => (
                 <div
                   key={idx}
+                  onClick={() => {
+                    if (onOpenFile && rec.appType) {
+                      onOpenFile(rec.appType, rec.name);
+                    }
+                  }}
                   onDoubleClick={() => {
                     if (onOpenFile && rec.appType) {
                       onOpenFile(rec.appType, rec.name);

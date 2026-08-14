@@ -131,6 +131,42 @@ export const ThreePhysics: React.FC = () => {
     window.addEventListener('keydown', handleKeyDown);
     window.addEventListener('keyup', handleKeyUp);
 
+    // Touch Controls for Mobile/Tablet
+    let touchStartX = 0;
+    let initialBallX = 0;
+
+    const touchStartHandler = (e: TouchEvent) => {
+      if (!physicsRef.current.isThrown) {
+        isCharging = true;
+        touchStartX = e.touches[0].clientX;
+        initialBallX = physicsRef.current.ballPos.x;
+      }
+    };
+
+    const touchMoveHandler = (e: TouchEvent) => {
+      if (e.cancelable) e.preventDefault();
+      if (!physicsRef.current.isThrown && isCharging) {
+        const touchX = e.touches[0].clientX;
+        const dx = (touchX - touchStartX) * 0.02; // sensitivity
+        physicsRef.current.ballPos.x = Math.max(-2.2, Math.min(2.2, initialBallX + dx));
+      }
+    };
+
+    const touchEndHandler = (e: TouchEvent) => {
+      if (isCharging && !physicsRef.current.isThrown) {
+        isCharging = false;
+        physicsRef.current.isThrown = true;
+        const throwPower = Math.max(20, chargePower * 40);
+        physicsRef.current.ballVel.set(0, 0, -throwPower);
+        soundEngine.playButtonClick();
+        setMsg('¡Bola en movimiento!');
+      }
+    };
+
+    container.addEventListener('touchstart', touchStartHandler, { passive: false });
+    container.addEventListener('touchmove', touchMoveHandler, { passive: false });
+    container.addEventListener('touchend', touchEndHandler);
+
     let animId: number;
     let clock = new THREE.Clock();
 
@@ -203,6 +239,9 @@ export const ThreePhysics: React.FC = () => {
       window.removeEventListener('keydown', handleKeyDown);
       window.removeEventListener('keyup', handleKeyUp);
       window.removeEventListener('resize', handleResize);
+      container.removeEventListener('touchstart', touchStartHandler);
+      container.removeEventListener('touchmove', touchMoveHandler);
+      container.removeEventListener('touchend', touchEndHandler);
       if (container.contains(renderer.domElement)) {
         container.removeChild(renderer.domElement);
       }

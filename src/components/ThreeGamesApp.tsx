@@ -138,7 +138,7 @@ export const ThreeGamesApp: React.FC = () => {
   const activeGame = GAME_CATALOG.find(g => g.id === activeGameId) || GAME_CATALOG[0];
 
   return (
-    <div className="w-full h-full flex bg-slate-950 text-white overflow-hidden select-none font-sans">
+    <div id="game-master-container" className="w-full h-full flex bg-slate-950 text-white overflow-hidden select-none font-sans">
       {/* LEFT SIDEBAR: GAME SELECTOR */}
       <div 
         className={`${
@@ -229,7 +229,16 @@ export const ThreeGamesApp: React.FC = () => {
                   return (
                     <div
                       key={game.id}
-                      onClick={() => handleGameSelect(game.id)}
+                      onClick={() => {
+                        handleGameSelect(game.id);
+                        setIsSidebarOpen(false);
+                        if (window.innerWidth < 768) {
+                          const container = document.getElementById('game-master-container');
+                          if (container && !document.fullscreenElement) {
+                            container.requestFullscreen().catch(err => console.warn(err));
+                          }
+                        }
+                      }}
                       className={`p-2.5 rounded-xl cursor-pointer transition-all border flex items-center gap-3 ${
                         isActive
                           ? 'bg-slate-800 border-sky-500/60 shadow-lg scale-[1.01]'

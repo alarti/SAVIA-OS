@@ -104,7 +104,7 @@ export function getRealOsInfo(): RealOsInfo {
   const ua = navigator.userAgent || '';
   const hardwareConcurrency = navigator.hardwareConcurrency || 4;
 
-  let osName = 'Linux / Unix';
+  let osName = 'SAVIA OS / Linux';
   let osVersion = 'Kernel Genérico';
   let architecture = 'x86_64 / WebAssembly';
 

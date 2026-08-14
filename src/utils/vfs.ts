@@ -11,6 +11,8 @@ export interface VFSFileItem {
   date?: string;
   permissions?: string;
   owner?: string;
+  author?: string;
+  company?: string;
   content?: string;
   appType?: string;
   docData?: any;
@@ -54,7 +56,20 @@ const DEFAULT_VFS: VFSMap = {
     { id: 'u_music', name: 'Music', type: 'folder', iconType: 'folder', date: 'Hoy 09:00', permissions: 'drwxr-xr-x', owner: 'user' },
     { id: 'u_videos', name: 'Videos', type: 'folder', iconType: 'folder', date: 'Hoy 09:00', permissions: 'drwxr-xr-x', owner: 'user' },
     { id: 'u_notes', name: 'Notas_SaviaOS.txt', type: 'file', iconType: 'text', size: '2 KB', date: 'Hoy 14:20', permissions: '-rw-r--r--', owner: 'user', content: 'Bienvenido a SAVIA-OS.\nEditor de Código y Archivos Savia Nano.\nSistema de Archivos Virtual VFS.' },
-    { id: 'u_manual', name: 'Manual_Sistema.pdf', type: 'file', iconType: 'file', size: '1.4 MB', date: 'Ayer 16:20', permissions: '-rw-r--r--', owner: 'user', content: 'https://raw.githubusercontent.com/mozilla/pdf.js/ba2edeae/web/compressed.tracemonkey-pldi-09.pdf' },
+    { id: 'u_manual', name: 'Manual_Sistema.pdf', type: 'file', iconType: 'file', size: '1.4 MB', date: 'Ayer 16:20', permissions: '-rw-r--r--', owner: 'user', content: JSON.stringify([
+      {
+        id: "p-manual-1",
+        pageNumber: 1,
+        title: "Manual de Sistema Savia OS v4.0",
+        watermarkText: "SAVIA OS",
+        elements: [
+          { id: "m1", type: "text", x: 40, y: 40, text: "MANUAL DE USUARIO OFICIAL - SAVIA OS", fontSize: 20, fontWeight: "bold", color: "#0F172A" },
+          { id: "m2", type: "text", x: 40, y: 80, text: "Sistema Operativo Web de Alto Rendimiento", fontSize: 14, color: "#0284C7", fontWeight: "semibold" },
+          { id: "m3", type: "text", x: 40, y: 120, text: "1. Suite Ofimática: Incluye SaviaDoc, SaviaXls, SaviaPpt y SaviaPdf con compatibilidad completa de exportación a tu PC local.\n2. Arrastrar y Soltar (Drag & Drop): Transfiere documentos, PDFs e imágenes directamente desde tu PC a Savia OS.\n3. Gestión VFS: Sistema de archivos virtual con soporte de permisos, carpetas de usuario y recientes.", fontSize: 12, color: "#334155" },
+          { id: "m4", type: "stamp", stampType: "CONFIDENCIAL", x: 520, y: 40 }
+        ]
+      }
+    ], null, 2) },
   ],
   '/home/user/Music': [
     { id: 'm_1', name: 'ACDC_Back_In_Black.mp3', type: 'file', iconType: 'file', size: '2.5 MB', date: 'Hoy 10:00', permissions: '-rw-r--r--', owner: 'user', content: 'https://cdn.freesound.org/previews/682/682123_14838638-lq.mp3' },
@@ -70,7 +85,20 @@ const DEFAULT_VFS: VFSMap = {
     { id: 'doc2', name: 'nuevo documento.xlsx', type: 'file', iconType: 'text', size: '18 KB', date: 'Hoy 10:05', permissions: '-rw-r--r--', owner: 'user' },
     { id: 'doc3', name: 'nuevo documento.pptx', type: 'file', iconType: 'text', size: '24 KB', date: 'Hoy 10:10', permissions: '-rw-r--r--', owner: 'user' },
     { id: 'doc4', name: 'Informe_SaviaOS.txt', type: 'file', iconType: 'text', size: '3.5 KB', date: 'Hoy 11:30', permissions: '-rw-r--r--', owner: 'user', content: 'Informe ejecutivo de SAVIA-OS.' },
-    { id: 'doc5', name: 'Documento_PDF_Ejemplo.pdf', type: 'file', iconType: 'file', size: '1.2 MB', date: 'Hoy 12:00', permissions: '-rw-r--r--', owner: 'user', content: 'https://raw.githubusercontent.com/mozilla/pdf.js/ba2edeae/web/compressed.tracemonkey-pldi-09.pdf' },
+    { id: 'doc5', name: 'Documento_PDF_Ejemplo.pdf', type: 'file', iconType: 'file', size: '1.2 MB', date: 'Hoy 12:00', permissions: '-rw-r--r--', owner: 'user', content: JSON.stringify([
+      {
+        id: "p-ejemplo-1",
+        pageNumber: 1,
+        title: "Informe Oficial Savia OS",
+        watermarkText: "OFICIAL",
+        elements: [
+          { id: "e1", type: "text", x: 40, y: 40, text: "INFORME TÉCNICO Y DOCUMENTO DE EJEMPLO", fontSize: 18, fontWeight: "bold", color: "#0F172A" },
+          { id: "e2", type: "text", x: 40, y: 80, text: "Este documento demuestra las capacidades de visualización, edición e interactividad de SaviaPdf Studio.", fontSize: 13, color: "#334155" },
+          { id: "e3", type: "stamp", stampType: "APROBADO", x: 520, y: 40 },
+          { id: "e4", type: "note", x: 500, y: 140, text: "Verificado y listo para revisión.", bgColor: "#dcfce7", color: "#15803d" }
+        ]
+      }
+    ], null, 2) },
   ],
   '/home/user/Downloads': [
     { id: 'dl4', name: 'archivos_proyecto.zip', type: 'file', iconType: 'file', size: '4.2 MB', date: 'Hoy 11:15', permissions: '-rw-r--r--', owner: 'user' },
@@ -108,10 +136,15 @@ export async function getFileContent(file: File): Promise<string> {
   const isTextExt = /\.(txt|js|ts|jsx|tsx|json|csv|md|markdown|html|htm|css|scss|less|py|c|cpp|h|hpp|sh|bash|xml|yaml|yml|ini|cfg|conf|log|env|sql|rb|php|java|go|rs|swift|kt|bat|cmd|ps1)$/.test(nameLower) || file.type.startsWith('text/');
 
   const isImageOrMedia = file.type.startsWith('image/') || file.type.startsWith('audio/') || file.type.startsWith('video/') || file.type === 'application/pdf';
-  const isBinaryExt = /\.(png|jpe?g|gif|webp|ico|svg|bmp|pdf|mp3|wav|mp4|webm|zip|tar|gz|7z|rar|exe|dll|so|dylib)$/.test(nameLower);
+  const isBinaryExt = /\.(png|jpe?g|gif|webp|ico|svg|bmp|pdf|mp3|wav|mp4|webm|zip|tar|gz|7z|rar|exe|dll|so|dylib|docx?|xlsx?|pptx?|odt|ods|odp)$/.test(nameLower);
 
   if (!isTextExt && (isImageOrMedia || isBinaryExt)) {
-    return URL.createObjectURL(file);
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result as string);
+      reader.onerror = () => resolve(URL.createObjectURL(file)); // Fallback to blob if reading fails
+      reader.readAsDataURL(file);
+    });
   }
 
   try {
@@ -141,6 +174,29 @@ export async function resolveTextContent(rawContent?: string): Promise<string> {
   return rawContent;
 }
 
+export async function writeContentToHandle(fileHandle: any, content: string): Promise<void> {
+  if (fileHandle && fileHandle.createWritable) {
+    const writable = await fileHandle.createWritable();
+    if (content.startsWith('data:')) {
+      const base64Part = content.split(',')[1];
+      if (base64Part) {
+        const binaryString = atob(base64Part);
+        const len = binaryString.length;
+        const bytes = new Uint8Array(len);
+        for (let i = 0; i < len; i++) {
+          bytes[i] = binaryString.charCodeAt(i);
+        }
+        await writable.write(bytes);
+      } else {
+        await writable.write(content);
+      }
+    } else {
+      await writable.write(content);
+    }
+    await writable.close();
+  }
+}
+
 export const vfs = {
   registerLocalDirHandle(mountPointPath: string, handle: any): void {
     localDirHandles[mountPointPath] = handle;
@@ -163,11 +219,7 @@ export const vfs = {
       const handle = localDirHandles[targetMount];
       if (handle && handle.getFileHandle) {
         const fileHandle = await handle.getFileHandle(fileName, { create: true });
-        if (fileHandle && fileHandle.createWritable) {
-          const writable = await fileHandle.createWritable();
-          await writable.write(content);
-          await writable.close();
-        }
+        await writeContentToHandle(fileHandle, content);
       }
     } catch (err) {
       console.warn('Sync to disk error:', err);
@@ -199,7 +251,7 @@ export const vfs = {
 
         if (!existing) {
           currentItems.push({
-            id: 'real_local_' + Date.now() + '_' + Math.random().toString(36).substring(2, 7),
+            id: 'real_local_' + Date.now() + '_' + crypto.randomUUID().substring(0, 8),
             name: file.name,
             type: 'file',
             iconType: file.type.startsWith('image/') ? 'image' : 'text',
@@ -229,7 +281,15 @@ export const vfs = {
 
   getVFS(): VFSMap {
     try {
-      const saved = localStorage.getItem('savia_os_mock_fs');
+      let saved = localStorage.getItem('savia_os_vfs_data');
+      if (!saved) {
+        saved = localStorage.getItem('savia_os_mock_fs');
+        if (saved) {
+          localStorage.setItem('savia_os_vfs_data', saved);
+          localStorage.removeItem('savia_os_mock_fs');
+        }
+      }
+      
       let map: VFSMap = DEFAULT_VFS;
       if (saved) {
         map = JSON.parse(saved);
@@ -266,7 +326,7 @@ export const vfs = {
       }
       if (needsResave) {
         try {
-          localStorage.setItem('savia_os_mock_fs', JSON.stringify(map));
+          localStorage.setItem('savia_os_vfs_data', JSON.stringify(map));
         } catch (err) {
           console.warn('Failed to sanitize VFS localStorage:', err);
         }
@@ -352,7 +412,7 @@ export const vfs = {
 
   saveVFS(map: VFSMap): void {
     try {
-      localStorage.setItem('savia_os_mock_fs', JSON.stringify(map));
+      localStorage.setItem('savia_os_vfs_data', JSON.stringify(map));
       window.dispatchEvent(new CustomEvent('savia_os_vfs_updated'));
     } catch (e) {
       console.error('Error saving VFS', e);
@@ -398,6 +458,8 @@ export const vfs = {
       iconType?: VFSFileItem['iconType'];
       owner?: string;
       size?: string;
+      author?: string;
+      company?: string;
     }
   ): { fullPath: string; fileName: string; folderPath: string } {
     const map = this.getVFS();
@@ -405,6 +467,8 @@ export const vfs = {
     const items = map[cleanFolder] || [];
 
     const owner = options?.owner || 'user';
+    const author = options?.author || owner;
+    const company = options?.company || 'Savia OS';
     const iconType = options?.iconType || 'text';
     const calculatedSize = options?.size || `${Math.max(1, Math.round(content.length / 1024))} KB`;
 
@@ -420,6 +484,8 @@ export const vfs = {
       date: dateStr,
       permissions: '-rw-r--r--',
       owner,
+      author,
+      company,
       content,
     };
 
@@ -537,7 +603,7 @@ export const vfs = {
           item.date = dateStr;
         } else {
           items.push({
-            id: 'real_local_' + Date.now() + '_' + Math.random().toString(36).substring(2, 6),
+            id: 'real_local_' + Date.now() + '_' + crypto.randomUUID().substring(0, 8),
             name: fileName,
             type: 'file',
             iconType: file.type.startsWith('image/') ? 'image' : 'text',

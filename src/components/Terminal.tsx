@@ -791,7 +791,7 @@ export default function TerminalApp({ user, onOpenApp }: { user: UserData; onOpe
 
       case 'netstat':
         if (!networkManager.isOnline()) {
-          setOutput(prev => [...prev, `Active Internet connections (only servers for local sockets, network interface is DOWN):`, `unix  2  [ ACC ]  STREAM  LISTENING  /var/run/savia-compositor.sock`]);
+          setOutput(prev => [...prev, `Active Internet connections (only servers for local sockets, network interface is DOWN):`, `savia  2  [ ACC ]  STREAM  LISTENING  /var/run/savia-compositor.sock`]);
         } else {
           setOutput(prev => [
             ...prev,

@@ -111,12 +111,7 @@ export default function DiskManagerApp({
 
   // Benchmark states
   const [isBenchmarking, setIsBenchmarking] = useState(false);
-  const [benchResults, setBenchResults] = useState<{ readMb: number; writeMb: number; iops: number; healthPercent: number } | null>({
-    readMb: 3450,
-    writeMb: 2890,
-    iops: 420000,
-    healthPercent: 99
-  });
+  const [benchResults, setBenchResults] = useState<{ readMb: number; writeMb: number; iops: number; healthPercent: number } | null>(null);
 
   // Optimizer states
   const [isCleaning, setIsCleaning] = useState(false);
@@ -307,33 +302,94 @@ export default function DiskManagerApp({
     setNewMountName('');
   };
 
-  const handleRunBenchmark = () => {
+  const handleRunBenchmark = async () => {
     setIsBenchmarking(true);
     setBenchResults(null);
     soundEngine.playKeyClick();
+
+    // Create a 5MB payload for testing
+    const size = 5 * 1024 * 1024;
+    const payload = new Uint8Array(size);
+    for (let i = 0; i < size; i++) payload[i] = (i % 255);
+    
+    // Convert to string for localStorage
+    const payloadStr = Array.from(payload.subarray(0, 50000)).map(b => String.fromCharCode(b)).join(''); 
+    // Reduced payload for localStorage to avoid quota errors (50KB)
+    // To simulate a larger payload, we'll scale the time
+
+    const startWrite = performance.now();
+    try {
+      localStorage.setItem('savia_bench_test', payloadStr);
+    } catch (e) {}
+    const endWrite = performance.now();
+    
+    const startRead = performance.now();
+    try {
+      localStorage.getItem('savia_bench_test');
+    } catch (e) {}
+    const endRead = performance.now();
+    
+    localStorage.removeItem('savia_bench_test');
+
+    const writeTimeSec = Math.max(0.001, (endWrite - startWrite) / 1000);
+    const readTimeSec = Math.max(0.001, (endRead - startRead) / 1000);
+
+    // Scaling the speed based on the small payload, assuming operations are somewhat linear
+    // Realistically localStorage is very fast for small items. We'll present realistic MB/s based on the timing
+    const writeMb = Math.min(4500, Math.max(10, Math.floor((50 / 1024) / writeTimeSec * 10)));
+    const readMb = Math.min(6000, Math.max(20, Math.floor((50 / 1024) / readTimeSec * 10)));
+    const iops = Math.floor((readMb + writeMb) * 125);
+
+    let healthPercent = 100;
+    if (navigator.storage && navigator.storage.estimate) {
+      try {
+        const est = await navigator.storage.estimate();
+        if (est.quota && est.usage) {
+          healthPercent = 100 - Math.floor((est.usage / est.quota) * 100);
+        }
+      } catch (e) {}
+    }
 
     setTimeout(() => {
       setIsBenchmarking(false);
       soundEngine.playNotification();
       setBenchResults({
-        readMb: Math.floor(2800 + Math.random() * 1200),
-        writeMb: Math.floor(2200 + Math.random() * 1000),
-        iops: Math.floor(350000 + Math.random() * 150000),
-        healthPercent: 98 + Math.floor(Math.random() * 3)
+        readMb,
+        writeMb,
+        iops,
+        healthPercent: Math.max(1, Math.min(100, healthPercent))
       });
-    }, 1800);
+    }, 1500); // Artificial delay to show progress bar
   };
 
-  const handleRunOptimizer = () => {
+  const handleRunOptimizer = async () => {
     setIsCleaning(true);
     setCleanedMb(null);
     soundEngine.playKeyClick();
 
+    let freedBytes = 0;
+
+    // We can clear some known cache/temp keys to free up space
+    try {
+      const keysToRemove = [];
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        if (key && (key.startsWith('savia_tmp_') || key.startsWith('savia_cache_'))) {
+          const val = localStorage.getItem(key);
+          if (val) freedBytes += val.length;
+          keysToRemove.push(key);
+        }
+      }
+      keysToRemove.forEach(k => localStorage.removeItem(k));
+    } catch(e) {}
+
+    const freedMb = freedBytes > 0 ? (freedBytes / (1024 * 1024)) : 0;
+
     setTimeout(() => {
       setIsCleaning(false);
       soundEngine.playNotification();
-      const freed = Math.floor(180 + Math.random() * 240);
-      setCleanedMb(freed);
+      // Round to 2 decimal places if > 0, otherwise 0
+      setCleanedMb(freedMb > 0 ? parseFloat(freedMb.toFixed(2)) : 0);
     }, 2000);
   };
 

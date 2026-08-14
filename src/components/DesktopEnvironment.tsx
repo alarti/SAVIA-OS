@@ -1,7 +1,8 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Terminal, Folder, Globe, Cpu, X, Square, Minus, Zap, User, Users, Lock, Monitor, Search, FileText, FileImage, Power, Activity, Gamepad2, Volume2, VolumeX, Box, Radio, Palette, Download, Sliders, ShieldCheck, ShieldAlert, Info, Settings, Wifi, WifiOff, Battery, CheckCircle, Image as ImageIcon, Calculator as CalcIcon, Calendar as CalendarIcon, Move, Maximize2, Minimize2, RefreshCcw, Plus, Trash2, Edit2, Play, ChevronRight, ChevronLeft, Grid, Sparkles, Trophy, Rocket, FileCode, Cloud, RefreshCw, AlertTriangle } from 'lucide-react';
+import { Terminal, Folder, Globe, Cpu, X, Square, Minus, Zap, User, Users, Lock, Monitor, Search, FileText, FileImage, Power, Activity, Gamepad2, Volume2, VolumeX, Box, Radio, Palette, Download, Upload, Sliders, ShieldCheck, ShieldAlert, Info, Settings, Wifi, WifiOff, Battery, CheckCircle, Image as ImageIcon, Calculator as CalcIcon, Calendar as CalendarIcon, Move, Maximize2, Minimize2, RefreshCcw, Plus, Trash2, Edit2, Play, ChevronRight, ChevronLeft, Grid, Sparkles, Trophy, Rocket, FileCode, Cloud, RefreshCw, AlertTriangle } from 'lucide-react';
 import { networkManager } from '../utils/networkManager';
 import { sessionManager } from '../utils/sessionManager';
+import { isTouchDevice, isMobileOrTablet, calculateResponsiveWindowBounds } from '../utils/deviceUtils';
 import UserSessionSwitcherModal from './UserSessionSwitcherModal';
 import Editor from '@monaco-editor/react';
 import type { UserData } from '../utils/auth';
@@ -378,7 +379,7 @@ export default function DesktopEnvironment({
   const [volume, setVolumeState] = useState(soundEngine.getVolume());
   const [isMuted, setIsMutedState] = useState(soundEngine.isMuted());
   const [installedPackages, setInstalledPackages] = useState<string[]>(getInstalledPackageIds());
-  const [isTouch, setIsTouch] = useState(false);
+  const [isTouch, setIsTouch] = useState(() => isTouchDevice());
   const [draggingWindow, setDraggingWindow] = useState<{ id: string, startX: number, startY: number, initialX: number, initialY: number } | null>(null);
   const [resizingWindow, setResizingWindow] = useState<{ id: string, startX: number, startY: number, initialW: number, initialH: number } | null>(null);
   const [windowContextMenu, setWindowContextMenu] = useState<{ id: string, x: number, y: number } | null>(null);
@@ -537,7 +538,7 @@ export default function DesktopEnvironment({
             }
 
             const newIcon: DesktopIcon = {
-              id: vfsItem.id || `vfs_icon_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+              id: vfsItem.id || `vfs_icon_${Date.now()}_${crypto.randomUUID().substring(0, 8)}`,
               title: vfsItem.name,
               appType,
               iconType,
@@ -605,6 +606,75 @@ export default function DesktopEnvironment({
   const [renameIconModal, setRenameIconModal] = useState<DesktopIcon | null>(null);
   const [renameIconValue, setRenameIconValue] = useState('');
 
+  // Drag & Drop File Transfer between Local PC OS and SaviaOS Desktop
+  const [isExternalDesktopDragOver, setIsExternalDesktopDragOver] = useState(false);
+
+  const handleDesktopExternalDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsExternalDesktopDragOver(true);
+  };
+
+  const handleDesktopExternalDragLeave = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsExternalDesktopDragOver(false);
+  };
+
+  const handleDesktopExternalDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsExternalDesktopDragOver(false);
+
+    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+      const userDesktopPath = user.username === 'root' ? '/root/Desktop' : `/home/${user.username}/Desktop`;
+      
+      for (let i = 0; i < e.dataTransfer.files.length; i++) {
+        const file = e.dataTransfer.files[i];
+        const fileName = file.name;
+        
+        const reader = new FileReader();
+        reader.onload = (evt) => {
+          const content = evt.target?.result as string;
+          if (content) {
+            let iconType = 'file';
+            let appType: WindowData['type'] = 'texteditor';
+            const lowerName = fileName.toLowerCase();
+            
+            if (lowerName.endsWith('.docx') || lowerName.endsWith('.xlsx') || lowerName.endsWith('.pptx')) {
+              appType = 'office';
+              iconType = lowerName.endsWith('.docx') ? 'doc' : lowerName.endsWith('.xlsx') ? 'xls' : 'ppt';
+            } else if (lowerName.endsWith('.pdf')) {
+              appType = 'pdfviewer';
+              iconType = 'pdf';
+            } else if (lowerName.endsWith('.png') || lowerName.endsWith('.jpg') || lowerName.endsWith('.jpeg')) {
+              appType = 'imageviewer';
+              iconType = 'image';
+            } else if (lowerName.endsWith('.mp3') || lowerName.endsWith('.wav')) {
+              appType = 'webamp';
+              iconType = 'music';
+            }
+
+            vfs.saveFile(userDesktopPath, fileName, content, {
+              iconType: iconType as any,
+              owner: user.username
+            });
+
+            createNewDesktopIcon(fileName, appType, iconType, fileName);
+            triggerSystemToast(`📥 "${fileName}" importado a SaviaOS Desktop`);
+            soundEngine.playSuccessTone();
+          }
+        };
+
+        if (file.type.startsWith('image/') || file.type === 'application/pdf' || file.name.endsWith('.docx') || file.name.endsWith('.xlsx') || file.name.endsWith('.pptx')) {
+          reader.readAsDataURL(file);
+        } else {
+          reader.readAsText(file);
+        }
+      }
+    }
+  };
+
   const createNewDesktopIcon = (title: string, appType: WindowData['type'], iconType: string, docData?: any) => {
     const GRID_X = 110;
     const GRID_Y = 100;
@@ -626,7 +696,7 @@ export default function DesktopEnvironment({
       }
 
       const newIcon: DesktopIcon = {
-        id: 'icon_' + Date.now() + '_' + Math.floor(Math.random() * 1000),
+        id: 'icon_' + Date.now() + '_' + crypto.randomUUID().substring(0, 8),
         title,
         appType,
         iconType,
@@ -1015,12 +1085,20 @@ export default function DesktopEnvironment({
   };
 
   const centerWindow = (id: string) => {
-    setWindows(ws => ws.map(w => w.id === id ? {
-      ...w,
-      x: Math.max(20, (window.innerWidth - w.w) / 2),
-      y: Math.max(20, (window.innerHeight - w.h) / 2),
-      maximized: false
-    } : w));
+    setWindows(ws => ws.map(w => {
+      if (w.id === id) {
+        const bounds = calculateResponsiveWindowBounds(w.w, w.h, 0);
+        return {
+          ...w,
+          x: bounds.x,
+          y: bounds.y,
+          w: bounds.w,
+          h: bounds.h,
+          maximized: bounds.maximized || false
+        };
+      }
+      return w;
+    }));
   };
 
 
@@ -1048,51 +1126,47 @@ export default function DesktopEnvironment({
     const screenW = typeof window !== 'undefined' ? window.innerWidth : 1280;
     const screenH = typeof window !== 'undefined' ? window.innerHeight : 800;
 
-    let defaultW = Math.min(1180, Math.max(800, Math.floor(screenW * 0.85)));
-    let defaultH = Math.min(780, Math.max(560, Math.floor(screenH * 0.82)));
+    let targetW = Math.floor(screenW * 0.85);
+    let targetH = Math.floor(screenH * 0.82);
 
     if (type === 'calculator') {
-      defaultW = 380;
-      defaultH = 540;
+      targetW = 380;
+      targetH = 540;
     } else if (type === 'calendar') {
-      defaultW = 580;
-      defaultH = 520;
+      targetW = 580;
+      targetH = 520;
     } else if (type === 'tetris') {
-      defaultW = 460;
-      defaultH = 580;
+      targetW = 460;
+      targetH = 580;
     } else if (type === 'about') {
-      defaultW = Math.min(940, Math.max(760, Math.floor(screenW * 0.75)));
-      defaultH = Math.min(700, Math.max(580, Math.floor(screenH * 0.78)));
+      targetW = 860;
+      targetH = 640;
     } else if (type === 'wine') {
-      defaultW = Math.min(1080, Math.max(780, Math.floor(screenW * 0.8)));
-      defaultH = Math.min(740, Math.max(540, Math.floor(screenH * 0.78)));
+      targetW = 980;
+      targetH = 680;
     } else if (type === 'webamp') {
-      defaultW = 680;
-      defaultH = 460;
+      targetW = 680;
+      targetH = 460;
     } else if (type === 'equipo' || type === 'diskmanager') {
-      defaultW = Math.min(1080, Math.max(780, Math.floor(screenW * 0.82)));
-      defaultH = Math.min(720, Math.max(520, Math.floor(screenH * 0.78)));
+      targetW = 980;
+      targetH = 640;
     }
 
-    const windowCount = windows.length;
-    const offset = (windowCount % 5) * 24;
-    const posX = Math.max(10, Math.floor((screenW - defaultW) / 2) + offset);
-    const posY = Math.max(10, Math.floor((screenH - defaultH) / 2 - 15) + offset);
-
-    const newId = Math.random().toString();
+    const bounds = calculateResponsiveWindowBounds(targetW, targetH, windows.length);
+    const newId = crypto.randomUUID();
 
     setWindows(ws => [...ws, {
       id: newId,
       title,
       type,
       data,
-      x: posX,
-      y: posY,
-      w: defaultW,
-      h: defaultH,
+      x: bounds.x,
+      y: bounds.y,
+      w: bounds.w,
+      h: bounds.h,
       zIndex: Math.max(...ws.map(w => w.zIndex), 0) + 1,
       minimized: false,
-      maximized: false
+      maximized: bounds.maximized || false
     }]);
     setActiveId(newId);
     setIsStartMenuOpen(false);
@@ -1141,6 +1215,9 @@ export default function DesktopEnvironment({
           backgroundImage: wallpaper === 'gradient-oled' ? 'none' : `url('${wallpaper}')`,
           backgroundColor: wallpaper === 'gradient-oled' ? '#050508' : '#0A0B10'
         }}
+        onDragOver={handleDesktopExternalDragOver}
+        onDragLeave={handleDesktopExternalDragLeave}
+        onDrop={handleDesktopExternalDrop}
         onMouseDown={(e) => {
           if (e.target === e.currentTarget || (e.target as HTMLElement).classList.contains('absolute')) {
             if (e.button === 0) {
@@ -1174,6 +1251,14 @@ export default function DesktopEnvironment({
           setContextMenu({ x: e.clientX, y: e.clientY });
         }}
       >
+        {/* Drag & Drop Visual Overlay for Desktop */}
+        {isExternalDesktopDragOver && (
+          <div className="absolute inset-0 bg-sky-950/85 backdrop-blur-md z-[99999] flex flex-col items-center justify-center border-4 border-dashed border-sky-400 p-8 text-center animate-pulse pointer-events-none">
+            <Upload className="w-20 h-20 text-sky-300 mb-4 animate-bounce" />
+            <h2 className="text-2xl font-black text-white uppercase tracking-widest">Transferir Archivos a SaviaOS</h2>
+            <p className="text-base text-sky-200 mt-2 font-medium">Suelta aquí tus documentos, PDFs o imágenes de tu PC para agregarlos a SaviaOS Desktop</p>
+          </div>
+        )}
         <div 
           className="absolute inset-0 transition-opacity duration-300" 
           style={{ 
@@ -1277,7 +1362,7 @@ export default function DesktopEnvironment({
                 </button>
                 <button
                   onClick={() => {
-                    const docName = `Fichero_${Math.floor(Math.random()*1000)}.txt`;
+                    const docName = `Fichero_${crypto.randomUUID().substring(0, 4).toUpperCase()}.txt`;
                     createNewDesktopIcon('Savia Nano', 'texteditor', 'editor', docName);
                     openApp('texteditor', 'Savia Nano', docName);
                     setContextMenu(null);
@@ -1417,7 +1502,9 @@ export default function DesktopEnvironment({
                   setSelectedIconId(icon.id);
                   setSelectedIconIds([icon.id]);
 
-                  if (isDoubleTap && (!draggingIcon || !draggingIcon.isMoved)) {
+                  const isTouchMode = isTouch || isTouchDevice();
+
+                  if ((isTouchMode || isDoubleTap) && (!draggingIcon || !draggingIcon.isMoved)) {
                     openApp(icon.appType, icon.title, icon.docData);
                     lastIconClickRef.current = { id: '', time: 0 };
                   } else {
@@ -1458,6 +1545,13 @@ export default function DesktopEnvironment({
                   initialY: icon.y,
                   isMoved: false,
                 });
+              }}
+              onTouchEnd={(e) => {
+                e.stopPropagation();
+                if (draggingIcon && !draggingIcon.isMoved) {
+                  openApp(icon.appType, icon.title, icon.docData);
+                }
+                setDraggingIcon(null);
               }}
             >
             {(() => {
@@ -2344,7 +2438,7 @@ export default function DesktopEnvironment({
           <button
             onClick={() => { setIsSessionSwitcherOpen(!isSessionSwitcherOpen); setIsStartMenuOpen(false); }}
             className="px-2.5 py-1.5 bg-blue-600/20 hover:bg-blue-600/30 border border-blue-500/30 text-blue-300 rounded-xl transition-all relative flex items-center gap-1.5"
-            title="Gestor de Sesiones Multiusuario Unix (Concurrencia Activa)"
+            title="Gestor de Sesiones Multiusuario (Concurrencia Activa)"
           >
             <Users className="w-3.5 h-3.5 text-blue-400" />
             <span className="text-[10px] font-bold font-mono">{activeSessionsCount}</span>

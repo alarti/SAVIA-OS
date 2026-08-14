@@ -114,8 +114,49 @@ export const RetroSnake2D: React.FC = () => {
     generateFood();
   };
 
+  // Touch Handlers for Swipes
+  const touchStartRef = useRef<{ x: number; y: number } | null>(null);
+
+  const handleTouchStart = (e: React.TouchEvent) => {
+    touchStartRef.current = {
+      x: e.touches[0].clientX,
+      y: e.touches[0].clientY
+    };
+  };
+
+  const handleTouchMove = (e: React.TouchEvent) => {
+    if (!touchStartRef.current) return;
+    
+    const touchEndX = e.touches[0].clientX;
+    const touchEndY = e.touches[0].clientY;
+    
+    const dx = touchEndX - touchStartRef.current.x;
+    const dy = touchEndY - touchStartRef.current.y;
+    
+    // Min swipe distance
+    if (Math.abs(dx) < 30 && Math.abs(dy) < 30) return;
+    
+    const currentDir = directionRef.current;
+    
+    if (Math.abs(dx) > Math.abs(dy)) {
+      // Horizontal
+      if (dx > 0 && currentDir !== 'LEFT') setDirection('RIGHT');
+      if (dx < 0 && currentDir !== 'RIGHT') setDirection('LEFT');
+    } else {
+      // Vertical
+      if (dy > 0 && currentDir !== 'UP') setDirection('DOWN');
+      if (dy < 0 && currentDir !== 'DOWN') setDirection('UP');
+    }
+    
+    touchStartRef.current = null; // reset to avoid multiple triggers per swipe
+  };
+
   return (
-    <div className="w-full h-full bg-slate-950 text-white flex flex-col items-center justify-between p-4 font-sans select-none">
+    <div 
+      className="w-full h-full bg-slate-950 text-white flex flex-col items-center justify-between p-4 font-sans select-none"
+      onTouchStart={handleTouchStart}
+      onTouchMove={handleTouchMove}
+    >
       {/* HEADER */}
       <div className="w-full max-w-md flex items-center justify-between bg-slate-900 p-3 rounded-2xl border border-slate-800 shadow-xl">
         <div className="flex items-center gap-2">

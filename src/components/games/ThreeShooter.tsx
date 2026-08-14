@@ -153,6 +153,52 @@ export const ThreeShooter: React.FC = () => {
     window.addEventListener('keydown', handleKeyDown);
     window.addEventListener('keyup', handleKeyUp);
 
+    // Touch Controls for Mobile/Tablet
+    let touchStartX = 0;
+    let touchStartY = 0;
+    
+    const touchStartHandler = (e: TouchEvent) => {
+      touchStartX = e.touches[0].clientX;
+      touchStartY = e.touches[0].clientY;
+      stateRef.current.keys['space'] = true; // Auto-shoot on touch
+    };
+    
+    const touchMoveHandler = (e: TouchEvent) => {
+      if (e.cancelable) e.preventDefault(); // Prevent scrolling
+      const currentX = e.touches[0].clientX;
+      const currentY = e.touches[0].clientY;
+      
+      // Reset movement keys
+      stateRef.current.keys['w'] = false;
+      stateRef.current.keys['a'] = false;
+      stateRef.current.keys['s'] = false;
+      stateRef.current.keys['d'] = false;
+
+      const dx = currentX - touchStartX;
+      const dy = currentY - touchStartY;
+      
+      if (Math.abs(dx) > 10) {
+        if (dx > 0) stateRef.current.keys['d'] = true;
+        else stateRef.current.keys['a'] = true;
+      }
+      if (Math.abs(dy) > 10) {
+        if (dy > 0) stateRef.current.keys['s'] = true;
+        else stateRef.current.keys['w'] = true;
+      }
+    };
+    
+    const touchEndHandler = () => {
+      stateRef.current.keys['w'] = false;
+      stateRef.current.keys['a'] = false;
+      stateRef.current.keys['s'] = false;
+      stateRef.current.keys['d'] = false;
+      stateRef.current.keys['space'] = false;
+    };
+
+    container.addEventListener('touchstart', touchStartHandler, { passive: false });
+    container.addEventListener('touchmove', touchMoveHandler, { passive: false });
+    container.addEventListener('touchend', touchEndHandler);
+
     // Laser Fire Function
     const fireLaser = () => {
       soundEngine.playButtonClick();
@@ -340,6 +386,9 @@ export const ThreeShooter: React.FC = () => {
       window.removeEventListener('keydown', handleKeyDown);
       window.removeEventListener('keyup', handleKeyUp);
       window.removeEventListener('resize', handleResize);
+      container.removeEventListener('touchstart', touchStartHandler);
+      container.removeEventListener('touchmove', touchMoveHandler);
+      container.removeEventListener('touchend', touchEndHandler);
       if (container.contains(renderer.domElement)) {
         container.removeChild(renderer.domElement);
       }

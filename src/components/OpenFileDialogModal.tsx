@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Folder, FileText, X, FolderPlus, HardDrive, ChevronRight, FileImage, Search, ArrowLeft } from 'lucide-react';
 import { vfs, VFSFileItem } from '../utils/vfs';
+import { isTouchDevice } from '../utils/deviceUtils';
 
 interface OpenFileDialogModalProps {
   isOpen: boolean;
@@ -189,7 +190,15 @@ export default function OpenFileDialogModal({
                   return (
                     <div
                       key={file.id}
-                      onClick={() => setSelectedFile(file)}
+                      onClick={async () => {
+                        setSelectedFile(file);
+                        if (isTouchDevice()) {
+                          const fullPath = currentPath === '/' ? `/${file.name}` : `${currentPath}/${file.name}`;
+                          const fileData = await vfs.readTextFileAsync(fullPath);
+                          onOpenFile(fullPath, file.name, fileData?.content);
+                          onClose();
+                        }
+                      }}
                       onDoubleClick={async () => {
                         setSelectedFile(file);
                         const fullPath = currentPath === '/' ? `/${file.name}` : `${currentPath}/${file.name}`;

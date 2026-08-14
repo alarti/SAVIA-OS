@@ -77,6 +77,31 @@ export const Breakout2D: React.FC = () => {
     window.addEventListener('keydown', keyDownHandler);
     window.addEventListener('keyup', keyUpHandler);
 
+    // Touch controls for Mobile/Tablet
+    let touchStartX = 0;
+    
+    const touchStartHandler = (e: TouchEvent) => {
+      touchStartX = e.touches[0].clientX;
+    };
+    
+    const touchMoveHandler = (e: TouchEvent) => {
+      if (e.cancelable) e.preventDefault(); // Prevent scrolling
+      const touchX = e.touches[0].clientX;
+      const dx = touchX - touchStartX;
+      
+      // Swipe/drag logic for paddle
+      paddleX += dx * 1.5; // Multiply for sensitivity
+      
+      // Clamp paddle
+      if (paddleX < 0) paddleX = 0;
+      if (paddleX > canvas.width - paddleWidth) paddleX = canvas.width - paddleWidth;
+      
+      touchStartX = touchX; // Reset for continuous dragging
+    };
+
+    canvas.addEventListener('touchstart', touchStartHandler, { passive: false });
+    canvas.addEventListener('touchmove', touchMoveHandler, { passive: false });
+
     const collisionDetection = () => {
       let activeBricks = 0;
       for (let c = 0; c < brickColumnCount; c++) {
@@ -205,6 +230,8 @@ export const Breakout2D: React.FC = () => {
       cancelAnimationFrame(animId);
       window.removeEventListener('keydown', keyDownHandler);
       window.removeEventListener('keyup', keyUpHandler);
+      canvas.removeEventListener('touchstart', touchStartHandler);
+      canvas.removeEventListener('touchmove', touchMoveHandler);
     };
   }, []);
 

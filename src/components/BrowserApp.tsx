@@ -76,7 +76,7 @@ export default function BrowserApp({ user }: { user?: UserData }) {
 
 
   const addNewTab = () => {
-    const newId = Math.random().toString();
+    const newId = crypto.randomUUID();
     const defaultUrl = DEFAULT_HOME_URL;
     setTabs([...tabs, { id: newId, url: `/api/proxy?url=${encodeURIComponent(defaultUrl)}`, displayUrl: defaultUrl, title: 'New Tab' }]);
     setActiveTabId(newId);
