@@ -3,7 +3,7 @@ import { PRESET_WALLPAPERS } from '../components/ThemeCustomizerApp';
 export interface DesktopIcon {
   id: string;
   title: string;
-  appType: 'terminal' | 'webgl' | 'folder' | 'browser' | 'texteditor' | 'pdfviewer' | 'office' | 'taskmanager' | 'tetris' | 'appstore' | 'soundsettings' | 'paint' | 'about' | 'controlpanel' | 'theme' | 'calculator' | 'calendar' | 'imageviewer' | 'webamp' | 'wine' | 'trash' | 'equipo' | 'diskmanager';
+  appType: 'terminal' | 'webgl' | 'folder' | 'browser' | 'texteditor' | 'pdfviewer' | 'office' | 'taskmanager' | 'tetris' | 'appstore' | 'soundsettings' | 'paint' | 'about' | 'controlpanel' | 'theme' | 'calculator' | 'calendar' | 'imageviewer' | 'webamp' | 'wine' | 'trash' | 'equipo' | 'diskmanager' | 'ai_copilot';
   iconType: string;
   docData?: any;
   x: number;
@@ -27,6 +27,7 @@ const DEFAULT_DESKTOP_ICONS: DesktopIcon[] = [
   { id: 'files', title: 'Explorador Archivos', appType: 'folder', iconType: 'folder', x: 20, y: 220 },
   { id: 'browser', title: 'Navegador Web', appType: 'browser', iconType: 'browser', x: 20, y: 320 },
   { id: 'term', title: 'Terminal POSIX', appType: 'terminal', iconType: 'terminal', x: 20, y: 420 },
+  { id: 'ai_copilot', title: 'AI Copilot', appType: 'ai_copilot', iconType: 'ai_copilot', x: 20, y: 520 },
 
   // Columna 2 (x: 130) - Ofimática y Documentos
   { id: 'office', title: 'Suite Ofimática', appType: 'office', iconType: 'office', x: 130, y: 20 },

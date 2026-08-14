@@ -1,0 +1,69 @@
+name: "SAVIA-OS CI/CD Pipeline"
+
+on:
+  push:
+    branches: ["main", "develop", "release/*"]
+  pull_request:
+    branches: ["main", "develop"]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate-frontend:
+    name: "TypeScript & Frontend Validation"
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: "npm"
+
+      - name: Install Dependencies
+        run: npm ci
+
+      - name: Run Typecheck & Linter
+        run: npm run lint
+
+      - name: Build Application (Frontend + Server CJS)
+        run: npm run build
+        env:
+          NODE_ENV: production
+
+  security-audit:
+    name: "Dependency & Secret Security Audit"
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Audit NPM Dependencies
+        run: npm audit --audit-level=high || true
+
+      - name: Secret Leak Detection
+        uses: gitleaks/gitleaks-action@v2
+        continue-on-error: true
+
+  rust-core-check:
+    name: "WebOS Core (Rust / Wasm) Check"
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Rust Toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+
+      - name: Cargo Check in webos-core
+        run: |
+          if [ -d "webos-core" ] && [ -f "webos-core/Cargo.toml" ]; then
+            cd webos-core
+            cargo check --target wasm32-unknown-unknown || true
+          fi

@@ -1,6 +1,7 @@
 import express from "express";
 import path from "path";
 import { createServer as createViteServer } from "vite";
+import { handleAiChat, handleAiCommand, projectState, getCodebaseSummary } from "./server/ai/aiAgent";
 
 async function startServer() {
   const app = express();
@@ -8,6 +9,9 @@ async function startServer() {
 
   // Security: Disable X-Powered-By header
   app.disable('x-powered-by');
+
+  // JSON Body Parser for API requests
+  app.use(express.json({ limit: "10mb" }));
 
   // Security Headers Middleware
   app.use((req, res, next) => {
@@ -167,6 +171,90 @@ async function startServer() {
         </html>
       `);
     }
+  });
+
+  // ==========================================
+  // SAVIA-OS AI Management Layer API Routes
+  // ==========================================
+
+  // 1. AI Chat Endpoint
+  app.post("/api/ai/chat", async (req, res) => {
+    try {
+      const { message, history } = req.body;
+      if (!message || typeof message !== "string") {
+        return res.status(400).json({ error: "Message is required" });
+      }
+
+      const reply = await handleAiChat(message, history || []);
+      return res.json({ reply, timestamp: new Date().toISOString() });
+    } catch (error: any) {
+      console.error("AI Chat Error:", error);
+      return res.status(500).json({
+        error: "Error processing AI request",
+        details: error?.message || String(error),
+      });
+    }
+  });
+
+  // 2. AI Slash Command Endpoint (/ai plan-sprint, /ai review-pr, etc.)
+  app.post("/api/ai/command", async (req, res) => {
+    try {
+      const { command, args, context } = req.body;
+      if (!command || typeof command !== "string") {
+        return res.status(400).json({ error: "Command is required" });
+      }
+
+      const response = await handleAiCommand(command, args || "", context);
+      return res.json(response);
+    } catch (error: any) {
+      console.error("AI Command Error:", error);
+      return res.status(500).json({
+        error: "Error executing AI command",
+        details: error?.message || String(error),
+      });
+    }
+  });
+
+  // 3. Project State & Sprint Backlog Endpoint
+  app.get("/api/ai/project-state", (req, res) => {
+    return res.json(projectState);
+  });
+
+  // 4. Create or Update Project Task Endpoint
+  app.post("/api/ai/tasks", (req, res) => {
+    try {
+      const { task } = req.body;
+      if (!task || !task.title) {
+        return res.status(400).json({ error: "Valid task object is required" });
+      }
+
+      const existingIndex = projectState.tasks.findIndex((t) => t.id === task.id);
+      if (existingIndex >= 0) {
+        projectState.tasks[existingIndex] = { ...projectState.tasks[existingIndex], ...task };
+      } else {
+        const newTask = {
+          id: task.id || `TASK-${Math.floor(100 + Math.random() * 900)}`,
+          title: task.title,
+          description: task.description || "",
+          module: task.module || "ui",
+          priority: task.priority || "medium",
+          status: task.status || "todo",
+          storyPoints: task.storyPoints || 3,
+          assignee: task.assignee || "AI Agent",
+          githubIssueNumber: task.githubIssueNumber,
+        };
+        projectState.tasks.unshift(newTask);
+      }
+
+      return res.json({ success: true, state: projectState });
+    } catch (error: any) {
+      return res.status(500).json({ error: "Failed to update project task", details: error?.message });
+    }
+  });
+
+  // 5. Codebase Summary & Knowledge Graph Endpoint
+  app.get("/api/ai/codebase-summary", (req, res) => {
+    return res.json(getCodebaseSummary());
   });
 
   // Vite middleware for development

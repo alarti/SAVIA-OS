@@ -1,0 +1,26 @@
+# Configuración de pre-commit para SAVIA-OS
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.6.0
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: check-yaml
+      - id: check-json
+      - id: check-added-large-files
+        args: ['--maxkb=1024']
+
+  - repo: local
+    hooks:
+      - id: typescript-typecheck
+        name: TypeScript Strict Typecheck (SAVIA-OS)
+        entry: npm run lint
+        language: system
+        pass_filenames: false
+        files: \.(ts|tsx)$
+
+      - id: conventional-commit-check
+        name: Conventional Commit Format
+        entry: npx --yes commitlint --edit
+        language: system
+        stages: [commit-msg]

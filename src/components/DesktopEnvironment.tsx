@@ -34,11 +34,12 @@ import { getInstalledPackageIds, AVAILABLE_PACKAGES } from '../utils/packageRegi
 import { userStorage } from '../utils/userStorage';
 import { trashAndUndo } from '../utils/trashAndUndo';
 import { isSystemDesktopIcon, vfs } from '../utils/vfs';
+import AiDevCopilotApp from './AiDevCopilotApp';
 
 type WindowData = {
   id: string;
   title: string;
-  type: 'terminal' | 'webgl' | 'folder' | 'browser' | 'texteditor' | 'pdfviewer' | 'office' | 'taskmanager' | 'tetris' | 'appstore' | 'soundsettings' | 'paint' | 'about' | 'controlpanel' | 'theme' | 'calculator' | 'calendar' | 'imageviewer' | 'webamp' | 'wine' | 'trash' | 'equipo' | 'diskmanager';
+  type: 'terminal' | 'webgl' | 'folder' | 'browser' | 'texteditor' | 'pdfviewer' | 'office' | 'taskmanager' | 'tetris' | 'appstore' | 'soundsettings' | 'paint' | 'about' | 'controlpanel' | 'theme' | 'calculator' | 'calendar' | 'imageviewer' | 'webamp' | 'wine' | 'trash' | 'equipo' | 'diskmanager' | 'ai_copilot';
   data?: any;
   docData?: any;
   x: number;
@@ -76,6 +77,7 @@ const DEFAULT_DESKTOP_ICONS: DesktopIcon[] = [
   { id: 'files', title: 'Explorador Archivos', appType: 'folder', iconType: 'folder', x: 20, y: 220 },
   { id: 'browser', title: 'Navegador Web', appType: 'browser', iconType: 'browser', x: 20, y: 320 },
   { id: 'term', title: 'Terminal POSIX', appType: 'terminal', iconType: 'terminal', x: 20, y: 420 },
+  { id: 'ai_copilot', title: 'AI Copilot', appType: 'ai_copilot', iconType: 'ai_copilot', x: 20, y: 520 },
 
   // Columna 2 (x: 130) - Ofimática y Documentos
   { id: 'office', title: 'Suite Ofimática', appType: 'office', iconType: 'office', x: 130, y: 20 },
@@ -1150,6 +1152,9 @@ export default function DesktopEnvironment({
     } else if (type === 'equipo' || type === 'diskmanager') {
       targetW = 980;
       targetH = 640;
+    } else if (type === 'ai_copilot') {
+      targetW = 1060;
+      targetH = 720;
     }
 
     const bounds = calculateResponsiveWindowBounds(targetW, targetH, windows.length);
@@ -1563,6 +1568,13 @@ export default function DesktopEnvironment({
                   </div>
                 );
               }
+              if (type === 'ai_copilot' || icon.appType === 'ai_copilot') {
+                return (
+                  <div className="p-2 bg-gradient-to-tr from-purple-600 via-indigo-600 to-pink-500 rounded-2xl shadow-xl border border-white/20 group-hover:scale-105 transition-transform">
+                    <Sparkles className="w-7 h-7 text-white animate-pulse" />
+                  </div>
+                );
+              }
               if (type === 'trash' || icon.appType === 'trash') {
                 return (
                   <div className="p-2 bg-gradient-to-tr from-rose-600 to-red-500 rounded-2xl shadow-xl border border-white/20 group-hover:scale-105 transition-transform">
@@ -1704,6 +1716,7 @@ export default function DesktopEnvironment({
                 {w.type === 'imageviewer' && <ImageIcon className="w-3.5 h-3.5 text-purple-400" />}
                 {w.type === 'trash' && <Trash2 className="w-3.5 h-3.5 text-rose-400" />}
                 {(w.type === 'equipo' || w.type === 'diskmanager') && <Monitor className="w-3.5 h-3.5 text-cyan-400" />}
+                {w.type === 'ai_copilot' && <Sparkles className="w-3.5 h-3.5 text-purple-400 animate-pulse" />}
                 <span className="text-xs font-medium tracking-wide">{w.title}</span>
                 {w.type === 'taskmanager' && (
                   <span className="px-1.5 py-0.5 bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 rounded text-[10px] font-mono font-bold flex items-center gap-1">
@@ -1739,6 +1752,7 @@ export default function DesktopEnvironment({
               {w.type === 'imageviewer' && <ImageViewerApp />}
               {w.type === 'trash' && <TrashApp onOpenFile={(type, title, data) => openApp(type as any, title, data)} />}
               {(w.type === 'equipo' || w.type === 'diskmanager') && <DiskManagerApp onOpenApp={(type, title, data) => openApp(type as any, title, data)} />}
+              {w.type === 'ai_copilot' && <AiDevCopilotApp />}
             </div>
 
             {/* Window Resizing Handle */}
@@ -1984,9 +1998,25 @@ export default function DesktopEnvironment({
               <div>
                 <h4 className="text-[11px] font-bold text-emerald-400 uppercase tracking-wider mb-2 px-1 flex items-center gap-1.5">
                   <Settings className="w-3.5 h-3.5" />
-                  Sistema y Utilidades
+                  Sistema, IA y Utilidades
                 </h4>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  <div 
+                    onClick={() => { openApp('ai_copilot', 'SAVIA AI Dev Copilot'); setIsStartMenuOpen(false); }}
+                    className="flex items-center gap-3 p-2.5 bg-gradient-to-r from-purple-900/30 to-indigo-900/30 hover:from-purple-900/50 hover:to-indigo-900/50 border border-purple-500/30 rounded-xl cursor-pointer transition-all group col-span-1 sm:col-span-2 shadow-sm"
+                  >
+                    <div className="p-2 bg-gradient-to-br from-purple-500 to-indigo-600 rounded-lg border border-purple-400/40 shadow-sm">
+                      <Sparkles className="w-5 h-5 text-white animate-pulse" />
+                    </div>
+                    <div className="flex flex-col min-w-0">
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs font-bold text-white group-hover:text-purple-300 transition-colors">SAVIA AI Dev Copilot</span>
+                        <span className="text-[9px] bg-purple-500/20 text-purple-300 px-1.5 py-0.2 rounded font-semibold border border-purple-500/30">Gemini 3.7</span>
+                      </div>
+                      <span className="text-[10px] text-slate-300 truncate">Copilot de desarrollo, revisión de PRs, gestión de sprints y sincronización Git</span>
+                    </div>
+                  </div>
+
                   <div 
                     onClick={() => { openApp('terminal', 'Terminal POSIX'); setIsStartMenuOpen(false); }}
                     className="flex items-center gap-3 p-2.5 bg-white/5 hover:bg-white/10 border border-white/5 rounded-xl cursor-pointer transition-all"
