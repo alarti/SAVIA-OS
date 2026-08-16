@@ -23,8 +23,29 @@ import {
   BookOpen,
   Cpu,
   Play,
-  RotateCcw
+  RotateCcw,
+  HardDrive,
+  Download,
+  CheckCircle,
+  AlertCircle,
+  Activity,
+  Rocket,
+  Globe,
+  Monitor,
+  Volume2,
+  VolumeX,
+  Eye,
+  EyeOff,
+  LayoutGrid,
+  Sliders,
+  ExternalLink,
+  PlayCircle
 } from "lucide-react";
+import { vfs } from "../utils/vfs";
+import { Ollama } from 'ollama/browser';
+import { webllmManager, IN_BROWSER_MODELS, InBrowserModelOption } from "../utils/webllmEngine";
+import type { InitProgressReport } from "@mlc-ai/web-llm";
+import { copilotOsBridge, CopilotOsAction, CopilotOsActionResult } from "../utils/copilotOsBridge";
 
 interface Message {
   id: string;
@@ -32,6 +53,8 @@ interface Message {
   text: string;
   timestamp: string;
   command?: string;
+  actionsPerformed?: string[];
+  actionResults?: CopilotOsActionResult[];
 }
 
 interface ProjectTask {
@@ -64,7 +87,20 @@ interface ProjectState {
   }>;
 }
 
-export default function AiDevCopilotApp() {
+interface OSApi {
+  openApp?: (id: string, title?: string, data?: any) => void;
+  closeApp?: (target: string) => void;
+  minimizeApp?: (target: string) => void;
+  maximizeApp?: (target: string) => void;
+  tileWindows?: (mode: 'grid' | 'side-by-side' | 'cascade') => void;
+  notify?: (msg: string, type?: 'info' | 'success' | 'warning' | 'error') => void;
+  changeTheme?: (theme: string) => void;
+  changeAccent?: (accent: string) => void;
+  changeWallpaper?: (url: string) => void;
+  setTaskbarAutoHide?: (enabled: boolean) => void;
+}
+
+export default function AiDevCopilotApp({ osApi }: { osApi?: OSApi }) {
   const [activeTab, setActiveTab] = useState<"chat" | "sprint" | "review" | "sync" | "architecture">("chat");
 
   // Chat State
@@ -72,13 +108,64 @@ export default function AiDevCopilotApp() {
     {
       id: "msg-0",
       sender: "system",
-      text: "⚡ **SAVIA-OS AI Dev Copilot v3.0** inicializado con **Gemini 3.7 Flash**.\n\nPuedes chatear libremente o usar comandos de barra como `/ai plan-sprint`, `/ai review-pr`, `/ai refactor-module` o `/ai security-audit`.",
+      text: "⚡ **SAVIA-OS AI Dev Copilot v3.0** inicializado con motor por defecto **WebGPU In-Browser (Qwen 2.5 0.5B Instruct)**.\n\nInferencia 100% local en tu navegador con aceleración por GPU, máxima privacidad y sin latencia de red. La IA puede **abrir aplicaciones**, **cambiar temas**, **crear archivos** en el VFS y asistirte en el desarrollo del sistema operativo.",
       timestamp: new Date().toLocaleTimeString(),
     },
   ]);
   const [inputMessage, setInputMessage] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const chatEndRef = useRef<HTMLDivElement>(null);
+
+  // Engine State - Defaulting to WebGPU (In-Browser WebLLM)
+  const [aiEngine, setAiEngine] = useState<"gemini" | "webllm" | "ollama">("webllm");
+  const [ollamaHost, setOllamaHost] = useState("http://localhost:11434");
+  const [ollamaModel, setOllamaModel] = useState("llama3");
+
+  // WebLLM (In-Browser WebGPU) State - Defaulting to Qwen 2.5 0.5B
+  const [webllmModel, setWebllmModel] = useState(IN_BROWSER_MODELS[0].id);
+  const [webllmProgress, setWebllmProgress] = useState<{ text: string; progress: number; timeElapsed?: number } | null>(null);
+  const [isModelLoading, setIsModelLoading] = useState(false);
+  const [isModelLoaded, setIsModelLoaded] = useState(() => webllmManager.isLoaded(IN_BROWSER_MODELS[0].id));
+  const [webgpuSupported, setWebgpuSupported] = useState<boolean>(true);
+  const [showPreloadPrompt, setShowPreloadPrompt] = useState<boolean>(() => !webllmManager.isLoaded(IN_BROWSER_MODELS[0].id));
+
+  useEffect(() => {
+    const check = webllmManager.checkWebGPUSupport();
+    setWebgpuSupported(check.supported);
+    if (webllmManager.isLoaded(webllmModel)) {
+      setIsModelLoaded(true);
+      setShowPreloadPrompt(false);
+    }
+  }, [webllmModel]);
+
+  const handlePreloadWebLLMModel = async (modelIdToLoad?: string) => {
+    const targetModel = modelIdToLoad || webllmModel;
+    const gpuCheck = webllmManager.checkWebGPUSupport();
+    if (!gpuCheck.supported) {
+      alert(gpuCheck.reason);
+      return;
+    }
+    setIsModelLoading(true);
+    setShowPreloadPrompt(false);
+    try {
+      await webllmManager.getOrInitEngine(targetModel, (report: InitProgressReport) => {
+        setWebllmProgress({
+          text: report.text,
+          progress: Math.round(report.progress * 100),
+          timeElapsed: report.timeElapsed,
+        });
+      });
+      setIsModelLoaded(true);
+      if (osApi?.notify) {
+        osApi.notify(`Modelo WebGPU cargado en navegador: ${targetModel}`);
+      }
+    } catch (err: any) {
+      alert(`Error cargando modelo WebGPU: ${err.message}`);
+    } finally {
+      setIsModelLoading(false);
+      setWebllmProgress(null);
+    }
+  };
 
   // Sprint / Task State
   const [projectState, setProjectState] = useState<ProjectState | null>(null);
@@ -134,6 +221,20 @@ export function resolveVirtualPath(token: CapabilityToken, requestedPath: string
     fetchProjectState();
   }, []);
 
+  const processOsActions = async (text: string): Promise<{ cleanText: string; actionResults: CopilotOsActionResult[] }> => {
+    try {
+      const { cleanText, actions } = copilotOsBridge.parseTextForActions(text);
+      if (actions.length === 0) {
+        return { cleanText, actionResults: [] };
+      }
+      const actionResults = await copilotOsBridge.executePlan(actions);
+      return { cleanText, actionResults };
+    } catch (e) {
+      console.error("Error executing OS actions via bridge:", e);
+      return { cleanText: text, actionResults: [] };
+    }
+  };
+
   const handleSendMessage = async (customPrompt?: string) => {
     const textToSend = (customPrompt || inputMessage).trim();
     if (!textToSend || isLoading) return;
@@ -171,41 +272,175 @@ export function resolveVirtualPath(token: CapabilityToken, requestedPath: string
         });
 
         const data = await res.json();
+        const { cleanText, actionResults } = await processOsActions(data.result || "Comando ejecutado con éxito.");
+        
         const copilotMsg: Message = {
           id: `copilot-${Date.now()}`,
           sender: "copilot",
-          text: data.result || "Comando ejecutado con éxito.",
+          text: cleanText,
           timestamp: new Date().toLocaleTimeString(),
           command: cmd,
+          actionResults: actionResults.length > 0 ? actionResults : undefined,
         };
         setMessages((prev) => [...prev, copilotMsg]);
       } else {
         // Standard AI Chat
-        const historyPayload = messages
-          .filter((m) => m.sender !== "system")
-          .slice(-8)
-          .map((m) => ({
-            role: m.sender === "user" ? ("user" as const) : ("model" as const),
-            text: m.text,
-          }));
+        if (aiEngine === "webllm") {
+          const gpuCheck = webllmManager.checkWebGPUSupport();
+          if (!gpuCheck.supported) {
+            throw new Error(gpuCheck.reason || "WebGPU no está disponible en este navegador.");
+          }
 
-        const res = await fetch("/api/ai/chat", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            message: textToSend,
-            history: historyPayload,
-          }),
-        });
+          setIsModelLoading(true);
+          const engine = await webllmManager.getOrInitEngine(webllmModel, (report: InitProgressReport) => {
+            setWebllmProgress({
+              text: report.text,
+              progress: Math.round(report.progress * 100),
+              timeElapsed: report.timeElapsed,
+            });
+          });
+          setIsModelLoading(false);
+          setWebllmProgress(null);
+          setIsModelLoaded(true);
 
-        const data = await res.json();
-        const copilotMsg: Message = {
-          id: `copilot-${Date.now()}`,
-          sender: "copilot",
-          text: data.reply || "No se ha recibido respuesta del servidor.",
-          timestamp: new Date().toLocaleTimeString(),
-        };
-        setMessages((prev) => [...prev, copilotMsg]);
+          const inBrowserMessages = messages
+            .filter((m) => m.sender !== "system" && !m.command)
+            .slice(-6)
+            .map((m) => ({
+              role: m.sender === "user" ? ("user" as const) : ("assistant" as const),
+              content: m.text,
+            }));
+
+          inBrowserMessages.push({ role: "user" as const, content: textToSend });
+
+          const systemPrompt = `Eres SAVIA-OS AI Copilot ejecutándote de forma local en el navegador mediante WebGPU y Qwen 2.5 0.5B.
+Tienes control kernel directo sobre el sistema operativo SAVIA-OS.
+Si el usuario te pide abrir una web o app, crear archivos en VFS, ejecutar comandos bash, cambiar tema o volumen, responde amablemente y agrega al final un bloque JSON con 'savia_actions':
+\`\`\`json
+{
+  "savia_actions": [
+    { "action": "open_browser", "url": "https://en.wikipedia.org" },
+    { "action": "search_web", "query": "SAVIA OS" },
+    { "action": "open_app", "app": "terminal" },
+    { "action": "exec_command", "command": "uname -a" },
+    { "action": "set_theme", "theme": "neon-cyber" },
+    { "action": "tile_windows", "mode": "grid" },
+    { "action": "vfs_create", "path": "/home/user/Desktop/notas.txt", "content": "Texto...", "openAfter": true }
+  ]
+}
+\`\`\`
+Apps disponibles: terminal, folder, browser, texteditor, pdfviewer, office, taskmanager, tetris, appstore, soundsettings, paint, about, controlpanel, theme, calculator, calendar, imageviewer, webamp, equipo, diskmanager, ai_copilot.`;
+
+          const copilotMsgId = `copilot-${Date.now()}`;
+          let accumulatedText = "";
+
+          setMessages((prev) => [
+            ...prev,
+            {
+              id: copilotMsgId,
+              sender: "copilot",
+              text: "⚡ Generando inferencia en WebGPU...",
+              timestamp: new Date().toLocaleTimeString(),
+            },
+          ]);
+
+          const asyncChunkGenerator = await engine.chat.completions.create({
+            messages: [
+              { role: "system", content: systemPrompt },
+              ...inBrowserMessages,
+            ],
+            stream: true,
+            temperature: 0.7,
+          });
+
+          for await (const chunk of asyncChunkGenerator) {
+            const delta = chunk.choices[0]?.delta?.content || "";
+            accumulatedText += delta;
+            setMessages((prev) =>
+              prev.map((msg) =>
+                msg.id === copilotMsgId ? { ...msg, text: accumulatedText } : msg
+              )
+            );
+          }
+
+          const { cleanText, actionResults } = await processOsActions(accumulatedText || "Respuesta generada en el navegador.");
+          setMessages((prev) =>
+            prev.map((msg) =>
+              msg.id === copilotMsgId
+                ? {
+                    ...msg,
+                    text: cleanText,
+                    actionResults: actionResults.length > 0 ? actionResults : undefined,
+                  }
+                : msg
+            )
+          );
+        } else if (aiEngine === "ollama") {
+          try {
+            const ollama = new Ollama({ host: ollamaHost });
+            const ollamaMessages = messages
+              .filter((m) => m.sender !== "system" && !m.command)
+              .slice(-8)
+              .map((m) => ({
+                role: m.sender === "user" ? "user" : "assistant",
+                content: m.text,
+              }));
+            
+            ollamaMessages.push({ role: 'user', content: textToSend });
+            
+            const systemPrompt = `Eres SAVIA-OS AI Copilot. Tienes control directo sobre el sistema operativo. Incluye bloques JSON con 'savia_actions' cuando el usuario te pida realizar acciones (open_browser, exec_command, open_app, set_theme, tile_windows, vfs_create, notify, set_wallpaper).`;
+            
+            const response = await ollama.chat({
+              model: ollamaModel,
+              messages: [
+                { role: 'system', content: systemPrompt },
+                ...ollamaMessages
+              ]
+            });
+            
+            const { cleanText, actionResults } = await processOsActions(response.message.content || "No se ha recibido respuesta de Ollama.");
+
+            const copilotMsg: Message = {
+              id: `copilot-${Date.now()}`,
+              sender: "copilot",
+              text: cleanText,
+              timestamp: new Date().toLocaleTimeString(),
+              actionResults: actionResults.length > 0 ? actionResults : undefined,
+            };
+            setMessages((prev) => [...prev, copilotMsg]);
+          } catch (e: any) {
+            throw new Error(`Error en Ollama (${ollamaHost}): ${e.message}. Asegúrate de tener OLLAMA_ORIGINS="*" configurado en el servidor Ollama local.`);
+          }
+        } else {
+          const historyPayload = messages
+            .filter((m) => m.sender !== "system" && !m.command)
+            .slice(-8)
+            .map((m) => ({
+              role: m.sender === "user" ? ("user" as const) : ("model" as const),
+              text: m.text,
+            }));
+
+          const res = await fetch("/api/ai/chat", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              message: textToSend,
+              history: historyPayload,
+            }),
+          });
+
+          const data = await res.json();
+          const { cleanText, actionResults } = await processOsActions(data.reply || "No se ha recibido respuesta del servidor.");
+
+          const copilotMsg: Message = {
+            id: `copilot-${Date.now()}`,
+            sender: "copilot",
+            text: cleanText,
+            timestamp: new Date().toLocaleTimeString(),
+            actionResults: actionResults.length > 0 ? actionResults : undefined,
+          };
+          setMessages((prev) => [...prev, copilotMsg]);
+        }
       }
     } catch (error: any) {
       setMessages((prev) => [
@@ -320,9 +555,16 @@ export function resolveVirtualPath(token: CapabilityToken, requestedPath: string
           <div>
             <div className="flex items-center space-x-2">
               <span className="font-bold text-sm tracking-wide text-white">SAVIA AI Dev Copilot</span>
-              <span className="px-1.5 py-0.5 text-[10px] font-semibold bg-purple-500/20 text-purple-300 border border-purple-500/30 rounded">
-                Gemini 3.7 Flash
-              </span>
+              <select
+                value={aiEngine}
+                onChange={(e) => setAiEngine(e.target.value as any)}
+                className="px-2 py-0.5 text-[10px] font-semibold bg-purple-500/20 text-purple-300 border border-purple-500/30 rounded cursor-pointer outline-none focus:ring-1 focus:ring-purple-400 appearance-none pr-4 relative"
+                style={{ backgroundImage: `url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="%23d8b4fe" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>')`, backgroundRepeat: 'no-repeat', backgroundPosition: 'right 2px center' }}
+              >
+                <option value="gemini" className="bg-[#161b22] text-white">Gemini 3.7 Flash (Nube)</option>
+                <option value="webllm" className="bg-[#161b22] text-white">⚡ WebGPU In-Browser (100% en Navegador)</option>
+                <option value="ollama" className="bg-[#161b22] text-white">Ollama.js (Local)</option>
+              </select>
             </div>
             <p className="text-[11px] text-slate-400">alarti/SAVIA-OS • Trunk-Based Collab Layer</p>
           </div>
@@ -437,7 +679,158 @@ export function resolveVirtualPath(token: CapabilityToken, requestedPath: string
               </button>
             </div>
 
+            {/* WebLLM (In-Browser WebGPU) Control Bar */}
+            {aiEngine === "webllm" && (
+              <div className="px-4 py-2.5 bg-gradient-to-r from-purple-950/40 via-slate-900/60 to-indigo-950/40 border-b border-purple-800/40 flex flex-col gap-2 text-xs shrink-0">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div className="flex items-center gap-2">
+                    <Cpu className="w-4 h-4 text-purple-400 animate-pulse" />
+                    <span className="text-purple-200 font-semibold">Motor WebGPU (100% en Navegador):</span>
+                    <select
+                      value={webllmModel}
+                      onChange={(e) => {
+                        const newModel = e.target.value;
+                        setWebllmModel(newModel);
+                        setIsModelLoaded(webllmManager.isLoaded(newModel));
+                      }}
+                      disabled={isModelLoading}
+                      className="bg-[#0d1117] border border-purple-700/60 text-purple-200 px-2 py-1 rounded text-xs outline-none focus:ring-1 focus:ring-purple-400"
+                    >
+                      {IN_BROWSER_MODELS.map((m) => (
+                        <option key={m.id} value={m.id} className="bg-[#161b22] text-slate-200">
+                          {m.name} ({m.size}) {m.recommended ? "★ Recomendado" : ""}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    {webgpuSupported ? (
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-500/15 border border-emerald-500/30 text-emerald-300 text-[11px] font-medium">
+                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping" />
+                        WebGPU Activo
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-500/15 border border-amber-500/30 text-amber-300 text-[11px] font-medium" title="Usa Chrome 113+ o Edge 113+ para WebGPU">
+                        <AlertCircle className="w-3 h-3" />
+                        WebGPU No Detectado
+                      </span>
+                    )}
+
+                    <button
+                      onClick={() => handlePreloadWebLLMModel()}
+                      disabled={isModelLoading}
+                      className={`flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-semibold transition shadow-sm cursor-pointer ${
+                        isModelLoaded
+                          ? "bg-emerald-600/30 hover:bg-emerald-600/50 text-emerald-200 border border-emerald-500/40"
+                          : isModelLoading
+                          ? "bg-purple-600/50 text-purple-200 border border-purple-400/40 cursor-wait"
+                          : "bg-purple-600 hover:bg-purple-500 text-white shadow-purple-600/30"
+                      }`}
+                    >
+                      {isModelLoading ? (
+                        <>
+                          <RefreshCw className="w-3.5 h-3.5 animate-spin text-purple-300" />
+                          <span>Cargando en GPU...</span>
+                        </>
+                      ) : isModelLoaded ? (
+                        <>
+                          <CheckCircle className="w-3.5 h-3.5 text-emerald-400" />
+                          <span>Listo en VRAM GPU</span>
+                        </>
+                      ) : (
+                        <>
+                          <Download className="w-3.5 h-3.5" />
+                          <span>Descargar/Cargar en GPU</span>
+                        </>
+                      )}
+                    </button>
+                  </div>
+                </div>
+
+                {/* Progress Bar during Download / Shader Compilation */}
+                {webllmProgress && (
+                  <div className="flex flex-col gap-1 mt-1 bg-[#0d1117]/80 p-2 rounded-lg border border-purple-900/50">
+                    <div className="flex items-center justify-between text-[11px] text-purple-300">
+                      <span className="truncate max-w-[80%] font-mono text-[10px]">{webllmProgress.text}</span>
+                      <span className="font-bold">{webllmProgress.progress}%</span>
+                    </div>
+                    <div className="w-full bg-slate-800 rounded-full h-1.5 overflow-hidden">
+                      <div
+                        className="bg-gradient-to-r from-purple-500 via-pink-500 to-indigo-500 h-full transition-all duration-300 rounded-full"
+                        style={{ width: `${webllmProgress.progress}%` }}
+                      />
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
             {/* Chat Messages Stream */}
+            {aiEngine === "ollama" && (
+              <div className="px-4 py-2 bg-slate-800/50 border-b border-slate-700/50 flex flex-col sm:flex-row items-start sm:items-center gap-3 text-xs shrink-0">
+                <span className="text-slate-300 font-medium whitespace-nowrap">Configuración Ollama:</span>
+                <div className="flex items-center gap-2 w-full sm:w-auto">
+                  <span className="text-slate-400">Host:</span>
+                  <input
+                    type="text"
+                    value={ollamaHost}
+                    onChange={(e) => setOllamaHost(e.target.value)}
+                    className="bg-[#0d1117] border border-slate-700 text-slate-200 px-2 py-1 rounded w-40 outline-none focus:border-purple-500"
+                    placeholder="http://localhost:11434"
+                  />
+                </div>
+                <div className="flex items-center gap-2 w-full sm:w-auto">
+                  <span className="text-slate-400">Modelo:</span>
+                  <input
+                    type="text"
+                    value={ollamaModel}
+                    onChange={(e) => setOllamaModel(e.target.value)}
+                    className="bg-[#0d1117] border border-slate-700 text-slate-200 px-2 py-1 rounded w-32 outline-none focus:border-purple-500"
+                    placeholder="llama3"
+                  />
+                </div>
+                <div className="text-[10px] text-amber-400/80 mt-1 sm:mt-0 sm:ml-auto text-right leading-tight max-w-[200px]">
+                  * Requiere OLLAMA_ORIGINS="*" en el servidor local.
+                </div>
+              </div>
+            )}
+            {/* Startup WebGPU Preload Prompt Card */}
+            {aiEngine === "webllm" && showPreloadPrompt && !isModelLoaded && !isModelLoading && (
+              <div className="mx-4 mt-3 mb-1 p-3.5 bg-gradient-to-r from-purple-950/70 via-indigo-950/60 to-slate-900/80 border border-purple-500/40 rounded-xl shadow-lg flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs shrink-0 animate-in fade-in slide-in-from-top-2 duration-200">
+                <div className="flex items-start gap-3">
+                  <div className="p-2 bg-purple-500/20 text-purple-300 rounded-lg border border-purple-500/30 shrink-0 mt-0.5">
+                    <Sparkles className="w-5 h-5 text-purple-400 animate-pulse" />
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <span className="font-bold text-white text-xs">Precargar Qwen 2.5 0.5B en WebGPU</span>
+                      <span className="text-[10px] px-1.5 py-0.5 rounded bg-purple-500/20 text-purple-300 border border-purple-500/30 font-semibold">Motor por defecto</span>
+                    </div>
+                    <p className="text-slate-300 text-[11px] mt-0.5 max-w-xl leading-relaxed">
+                      Para que tus respuestas de IA y comandos del sistema se ejecuten de forma ultra-rápida y 100% en local sin enviar datos a la nube, ¿deseas descargar el modelo (~350 MB) en segundo plano?
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2 shrink-0 self-end sm:self-center">
+                  <button
+                    onClick={() => setShowPreloadPrompt(false)}
+                    className="px-2.5 py-1 text-slate-400 hover:text-slate-200 text-[11px] font-medium transition cursor-pointer"
+                  >
+                    Más tarde
+                  </button>
+                  <button
+                    onClick={() => handlePreloadWebLLMModel("Qwen2.5-0.5B-Instruct-q4f16_1-MLC")}
+                    className="flex items-center gap-1.5 px-3 py-1.5 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-semibold rounded-lg shadow-md shadow-purple-900/30 transition text-xs cursor-pointer active:scale-95"
+                  >
+                    <Rocket className="w-3.5 h-3.5" />
+                    <span>Descargar en Segundo Plano</span>
+                  </button>
+                </div>
+              </div>
+            )}
+
             <div className="flex-1 overflow-y-auto p-4 space-y-4 select-text">
               {messages.map((msg) => (
                 <div
@@ -489,6 +882,63 @@ export function resolveVirtualPath(token: CapabilityToken, requestedPath: string
                     <div className="prose prose-invert max-w-none text-xs sm:text-sm whitespace-pre-wrap font-sans">
                       {msg.text}
                     </div>
+
+                    {/* Action Results / Interventions on OS */}
+                    {msg.actionResults && msg.actionResults.length > 0 && (
+                      <div className="mt-3 pt-2.5 border-t border-white/10 flex flex-col gap-2">
+                        <div className="flex items-center justify-between text-[11px]">
+                          <span className="uppercase text-emerald-400 font-bold tracking-wider flex items-center gap-1">
+                            <Zap className="w-3.5 h-3.5 text-emerald-400" />
+                            Acciones en Sistema Operativo ({msg.actionResults.length})
+                          </span>
+                          <span className="text-[10px] text-slate-400">Copilot OS Bridge</span>
+                        </div>
+                        <div className="grid grid-cols-1 gap-1.5">
+                          {msg.actionResults.map((res, i) => (
+                            <div
+                              key={i}
+                              className={`text-xs p-2 rounded-lg border flex flex-col gap-1 transition-all ${
+                                res.success
+                                  ? "bg-emerald-950/30 border-emerald-500/40 text-emerald-200"
+                                  : "bg-rose-950/30 border-rose-500/40 text-rose-200"
+                              }`}
+                            >
+                              <div className="flex items-center justify-between">
+                                <div className="flex items-center gap-2 font-medium">
+                                  {res.action === "open_browser" || res.action === "search_web" ? (
+                                    <Globe className="w-3.5 h-3.5 text-sky-400" />
+                                  ) : res.action === "exec_command" ? (
+                                    <Terminal className="w-3.5 h-3.5 text-amber-400" />
+                                  ) : res.action === "tile_windows" ? (
+                                    <LayoutGrid className="w-3.5 h-3.5 text-indigo-400" />
+                                  ) : res.action === "set_theme" || res.action === "set_accent" || res.action === "set_wallpaper" ? (
+                                    <Sparkles className="w-3.5 h-3.5 text-purple-400" />
+                                  ) : res.action === "vfs_create" || res.action === "vfs_read" || res.action === "vfs_delete" ? (
+                                    <FileCode className="w-3.5 h-3.5 text-emerald-400" />
+                                  ) : (
+                                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+                                  )}
+                                  <span className="capitalize text-slate-100">{res.action.replace("_", " ")}</span>
+                                </div>
+                                <span className={`text-[10px] px-1.5 py-0.5 rounded font-bold uppercase tracking-wider ${
+                                  res.success ? "bg-emerald-500/20 text-emerald-300" : "bg-rose-500/20 text-rose-300"
+                                }`}>
+                                  {res.success ? "Completado" : "Error"}
+                                </span>
+                              </div>
+                              <p className="text-[11px] text-slate-300 font-sans leading-tight pl-5">
+                                {res.message}
+                              </p>
+                              {res.stdout && (
+                                <pre className="mt-1 p-1.5 bg-black/60 rounded text-[10px] font-mono text-emerald-400 overflow-x-auto whitespace-pre-wrap max-h-24">
+                                  {res.stdout}
+                                </pre>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
                   </div>
                 </div>
               ))}
@@ -497,11 +947,65 @@ export function resolveVirtualPath(token: CapabilityToken, requestedPath: string
                 <div className="flex justify-start">
                   <div className="bg-[#161b22] border border-slate-800 rounded-xl p-3 flex items-center space-x-3 text-xs text-purple-300 shadow">
                     <Sparkles className="w-4 h-4 animate-spin text-purple-400" />
-                    <span>Gemini 3.7 Flash analizando la arquitectura de SAVIA-OS...</span>
+                    <span>
+                      {aiEngine === "webllm"
+                        ? `Motor WebGPU ejecutando inferencia en navegador (${webllmModel})...`
+                        : aiEngine === "ollama"
+                        ? `Ollama (${ollamaModel}) procesando en servidor local...`
+                        : "Gemini 3.7 Flash analizando la arquitectura de SAVIA-OS..."}
+                    </span>
                   </div>
                 </div>
               )}
               <div ref={chatEndRef} />
+            </div>
+
+            {/* Quick OS Actions Toolbar */}
+            <div className="px-3 py-1.5 bg-[#12161f] border-t border-slate-800/80 flex items-center gap-1.5 overflow-x-auto text-[11px] shrink-0 scrollbar-none">
+              <span className="text-slate-400 text-[10px] font-semibold uppercase tracking-wider whitespace-nowrap mr-1 flex items-center gap-1">
+                <Sliders className="w-3 h-3 text-purple-400" />
+                Control OS:
+              </span>
+              <button
+                type="button"
+                onClick={() => handleSendMessage("Abre el navegador web en https://en.wikipedia.org y busca información")}
+                className="flex items-center gap-1 px-2.5 py-1 rounded-md bg-slate-800/80 hover:bg-slate-700 text-sky-300 border border-slate-700/60 hover:border-sky-500/50 whitespace-nowrap transition cursor-pointer"
+              >
+                <Globe className="w-3 h-3 text-sky-400" />
+                <span>Navegador Web</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => handleSendMessage("Abre la terminal bash y ejecuta el comando uname -a")}
+                className="flex items-center gap-1 px-2.5 py-1 rounded-md bg-slate-800/80 hover:bg-slate-700 text-amber-300 border border-slate-700/60 hover:border-amber-500/50 whitespace-nowrap transition cursor-pointer"
+              >
+                <Terminal className="w-3 h-3 text-amber-400" />
+                <span>Terminal Bash</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => handleSendMessage("Organiza todas las ventanas abiertas en modo mosaico grid")}
+                className="flex items-center gap-1 px-2.5 py-1 rounded-md bg-slate-800/80 hover:bg-slate-700 text-purple-300 border border-slate-700/60 hover:border-purple-500/50 whitespace-nowrap transition cursor-pointer"
+              >
+                <LayoutGrid className="w-3 h-3 text-purple-400" />
+                <span>Mosaico Ventanas</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => handleSendMessage("Cambia el tema del sistema a neon-cyber y notifícame")}
+                className="flex items-center gap-1 px-2.5 py-1 rounded-md bg-slate-800/80 hover:bg-slate-700 text-pink-300 border border-slate-700/60 hover:border-pink-500/50 whitespace-nowrap transition cursor-pointer"
+              >
+                <Sparkles className="w-3 h-3 text-pink-400" />
+                <span>Tema Cyberpunk</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => handleSendMessage("Crea una nota en /home/user/Desktop/notas-copilot.txt y ábrela en el editor")}
+                className="flex items-center gap-1 px-2.5 py-1 rounded-md bg-slate-800/80 hover:bg-slate-700 text-emerald-300 border border-slate-700/60 hover:border-emerald-500/50 whitespace-nowrap transition cursor-pointer"
+              >
+                <FileCode className="w-3 h-3 text-emerald-400" />
+                <span>Crear Nota VFS</span>
+              </button>
             </div>
 
             {/* Chat Input Bar */}
@@ -519,7 +1023,7 @@ export function resolveVirtualPath(token: CapabilityToken, requestedPath: string
                     type="text"
                     value={inputMessage}
                     onChange={(e) => setInputMessage(e.target.value)}
-                    placeholder="Escribe tu consulta o ejecuta /ai plan-sprint, /ai review-pr, /ai refactor-module..."
+                    placeholder="Pídele al Copilot abrir apps, navegar webs, ejecutar comandos, crear notas..."
                     disabled={isLoading}
                     className="w-full bg-[#0d1117] border border-slate-700 rounded-lg px-4 py-2.5 text-sm text-slate-100 focus:outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500 transition placeholder-slate-500"
                   />
@@ -532,7 +1036,7 @@ export function resolveVirtualPath(token: CapabilityToken, requestedPath: string
                 <button
                   type="submit"
                   disabled={isLoading || !inputMessage.trim()}
-                  className="px-4 py-2.5 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white rounded-lg font-medium text-sm transition shadow flex items-center space-x-1.5 disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="px-4 py-2.5 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white rounded-lg font-medium text-sm transition shadow flex items-center space-x-1.5 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
                 >
                   <Send className="w-4 h-4" />
                   <span>Enviar</span>

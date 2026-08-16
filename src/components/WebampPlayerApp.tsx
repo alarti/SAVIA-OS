@@ -141,7 +141,7 @@ export default function WebampPlayerApp({ initialFile, onClose }: WebampPlayerAp
     const files = e.target.files;
     if (!files || files.length === 0 || !webampRef.current) return;
 
-    const newTracks = Array.from(files).map(file => {
+    const newTracks = (Array.from(files) as File[]).map((file: File) => {
       const url = URL.createObjectURL(file);
       return {
         metaData: {

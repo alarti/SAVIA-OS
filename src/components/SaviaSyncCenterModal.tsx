@@ -56,9 +56,9 @@ export default function SaviaSyncCenterModal({ onClose }: SaviaSyncCenterModalPr
 
   const handleFallbackFolderSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files.length > 0) {
-      const files = Array.from(e.target.files);
+      const files = Array.from(e.target.files) as File[];
       const firstFile = files[0];
-      const relPath = firstFile.webkitRelativePath || firstFile.name;
+      const relPath = (firstFile as any).webkitRelativePath || firstFile.name;
       const folderName = relPath.split('/')[0] || 'Carpeta_Local';
       const cleanFolderName = folderName.replace(/[^a-zA-Z0-9_-]/g, '_');
       const mountPointPath = `/mnt/local/${cleanFolderName}`;

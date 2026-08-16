@@ -87,6 +87,9 @@ export const userStorage = {
         if (!parsed.some(i => i.id === 'trash' || i.appType === 'trash')) {
           parsed.unshift({ id: 'trash', title: 'Papelera', appType: 'trash', iconType: 'trash', x: 20, y: 120 });
         }
+        if (!parsed.some(i => i.id === 'ai_copilot' || i.appType === 'ai_copilot')) {
+          parsed.push({ id: 'ai_copilot', title: 'AI Copilot', appType: 'ai_copilot', iconType: 'ai_copilot', x: 20, y: 520 });
+        }
         if (!parsed.some(i => i.id === 'webamp' || i.appType === 'webamp')) {
           parsed.push({ id: 'webamp', title: 'Webamp Music', appType: 'webamp', iconType: 'music', x: 350, y: 120 });
         }
@@ -103,6 +106,7 @@ export const userStorage = {
       return [
         { id: 'equipo', title: 'Equipo', appType: 'equipo', iconType: 'equipo', x: 20, y: 20 },
         { id: 'trash', title: 'Papelera', appType: 'trash', iconType: 'trash', x: 20, y: 120 },
+        { id: 'ai_copilot', title: 'AI Copilot (Root)', appType: 'ai_copilot', iconType: 'ai_copilot', x: 20, y: 520 },
         { id: 'term', title: 'Terminal Root (#)', appType: 'terminal', iconType: 'terminal', x: 20, y: 220 },
         { id: 'control', title: 'Centro de Seguridad Kernel', appType: 'controlpanel', iconType: 'controlpanel', x: 20, y: 320 },
         { id: 'files', title: 'Sistema de Archivos Root', appType: 'folder', iconType: 'folder', x: 130, y: 20 },
@@ -223,6 +227,22 @@ export const userStorage = {
   setBrightness(username: string, brightness: number): void {
     try {
       localStorage.setItem(`savia_os_brightness_${username}`, brightness.toString());
+    } catch {}
+  },
+
+  // --- TASKBAR AUTO-HIDE ---
+  getTaskbarAutoHide(username: string): boolean {
+    try {
+      const saved = localStorage.getItem(`savia_os_taskbar_autohide_${username}`);
+      if (saved !== null) return saved === 'true';
+    } catch {}
+    return true; // Default auto-hide enabled as requested
+  },
+
+  setTaskbarAutoHide(username: string, autoHide: boolean): void {
+    try {
+      localStorage.setItem(`savia_os_taskbar_autohide_${username}`, autoHide ? 'true' : 'false');
+      window.dispatchEvent(new CustomEvent('savia_os_taskbar_autohide_changed', { detail: { username, autoHide } }));
     } catch {}
   },
 

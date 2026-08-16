@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Terminal, Folder, Globe, Cpu, X, Square, Minus, Zap, User, Users, Lock, Monitor, Search, FileText, FileImage, Power, Activity, Gamepad2, Volume2, VolumeX, Box, Radio, Palette, Download, Upload, Sliders, ShieldCheck, ShieldAlert, Info, Settings, Wifi, WifiOff, Battery, CheckCircle, Image as ImageIcon, Calculator as CalcIcon, Calendar as CalendarIcon, Move, Maximize2, Minimize2, RefreshCcw, Plus, Trash2, Edit2, Play, ChevronRight, ChevronLeft, Grid, Sparkles, Trophy, Rocket, FileCode, Cloud, RefreshCw, AlertTriangle } from 'lucide-react';
+import { Terminal, Folder, Globe, Cpu, X, Square, Minus, Zap, User, Users, Lock, Monitor, Search, FileText, FileImage, Power, Activity, Gamepad2, Volume2, VolumeX, Box, Radio, Palette, Download, Upload, Sliders, ShieldCheck, ShieldAlert, Info, Settings, Wifi, WifiOff, Battery, CheckCircle, Image as ImageIcon, Calculator as CalcIcon, Calendar as CalendarIcon, Move, Maximize2, Minimize2, RefreshCcw, Plus, Trash2, Edit2, Play, ChevronRight, ChevronLeft, Grid, Sparkles, Trophy, Rocket, FileCode, Cloud, RefreshCw, AlertTriangle, Eye, EyeOff, ChevronUp } from 'lucide-react';
 import { networkManager } from '../utils/networkManager';
 import { sessionManager } from '../utils/sessionManager';
 import { isTouchDevice, isMobileOrTablet, calculateResponsiveWindowBounds } from '../utils/deviceUtils';
@@ -35,6 +35,7 @@ import { userStorage } from '../utils/userStorage';
 import { trashAndUndo } from '../utils/trashAndUndo';
 import { isSystemDesktopIcon, vfs } from '../utils/vfs';
 import AiDevCopilotApp from './AiDevCopilotApp';
+import { copilotOsBridge } from '../utils/copilotOsBridge';
 
 type WindowData = {
   id: string;
@@ -335,6 +336,7 @@ export default function DesktopEnvironment({
   onExit,
   onSwitchUser
 }: { 
+  key?: React.Key;
   user: UserData; 
   onExit: () => void;
   onSwitchUser?: (targetUser: UserData) => void;
@@ -369,6 +371,7 @@ export default function DesktopEnvironment({
   const [isSaviaMenuOpen, setIsSaviaMenuOpen] = useState(false);
   const [isControlCenterOpen, setIsControlCenterOpen] = useState(false);
   const [isVolumeMenuOpen, setIsVolumeMenuOpen] = useState(false);
+  const [isSyncCenterOpen, setIsSyncCenterOpen] = useState(false);
   const [isOnline, setIsOnline] = useState(() => networkManager.isOnline());
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null);
 
@@ -397,6 +400,134 @@ export default function DesktopEnvironment({
   const desktopAreaRef = useRef<HTMLDivElement>(null);
   const [desktopSelectionBox, setDesktopSelectionBox] = useState<{ startX: number, startY: number, currentX: number, currentY: number } | null>(null);
   const [systemToast, setSystemToast] = useState<string | null>(null);
+
+  // Auto-Hide Taskbar State & Gestures
+  const [taskbarAutoHide, setTaskbarAutoHideState] = useState<boolean>(() => {
+    return userStorage.getTaskbarAutoHide(user.username);
+  });
+  const [isTaskbarRevealed, setIsTaskbarRevealed] = useState<boolean>(false);
+  const [isTaskbarHovered, setIsTaskbarHovered] = useState<boolean>(false);
+  const hideTaskbarTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const touchGestureRef = useRef<{ startY: number; startX: number; time: number }>({ startY: 0, startX: 0, time: 0 });
+
+  const cancelHideTaskbar = () => {
+    if (hideTaskbarTimeoutRef.current) {
+      clearTimeout(hideTaskbarTimeoutRef.current);
+      hideTaskbarTimeoutRef.current = null;
+    }
+  };
+
+  const scheduleHideTaskbar = (delayMs = 1200) => {
+    cancelHideTaskbar();
+    hideTaskbarTimeoutRef.current = setTimeout(() => {
+      setIsTaskbarRevealed(false);
+    }, delayMs);
+  };
+
+  const revealTaskbar = (autoHideAfterMs?: number) => {
+    cancelHideTaskbar();
+    setIsTaskbarRevealed(true);
+    if (autoHideAfterMs) {
+      scheduleHideTaskbar(autoHideAfterMs);
+    }
+  };
+
+  const toggleTaskbarAutoHide = () => {
+    const nextVal = !taskbarAutoHide;
+    setTaskbarAutoHideState(nextVal);
+    userStorage.setTaskbarAutoHide(user.username, nextVal);
+    if (nextVal) {
+      triggerSystemToast('🪄 Auto-ocultar barra de tareas activado. Baja el ratón o desliza hacia arriba para verla.');
+    } else {
+      triggerSystemToast('📌 Barra de tareas fijada permanentemente.');
+    }
+  };
+
+  const isTaskbarOpen = 
+    !taskbarAutoHide || 
+    isTaskbarRevealed || 
+    isTaskbarHovered || 
+    isStartMenuOpen || 
+    isVolumeMenuOpen || 
+    isControlCenterOpen || 
+    isSessionSwitcherOpen ||
+    isSyncCenterOpen ||
+    isSaviaMenuOpen || 
+    windowContextMenu !== null;
+
+  // Global mousemove and swipe-up gesture detection for auto-hiding taskbar
+  useEffect(() => {
+    const handleGlobalMouseMove = (e: MouseEvent) => {
+      const windowH = window.innerHeight;
+      // When mouse cursor reaches bottom zone (within bottom 65px)
+      if (e.clientY >= windowH - 65) {
+        cancelHideTaskbar();
+        setIsTaskbarRevealed(true);
+      } else if (e.clientY < windowH - 95 && !isTaskbarHovered) {
+        if (
+          taskbarAutoHide &&
+          !isStartMenuOpen &&
+          !isVolumeMenuOpen &&
+          !isControlCenterOpen &&
+          !isSessionSwitcherOpen &&
+          !isSyncCenterOpen &&
+          !isSaviaMenuOpen &&
+          windowContextMenu === null
+        ) {
+          if (!hideTaskbarTimeoutRef.current && isTaskbarRevealed) {
+            scheduleHideTaskbar(800);
+          }
+        }
+      }
+    };
+
+    const handleGlobalTouchStart = (e: TouchEvent) => {
+      if (e.touches.length > 0) {
+        const touch = e.touches[0];
+        touchGestureRef.current = {
+          startX: touch.clientX,
+          startY: touch.clientY,
+          time: Date.now(),
+        };
+        // If user touches near bottom edge (bottom 80px)
+        if (touch.clientY >= window.innerHeight - 80) {
+          revealTaskbar(4500);
+        }
+      }
+    };
+
+    const handleGlobalTouchMove = (e: TouchEvent) => {
+      if (e.touches.length > 0) {
+        const touch = e.touches[0];
+        const deltaY = touchGestureRef.current.startY - touch.clientY; // positive = swipe up
+        const deltaX = Math.abs(touchGestureRef.current.startX - touch.clientX);
+
+        // Swipe up gesture detected from lower screen
+        if (deltaY > 20 && deltaY > deltaX && touchGestureRef.current.startY > window.innerHeight * 0.4) {
+          revealTaskbar(4500);
+        }
+      }
+    };
+
+    window.addEventListener('mousemove', handleGlobalMouseMove, { passive: true });
+    window.addEventListener('touchstart', handleGlobalTouchStart, { passive: true });
+    window.addEventListener('touchmove', handleGlobalTouchMove, { passive: true });
+
+    const handleAutoHideSettingChanged = (e: any) => {
+      if (e.detail?.autoHide !== undefined) {
+        setTaskbarAutoHideState(e.detail.autoHide);
+      }
+    };
+    window.addEventListener('savia_os_taskbar_autohide_changed', handleAutoHideSettingChanged as any);
+
+    return () => {
+      window.removeEventListener('mousemove', handleGlobalMouseMove);
+      window.removeEventListener('touchstart', handleGlobalTouchStart);
+      window.removeEventListener('touchmove', handleGlobalTouchMove);
+      window.removeEventListener('savia_os_taskbar_autohide_changed', handleAutoHideSettingChanged as any);
+      cancelHideTaskbar();
+    };
+  }, [taskbarAutoHide, isTaskbarHovered, isStartMenuOpen, isVolumeMenuOpen, isControlCenterOpen, isSessionSwitcherOpen, isSyncCenterOpen, isSaviaMenuOpen, windowContextMenu, isTaskbarRevealed]);
 
   const triggerSystemToast = (msg: string) => {
     soundEngine.playError();
@@ -458,6 +589,7 @@ export default function DesktopEnvironment({
     setOverlayOpacity(userStorage.getOverlayOpacity(user.username));
     setCurrentTheme(userStorage.getTheme(user.username));
     setCurrentAccent(userStorage.getAccent(user.username));
+    setTaskbarAutoHideState(userStorage.getTaskbarAutoHide(user.username));
   }, [user.username]);
 
   // Event listeners for desktop icon updates and guest reset
@@ -571,6 +703,20 @@ export default function DesktopEnvironment({
           }
         });
 
+        // 3. Ensure AI Copilot icon is present on desktop
+        if (!updated.some(ic => ic.id === 'ai_copilot' || ic.appType === 'ai_copilot')) {
+          const pos = getNextPosition(updated);
+          updated.push({
+            id: 'ai_copilot',
+            title: 'AI Copilot',
+            appType: 'ai_copilot',
+            iconType: 'ai_copilot',
+            x: pos.x,
+            y: pos.y
+          });
+          changed = true;
+        }
+
         if (changed) {
           userStorage.setDesktopIcons(user.username, updated);
           return updated;
@@ -595,7 +741,6 @@ export default function DesktopEnvironment({
   }, [user.username]);
 
   // Sync Center State
-  const [isSyncCenterOpen, setIsSyncCenterOpen] = useState(false);
   const [overallSyncStatus, setOverallSyncStatus] = useState<'idle' | 'syncing' | 'synced' | 'conflict' | 'error'>(syncService.getOverallStatus());
 
   // Desktop Icon Context Menu & Creation Modals State
@@ -1203,6 +1348,123 @@ export default function DesktopEnvironment({
     setWindows(ws => ws.map(w => w.id === id ? { ...w, minimized: !w.minimized } : w));
   };
 
+  const closeWindowByTypeOrId = (idOrType: string) => {
+    setWindows(ws => {
+      const closed = ws.filter(w => w.id === idOrType || w.type === idOrType);
+      closed.forEach(w => {
+        if (w.type === 'webamp' || w.title.toLowerCase().includes('webamp')) {
+          setTimeout(() => {
+            document.querySelectorAll('#webamp, .webamp-root, #webamp-context-menu').forEach(el => el.remove());
+          }, 50);
+        }
+      });
+      return ws.filter(w => w.id !== idOrType && w.type !== idOrType);
+    });
+    soundEngine.playWindowClose();
+  };
+
+  const minimizeWindowByTypeOrId = (idOrType: string) => {
+    setWindows(ws => ws.map(w => (w.id === idOrType || w.type === idOrType) ? { ...w, minimized: true } : w));
+    soundEngine.playWindowMinimize();
+  };
+
+  const maximizeWindowByTypeOrId = (idOrType: string) => {
+    setWindows(ws => ws.map(w => (w.id === idOrType || w.type === idOrType) ? { ...w, maximized: !w.maximized, minimized: false } : w));
+    soundEngine.playButtonClick();
+  };
+
+  const tileWindows = (mode: 'grid' | 'side-by-side' | 'cascade' = 'grid') => {
+    soundEngine.playWindowOpen();
+    const screenW = typeof window !== 'undefined' ? window.innerWidth : 1280;
+    const screenH = typeof window !== 'undefined' ? window.innerHeight - 60 : 740;
+
+    setWindows(ws => {
+      const activeWindows = ws.filter(w => !w.minimized);
+      if (activeWindows.length === 0) return ws;
+
+      const n = activeWindows.length;
+      if (mode === 'side-by-side' || (mode === 'grid' && n === 2)) {
+        const halfW = Math.floor(screenW / 2);
+        return ws.map(w => {
+          const idx = activeWindows.findIndex(aw => aw.id === w.id);
+          if (idx === -1) return w;
+          return {
+            ...w,
+            x: idx * halfW,
+            y: 0,
+            w: halfW,
+            h: screenH,
+            maximized: false,
+            minimized: false
+          };
+        });
+      }
+
+      if (mode === 'cascade') {
+        const offset = 36;
+        const wVal = Math.floor(screenW * 0.7);
+        const hVal = Math.floor(screenH * 0.7);
+        return ws.map(w => {
+          const idx = activeWindows.findIndex(aw => aw.id === w.id);
+          if (idx === -1) return w;
+          return {
+            ...w,
+            x: Math.min(screenW - wVal, 20 + idx * offset),
+            y: Math.min(screenH - hVal, 20 + idx * offset),
+            w: wVal,
+            h: hVal,
+            maximized: false,
+            minimized: false
+          };
+        });
+      }
+
+      // Default: Grid tiling
+      const cols = n <= 2 ? n : n <= 4 ? 2 : 3;
+      const rows = Math.ceil(n / cols);
+      const cellW = Math.floor(screenW / cols);
+      const cellH = Math.floor(screenH / rows);
+
+      return ws.map(w => {
+        const idx = activeWindows.findIndex(aw => aw.id === w.id);
+        if (idx === -1) return w;
+        const col = idx % cols;
+        const row = Math.floor(idx / cols);
+        return {
+          ...w,
+          x: col * cellW,
+          y: row * cellH,
+          w: cellW,
+          h: cellH,
+          maximized: false,
+          minimized: false
+        };
+      });
+    });
+  };
+
+  // Register & keep live bindings on Copilot OS Bridge Core
+  useEffect(() => {
+    copilotOsBridge.bindDesktop({
+      openApp: (type, title, data) => openApp(type as any, title || type, data),
+      closeWindow: (idOrType) => closeWindowByTypeOrId(idOrType),
+      minimizeWindow: (idOrType) => minimizeWindowByTypeOrId(idOrType),
+      maximizeWindow: (idOrType) => maximizeWindowByTypeOrId(idOrType),
+      tileWindows: (mode) => tileWindows(mode),
+      setTheme: (themeId) => setCurrentTheme(themeId),
+      setAccent: (accentId) => setCurrentAccent(accentId),
+      setWallpaper: (url) => setWallpaper(url),
+      notify: (msg) => triggerSystemToast(msg),
+      setTaskbarAutoHide: (enabled) => setTaskbarAutoHideState(enabled),
+      lockSession: () => sessionManager.lockSession(user.username),
+      getOpenWindows: () => windows.map(w => ({ id: w.id, type: w.type, title: w.title, minimized: w.minimized, maximized: w.maximized })),
+    });
+
+    return () => {
+      copilotOsBridge.unbindDesktop();
+    };
+  }, [windows, user.username]);
+
   const activeAccent = ACCENT_THEMES[currentAccent] || ACCENT_THEMES.blue;
   const activeThemeStyle = DESKTOP_THEME_STYLES[currentTheme] || DESKTOP_THEME_STYLES['dark-glass'];
 
@@ -1416,6 +1678,14 @@ export default function DesktopEnvironment({
             >
               <RefreshCcw className="w-4 h-4" />
               <span>Restablecer Posición de Iconos</span>
+            </button>
+
+            <button
+              onClick={() => { toggleTaskbarAutoHide(); setContextMenu(null); }}
+              className="flex items-center gap-2.5 px-3 py-2 hover:bg-blue-600 rounded-xl text-left font-medium text-sky-300"
+            >
+              {taskbarAutoHide ? <EyeOff className="w-4 h-4 text-sky-400" /> : <Eye className="w-4 h-4 text-gray-400" />}
+              <span>{taskbarAutoHide ? '✓ Auto-Ocultar Barra de Tareas (Activo)' : 'Auto-Ocultar Barra de Tareas'}</span>
             </button>
 
             <button
@@ -1752,7 +2022,22 @@ export default function DesktopEnvironment({
               {w.type === 'imageviewer' && <ImageViewerApp />}
               {w.type === 'trash' && <TrashApp onOpenFile={(type, title, data) => openApp(type as any, title, data)} />}
               {(w.type === 'equipo' || w.type === 'diskmanager') && <DiskManagerApp onOpenApp={(type, title, data) => openApp(type as any, title, data)} />}
-              {w.type === 'ai_copilot' && <AiDevCopilotApp />}
+              {w.type === 'ai_copilot' && (
+                <AiDevCopilotApp
+                  osApi={{
+                    openApp: (type, title, data) => openApp(type as any, title, data),
+                    closeApp: (target) => closeWindowByTypeOrId(target),
+                    minimizeApp: (target) => minimizeWindowByTypeOrId(target),
+                    maximizeApp: (target) => maximizeWindowByTypeOrId(target),
+                    tileWindows: (mode) => tileWindows(mode),
+                    notify: (msg) => triggerSystemToast(msg),
+                    changeTheme: (theme) => setCurrentTheme(theme),
+                    changeAccent: (accent) => setCurrentAccent(accent),
+                    changeWallpaper: (url) => setWallpaper(url),
+                    setTaskbarAutoHide: (enabled) => setTaskbarAutoHideState(enabled),
+                  }}
+                />
+              )}
             </div>
 
             {/* Window Resizing Handle */}
@@ -2370,12 +2655,44 @@ export default function DesktopEnvironment({
         </div>
       )}
 
-      {/* Floating Extended Taskbar */}
-      <footer className={`absolute bottom-3 left-1/2 -translate-x-1/2 h-15 ${activeThemeStyle.taskbarBg} border ${activeThemeStyle.taskbarText} rounded-2xl flex items-center px-4 z-40 shadow-[0_16px_48px_rgba(0,0,0,0.7)] gap-1.5`} onClick={e => e.stopPropagation()}>
+      {/* Floating Extended Taskbar (Auto-Hiding with Smooth Reveal & Peek) */}
+      <footer 
+        onMouseEnter={() => {
+          cancelHideTaskbar();
+          setIsTaskbarHovered(true);
+          setIsTaskbarRevealed(true);
+        }}
+        onMouseLeave={() => {
+          setIsTaskbarHovered(false);
+          if (taskbarAutoHide && !isStartMenuOpen && !isVolumeMenuOpen && !isControlCenterOpen && !isSessionSwitcherOpen && !isSyncCenterOpen && !isSaviaMenuOpen && windowContextMenu === null) {
+            scheduleHideTaskbar(800);
+          }
+        }}
+        className={`absolute bottom-3 left-1/2 -translate-x-1/2 h-15 ${activeThemeStyle.taskbarBg} border ${activeThemeStyle.taskbarText} rounded-2xl flex items-center px-4 z-40 shadow-[0_16px_48px_rgba(0,0,0,0.7)] gap-1.5 transition-all duration-300 ease-out ${
+          isTaskbarOpen 
+            ? 'translate-y-0 opacity-100 scale-100 pointer-events-auto' 
+            : 'translate-y-[calc(100%+24px)] opacity-0 scale-95 pointer-events-none'
+        }`} 
+        onClick={e => e.stopPropagation()}
+      >
         <button onClick={() => { setIsStartMenuOpen(!isStartMenuOpen); setIsVolumeMenuOpen(false); }} className={`flex items-center justify-center p-2.5 ${activeAccent.bgSubtleHover} active:scale-95 ${activeAccent.text} ${activeAccent.textHover} rounded-xl transition-all mx-0.5 group relative`} title="Menú de Inicio SaviaOS">
           <Zap className={`w-5 h-5 ${activeAccent.startZapText} ${activeAccent.startZapFill} transition-all`} />
           <span className="sr-only">Start</span>
         </button>
+
+        {/* Dedicated Direct AI Copilot Launcher */}
+        <button 
+          onClick={() => {
+            openApp('ai_copilot', 'SAVIA AI Dev Copilot');
+            soundEngine.playButtonClick();
+          }} 
+          className="flex items-center gap-1.5 px-3 py-1.5 bg-gradient-to-r from-purple-600/50 via-indigo-600/50 to-pink-600/40 hover:from-purple-600/80 hover:to-indigo-600/80 border border-purple-400/50 text-white rounded-xl transition-all shadow-lg active:scale-95 group cursor-pointer"
+          title="Abrir SAVIA AI Dev Copilot (Gemini 3.7)"
+        >
+          <Sparkles className="w-4 h-4 text-purple-200 animate-pulse group-hover:scale-110 transition-transform" />
+          <span className="text-xs font-bold tracking-wide hidden sm:inline bg-gradient-to-r from-white via-purple-100 to-pink-200 bg-clip-text text-transparent">AI Copilot</span>
+        </button>
+
         <div className="h-7 w-px bg-white/15 mx-1.5"></div>
         <div className="flex items-center gap-1.5 overflow-x-auto px-1 max-w-[55vw] sm:max-w-[65vw] no-scrollbar">
           {windows.map(w => (
@@ -2390,6 +2707,7 @@ export default function DesktopEnvironment({
               className={`flex items-center gap-2 px-3 py-2 rounded-xl transition-all relative group shrink-0 ${activeId === w.id && !w.minimized ? `${activeAccent.bgSubtle} shadow-inner border ${activeAccent.borderSubtle}` : 'hover:bg-white/10'}`}
               title={w.title}
             >
+              {w.type === 'ai_copilot' && <Sparkles className="w-5 h-5 shrink-0 text-purple-400 animate-pulse" />}
               {w.type === 'about' && <Info className="w-5 h-5 shrink-0 text-blue-400" />}
               {w.type === 'controlpanel' && <Settings className="w-5 h-5 shrink-0 text-emerald-400" />}
               {w.type === 'appstore' && <Box className="w-5 h-5 shrink-0 text-amber-400" />}
@@ -2485,7 +2803,7 @@ export default function DesktopEnvironment({
           {/* Control Center Popup */}
           {isControlCenterOpen && (
             <div className="absolute bottom-14 right-0 z-50 animate-in fade-in slide-in-from-bottom-2 duration-150">
-              <ControlCenter onOpenApp={openApp} onClose={() => setIsControlCenterOpen(false)} />
+              <ControlCenter onOpenApp={openApp} onClose={() => setIsControlCenterOpen(false)} user={user} />
             </div>
           )}
 
@@ -2503,6 +2821,36 @@ export default function DesktopEnvironment({
           </div>
         </div>
       </footer>
+
+      {/* Auto-Hide Taskbar Bottom Edge Hotzone & Swipe-Up Peek Trigger Bar */}
+      {taskbarAutoHide && (
+        <div
+          className="fixed bottom-0 left-0 right-0 h-6 z-30 flex items-end justify-center pb-1 transition-all duration-300 pointer-events-auto select-none"
+          onMouseEnter={() => {
+            cancelHideTaskbar();
+            setIsTaskbarRevealed(true);
+            setIsTaskbarHovered(true);
+          }}
+          onTouchStart={(e) => {
+            e.stopPropagation();
+            revealTaskbar(4500);
+          }}
+          onClick={(e) => {
+            e.stopPropagation();
+            revealTaskbar(4500);
+          }}
+        >
+          {/* Subtle visual Peek pill indicator when taskbar is hidden */}
+          <div
+            className={`h-1.5 rounded-full transition-all duration-300 cursor-pointer shadow-lg backdrop-blur-md ${
+              isTaskbarOpen
+                ? 'w-0 opacity-0 pointer-events-none'
+                : 'w-24 sm:w-32 bg-white/40 hover:bg-white/80 hover:w-36 hover:h-2 active:bg-blue-400 opacity-80 animate-pulse'
+            }`}
+            title="Baja el ratón o desliza hacia arriba para ver la barra de tareas"
+          />
+        </div>
+      )}
 
       {/* Contextual Window Management Floating Popup */}
       {windowContextMenu && (

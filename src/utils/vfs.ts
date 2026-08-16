@@ -724,7 +724,8 @@ export function isSystemDesktopIcon(icon: { id: string; appType?: string; title:
     'appstore',
     'theme',
     'browser',
-    'webgl_games'
+    'webgl_games',
+    'ai_copilot'
   ];
 
   if (systemIds.includes(icon.id)) {
@@ -742,7 +743,8 @@ export function isSystemDesktopIcon(icon: { id: string; appType?: string; title:
       'controlpanel',
       'theme',
       'trash',
-      'webgl'
+      'webgl',
+      'ai_copilot'
     ];
 
     if (systemAppTypes.includes(icon.appType)) {
@@ -759,7 +761,9 @@ export function isSystemDesktopIcon(icon: { id: string; appType?: string; title:
     'centro de software apt',
     'personalización',
     'navegador web',
-    'savia games'
+    'savia games',
+    'ai copilot',
+    'savia ai dev copilot'
   ];
 
   if (systemTitles.includes(icon.title.toLowerCase())) {

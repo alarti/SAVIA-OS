@@ -19,6 +19,18 @@ export type PackageInfo = {
 
 export const AVAILABLE_PACKAGES: PackageInfo[] = [
   {
+    id: 'ai_copilot',
+    name: 'SAVIA AI Dev Copilot (Gemini 3.7)',
+    version: '3.7.0',
+    category: 'development',
+    description: 'Copilot inteligente con Gemini 3.7: planificador de sprints, auditoría de seguridad VFS, code review y sincronización Git.',
+    size: '86 KB',
+    author: 'Alberto Arce / SAVIA-OS AI Lab',
+    icon: 'Zap',
+    type: 'gui',
+    installedByDefault: true
+  },
+  {
     id: 'about',
     name: 'Acerca de SAVIA-OS (Alberto Arce)',
     version: '2.4.0',

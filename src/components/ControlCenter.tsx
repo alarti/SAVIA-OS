@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Wifi, WifiOff, Bluetooth, Share2, Moon, Sun, Volume2, VolumeX, ShieldCheck, Battery, Radio, Info, Settings, Music, Box, Lock, Activity, Palette } from 'lucide-react';
+import { Wifi, WifiOff, Bluetooth, Share2, Moon, Sun, Volume2, VolumeX, ShieldCheck, Battery, Radio, Info, Settings, Music, Box, Lock, Activity, Palette, Sparkles, EyeOff, Eye } from 'lucide-react';
 import { soundEngine } from '../utils/soundEngine';
 import { networkManager } from '../utils/networkManager';
 import { userStorage } from '../utils/userStorage';
@@ -20,6 +20,7 @@ export default function ControlCenter({
   const [airDrop, setAirDrop] = useState(true);
   const [darkMode, setDarkMode] = useState(() => userStorage.getTheme(activeUsername) !== 'minimal-light');
   const [brightness, setBrightness] = useState(() => userStorage.getBrightness(activeUsername));
+  const [taskbarAutoHide, setTaskbarAutoHideState] = useState(() => userStorage.getTaskbarAutoHide(activeUsername));
   const [volume, setVolumeState] = useState(soundEngine.getVolume());
   const [isMuted, setIsMutedState] = useState(soundEngine.isMuted());
 
@@ -40,12 +41,19 @@ export default function ControlCenter({
         setDarkMode(e.detail.theme !== 'minimal-light');
       }
     };
+    const handleAutoHideChange = (e: any) => {
+      if (e.detail?.autoHide !== undefined) {
+        setTaskbarAutoHideState(e.detail.autoHide);
+      }
+    };
     window.addEventListener('savia_os_theme_changed', handleThemeChange as any);
+    window.addEventListener('savia_os_taskbar_autohide_changed', handleAutoHideChange as any);
 
     return () => {
       unsubSound();
       unsubNet();
       window.removeEventListener('savia_os_theme_changed', handleThemeChange as any);
+      window.removeEventListener('savia_os_taskbar_autohide_changed', handleAutoHideChange as any);
     };
   }, []);
 
@@ -65,6 +73,12 @@ export default function ControlCenter({
     window.dispatchEvent(new CustomEvent('savia_os_theme_changed', {
       detail: { theme: newTheme }
     }));
+  };
+
+  const handleToggleAutoHide = () => {
+    const nextVal = !taskbarAutoHide;
+    setTaskbarAutoHideState(nextVal);
+    userStorage.setTaskbarAutoHide(activeUsername, nextVal);
   };
 
   const handleVolumeChange = (v: number) => {
@@ -125,7 +139,7 @@ export default function ControlCenter({
         </div>
       </div>
 
-      {/* Display & Dark Mode Block */}
+      {/* Display, Dark Mode & Auto-Hide Taskbar Block */}
       <div className="grid grid-cols-2 gap-2">
         <button 
           onClick={handleToggleDarkMode} 
@@ -138,13 +152,17 @@ export default function ControlCenter({
           </div>
         </button>
 
-        <div className="bg-emerald-500/10 border border-emerald-500/20 p-3 rounded-2xl flex items-center gap-2.5 text-emerald-400">
-          <ShieldCheck className="w-5 h-5 shrink-0" />
+        <button 
+          onClick={handleToggleAutoHide}
+          className={`flex items-center gap-2.5 p-3 rounded-2xl border transition-all ${taskbarAutoHide ? 'bg-sky-600/30 text-sky-300 border-sky-500/30' : 'bg-white/5 text-gray-400 border-white/10'}`}
+          title="Ocultar automáticamente la barra de tareas al mover el ratón lejos o mostrarla al bajar el cursor / deslizar"
+        >
+          {taskbarAutoHide ? <EyeOff className="w-4 h-4 text-sky-400" /> : <Eye className="w-4 h-4 text-gray-400" />}
           <div className="flex flex-col text-left leading-tight">
-            <span className="text-xs font-bold">Seguridad</span>
-            <span className="text-[10px] text-emerald-300">Escudo Activo</span>
+            <span className="text-xs font-bold">Auto-Ocultar</span>
+            <span className="text-[10px] opacity-80">{taskbarAutoHide ? 'Barra Dinámica' : 'Barra Fija'}</span>
           </div>
-        </div>
+        </button>
       </div>
 
       {/* Brightness Slider */}
@@ -184,22 +202,32 @@ export default function ControlCenter({
       </div>
 
       {/* Quick Launch Shortcuts */}
-      <div className="grid grid-cols-2 gap-2 pt-1">
+      <div className="flex flex-col gap-2 pt-1">
         <button
-          onClick={() => { onOpenApp('about', 'Acerca de SAVIA-OS'); onClose(); }}
-          className="p-2.5 bg-blue-600/20 hover:bg-blue-600/30 border border-blue-500/30 rounded-xl text-xs font-semibold text-blue-300 flex items-center justify-center gap-2 transition-all"
+          onClick={() => { onOpenApp('ai_copilot', 'SAVIA AI Dev Copilot'); onClose(); }}
+          className="p-2.5 bg-gradient-to-r from-purple-600/30 to-indigo-600/30 hover:from-purple-600/50 hover:to-indigo-600/50 border border-purple-500/40 rounded-xl text-xs font-semibold text-purple-200 flex items-center justify-center gap-2 transition-all shadow-sm"
         >
-          <Info className="w-4 h-4" />
-          <span>Alberto Arce (About)</span>
+          <Sparkles className="w-4 h-4 text-purple-300 animate-pulse" />
+          <span>SAVIA AI Dev Copilot (Gemini 3.7)</span>
         </button>
 
-        <button
-          onClick={() => { onOpenApp('soundsettings', 'Audio Core'); onClose(); }}
-          className="p-2.5 bg-pink-600/20 hover:bg-pink-600/30 border border-pink-500/30 rounded-xl text-xs font-semibold text-pink-300 flex items-center justify-center gap-2 transition-all"
-        >
-          <Radio className="w-4 h-4" />
-          <span>Audio Synthesizer</span>
-        </button>
+        <div className="grid grid-cols-2 gap-2">
+          <button
+            onClick={() => { onOpenApp('about', 'Acerca de SAVIA-OS'); onClose(); }}
+            className="p-2.5 bg-blue-600/20 hover:bg-blue-600/30 border border-blue-500/30 rounded-xl text-xs font-semibold text-blue-300 flex items-center justify-center gap-2 transition-all"
+          >
+            <Info className="w-4 h-4" />
+            <span>Alberto Arce</span>
+          </button>
+
+          <button
+            onClick={() => { onOpenApp('soundsettings', 'Audio Core'); onClose(); }}
+            className="p-2.5 bg-pink-600/20 hover:bg-pink-600/30 border border-pink-500/30 rounded-xl text-xs font-semibold text-pink-300 flex items-center justify-center gap-2 transition-all"
+          >
+            <Radio className="w-4 h-4" />
+            <span>Audio Studio</span>
+          </button>
+        </div>
       </div>
     </div>
   );

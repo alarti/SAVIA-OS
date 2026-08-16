@@ -933,9 +933,9 @@ export default function DiskManagerApp({
         className="hidden"
         onChange={(e) => {
           if (e.target.files && e.target.files.length > 0) {
-            const fileList = Array.from(e.target.files);
+            const fileList = Array.from(e.target.files) as File[];
             const firstFile = fileList[0];
-            const relativePath = firstFile.webkitRelativePath || firstFile.name;
+            const relativePath = (firstFile as any).webkitRelativePath || firstFile.name;
             const folderName = relativePath.split('/')[0] || 'Carpeta_Local';
             processAndMountLocalFiles(folderName, fileList);
           }
