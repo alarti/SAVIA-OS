@@ -5,7 +5,7 @@ import {
   File, Play, ExternalLink, ShieldAlert, Plus, Upload, Download, Clipboard, 
   Check, X, HardDrive, Box, Image as ImageIcon, Music, Film, Home, 
   Monitor, Zap, Settings, RefreshCcw, ExternalLink as LinkIcon, Clock,
-  Undo2, RotateCcw, CheckCircle2, Cloud
+  Undo2, RotateCcw, CheckCircle2, Cloud, FolderPlus
 } from 'lucide-react';
 import type { UserData } from '../utils/auth';
 import { soundEngine } from '../utils/soundEngine';
@@ -227,6 +227,7 @@ export default function FileExplorer({ user, onOpenFile, initialPath }: { user?:
 
   const [propertiesModal, setPropertiesModal] = useState<{ item: FileItem | null, isDirectoryProp?: boolean } | null>(null);
   const fileInputRef = React.useRef<HTMLInputElement>(null);
+  const folderInputRef = React.useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     const checkTouch = () => {
@@ -364,38 +365,83 @@ export default function FileExplorer({ user, onOpenFile, initialPath }: { user?:
     }
   };
 
+  const [uploadTargetPath, setUploadTargetPath] = useState<string | null>(null);
+
   const handleLocalFileUploadToFS = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
 
-    const fileName = file.name;
-    const nameLower = fileName.toLowerCase();
+    const baseTargetDir = uploadTargetPath || currentPath;
 
-    let iconType: FileItem['iconType'] = 'text';
-    if (nameLower.endsWith('.pdf')) iconType = 'file';
-    else if (nameLower.endsWith('.docx')) iconType = 'doc';
-    else if (nameLower.endsWith('.xlsx')) iconType = 'xls';
-    else if (nameLower.endsWith('.pptx')) iconType = 'ppt';
-    else if (nameLower.endsWith('.png') || nameLower.endsWith('.jpg') || nameLower.endsWith('.jpeg')) iconType = 'image';
+    for (let i = 0; i < files.length; i++) {
+      const file = files[i];
+      const relPath = (file as any).webkitRelativePath || file.name;
+      const parts = relPath.split('/').filter(Boolean);
 
-    const reader = new FileReader();
-    reader.onload = (evt) => {
-      const content = evt.target?.result as string;
-      if (content) {
-        vfs.saveFile(currentPath, fileName, content, {
-          iconType: iconType as any,
-          owner: user?.username || 'user'
-        });
-        setFs(vfs.getVFS() as any);
-        soundEngine.playSuccessTone();
+      let targetDir = baseTargetDir;
+      let fileName = file.name;
+
+      if (parts.length > 1) {
+        fileName = parts[parts.length - 1];
+        const subDirs = parts.slice(0, parts.length - 1);
+
+        let subPath = baseTargetDir;
+        const currentVFS = vfs.getVFS();
+        for (const dirName of subDirs) {
+          const parentDir = subPath;
+          subPath = parentDir === '/' ? `/${dirName}` : `${parentDir}/${dirName}`;
+
+          if (!currentVFS[parentDir]) {
+            currentVFS[parentDir] = [];
+          }
+          if (!currentVFS[parentDir].some(item => item.name === dirName && item.type === 'folder')) {
+            currentVFS[parentDir].push({
+              id: 'dir_' + Date.now() + '_' + Math.random().toString(36).substring(2, 8),
+              name: dirName,
+              type: 'folder',
+              iconType: 'folder',
+              date: 'Hoy',
+              owner: user?.username || 'user'
+            });
+          }
+          if (!currentVFS[subPath]) {
+            currentVFS[subPath] = [];
+          }
+        }
+        vfs.saveVFS(currentVFS);
+        targetDir = subPath;
       }
-    };
 
-    if (file.type.startsWith('image/') || file.type === 'application/pdf' || nameLower.endsWith('.docx') || nameLower.endsWith('.xlsx') || nameLower.endsWith('.pptx')) {
-      reader.readAsDataURL(file);
-    } else {
-      reader.readAsText(file);
+      const nameLower = fileName.toLowerCase();
+      let iconType: FileItem['iconType'] = 'text';
+      if (nameLower.endsWith('.pdf')) iconType = 'file';
+      else if (nameLower.endsWith('.docx')) iconType = 'doc';
+      else if (nameLower.endsWith('.xlsx')) iconType = 'xls';
+      else if (nameLower.endsWith('.pptx')) iconType = 'ppt';
+      else if (nameLower.endsWith('.png') || nameLower.endsWith('.jpg') || nameLower.endsWith('.jpeg') || nameLower.endsWith('.gif') || nameLower.endsWith('.svg') || nameLower.endsWith('.webp')) iconType = 'image';
+
+      const reader = new FileReader();
+      reader.onload = (evt) => {
+        const content = evt.target?.result as string;
+        if (content) {
+          vfs.saveFile(targetDir, fileName, content, {
+            iconType: iconType as any,
+            owner: user?.username || 'user'
+          });
+          setFs(vfs.getVFS() as any);
+          soundEngine.playSuccessTone();
+        }
+      };
+
+      if (file.type.startsWith('image/') || file.type === 'application/pdf' || nameLower.endsWith('.docx') || nameLower.endsWith('.xlsx') || nameLower.endsWith('.pptx')) {
+        reader.readAsDataURL(file);
+      } else {
+        reader.readAsText(file);
+      }
     }
+
+    setUploadTargetPath(null);
+    e.target.value = '';
   };
 
   const handleExportToLocalPC = (item: FileItem) => {
@@ -475,9 +521,9 @@ export default function FileExplorer({ user, onOpenFile, initialPath }: { user?:
         onOpenFile('texteditor', `Editor de Código - ${item.name}`, fullItemPath);
       }
     } else if (nameLower.endsWith('.pdf')) {
-      appTypeForRecent = 'pdfviewer';
+      appTypeForRecent = 'pdfviewerpro';
       if (onOpenFile) {
-        onOpenFile('pdfviewer', `Visor PDF - ${item.name}`, fullItemPath);
+        onOpenFile('pdfviewerpro', `Savia PDF Pro - ${item.name}`, fullItemPath);
       }
     } else if (nameLower.endsWith('.png') || nameLower.endsWith('.jpg') || nameLower.endsWith('.jpeg')) {
       appTypeForRecent = 'imageviewer';
@@ -513,7 +559,9 @@ export default function FileExplorer({ user, onOpenFile, initialPath }: { user?:
     try {
       const existingIcons = userStorage.getDesktopIcons(activeUsername);
       let appType: any = 'texteditor';
-      let docData: string | undefined = item.name;
+      
+      const fullPath = currentPath === '/' ? `/${item.name}` : `${currentPath}/${item.name}`;
+      let docData: string | undefined = fullPath;
       const nameLower = item.name.toLowerCase();
 
       if (nameLower.endsWith('.exe') || nameLower.endsWith('.msi') || item.iconType === 'wine') {
@@ -528,7 +576,7 @@ export default function FileExplorer({ user, onOpenFile, initialPath }: { user?:
         else if (nameLower.includes('cmd')) docData = 'cmd_win32';
         else if (nameLower.includes('paint')) docData = 'mspaint_win32';
         else if (nameLower.includes('task')) docData = 'taskmgr_win32';
-        else docData = item.name;
+        else docData = fullPath;
       } else if (nameLower.endsWith('.pdf')) {
         appType = 'pdfviewer';
       } else if (nameLower.endsWith('.png') || nameLower.endsWith('.jpg')) {
@@ -1071,6 +1119,16 @@ export default function FileExplorer({ user, onOpenFile, initialPath }: { user?:
             onChange={handleLocalFileUploadToFS}
             className="hidden"
           />
+          <input
+            type="file"
+            ref={folderInputRef}
+            onChange={handleLocalFileUploadToFS}
+            className="hidden"
+            // @ts-ignore
+            webkitdirectory=""
+            directory=""
+            multiple
+          />
 
           {!user?.isGuest && (
             <>
@@ -1098,7 +1156,20 @@ export default function FileExplorer({ user, onOpenFile, initialPath }: { user?:
                 title="Subir archivo desde su PC"
               >
                 <Upload className="w-3.5 h-3.5" />
-                <span className="hidden sm:inline">Subir Local</span>
+                <span className="hidden sm:inline">Subir Archivo</span>
+              </button>
+
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setUploadTargetPath(currentPath);
+                  folderInputRef.current?.click();
+                }}
+                className="px-2.5 py-1.5 bg-sky-600/30 hover:bg-sky-600/50 border border-sky-500/50 text-sky-300 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all"
+                title="Vincular o subir carpeta local completa"
+              >
+                <FolderPlus className="w-3.5 h-3.5" />
+                <span className="hidden sm:inline">Vincular Carpeta</span>
               </button>
 
               <button
@@ -1423,6 +1494,32 @@ export default function FileExplorer({ user, onOpenFile, initialPath }: { user?:
                   <Box className="w-4 h-4 text-amber-400" /> Ejecutar en Savia Rust WASM Studio
                 </button>
               )}
+              {(contextMenu.item.type === 'folder' || (contextMenu.item as any).isDir || contextMenu.item.iconType === 'folder') && !user?.isGuest && (
+                <>
+                  <button 
+                    onClick={() => { 
+                      const targetPath = currentPath === '/' ? `/${contextMenu.item!.name}` : `${currentPath}/${contextMenu.item!.name}`;
+                      setUploadTargetPath(targetPath);
+                      setContextMenu(null); 
+                      fileInputRef.current?.click(); 
+                    }} 
+                    className="w-full text-left px-4 py-2 hover:bg-blue-600 hover:text-white flex items-center gap-2.5 transition-colors text-emerald-300 font-semibold"
+                  >
+                    <Upload className="w-4 h-4 text-emerald-400" /> Subir Fichero Local a esta Carpeta
+                  </button>
+                  <button 
+                    onClick={() => { 
+                      const targetPath = currentPath === '/' ? `/${contextMenu.item!.name}` : `${currentPath}/${contextMenu.item!.name}`;
+                      setUploadTargetPath(targetPath);
+                      setContextMenu(null); 
+                      folderInputRef.current?.click(); 
+                    }} 
+                    className="w-full text-left px-4 py-2 hover:bg-blue-600 hover:text-white flex items-center gap-2.5 transition-colors text-sky-300 font-semibold"
+                  >
+                    <FolderPlus className="w-4 h-4 text-sky-400" /> Vincular Carpeta Local
+                  </button>
+                </>
+              )}
               <button 
                 onClick={() => { setContextMenu(null); addShortcutToDesktop(contextMenu.item!); }} 
                 className="w-full text-left px-4 py-2 hover:bg-blue-600 hover:text-white flex items-center gap-2.5 transition-colors text-amber-300"
@@ -1463,6 +1560,26 @@ export default function FileExplorer({ user, onOpenFile, initialPath }: { user?:
             <>
               {!user?.isGuest && (
                 <>
+                  <button 
+                    onClick={() => { 
+                      setUploadTargetPath(currentPath);
+                      setContextMenu(null); 
+                      fileInputRef.current?.click(); 
+                    }} 
+                    className="w-full text-left px-4 py-2 hover:bg-blue-600 hover:text-white flex items-center gap-2.5 transition-colors text-emerald-300 font-semibold"
+                  >
+                    <Upload className="w-4 h-4 text-emerald-400" /> Subir Fichero Local a esta Carpeta
+                  </button>
+                  <button 
+                    onClick={() => { 
+                      setUploadTargetPath(currentPath);
+                      setContextMenu(null); 
+                      folderInputRef.current?.click(); 
+                    }} 
+                    className="w-full text-left px-4 py-2 hover:bg-blue-600 hover:text-white flex items-center gap-2.5 transition-colors text-sky-300 font-semibold"
+                  >
+                    <FolderPlus className="w-4 h-4 text-sky-400" /> Vincular Carpeta Local
+                  </button>
                   <button 
                     onClick={() => { setContextMenu(null); setNewModal({ type: 'file' }); setNewItemName('nuevo_documento.txt'); }} 
                     className="w-full text-left px-4 py-2 hover:bg-blue-600 hover:text-white flex items-center gap-2.5 transition-colors"

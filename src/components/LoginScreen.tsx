@@ -121,41 +121,12 @@ export default function LoginScreen({ onLogin, onPowerOff }: { onLogin: (user: U
       }, idx * 250);
     });
 
-    // Switch to Boot Phase after 2.2 seconds
+    
+    // True Hard Reboot: Reload the page completely to reset memory and all JS state
     setTimeout(() => {
-      setRebootPhase('boot');
-      setRebootLogs(prev => [...prev, '----------------------------------------', 'Savia OS v4.2.0 (x86_64 WASM Core) Iniciando...']);
-      setActiveProcessList([
-        { pid: 1, name: 'init_kernel', cpu: '12.4%', ram: '8.1 MB', status: 'arrancando' },
-        { pid: 2, name: 'vfs_daemon', cpu: '4.2%', ram: '3.5 MB', status: 'arrancando' },
-        { pid: 3, name: 'security_manager', cpu: '1.8%', ram: '2.4 MB', status: 'arrancando' },
-        { pid: 4, name: 'display_server', cpu: '8.5%', ram: '16.0 MB', status: 'arrancando' }
-      ]);
-
-      const bootSteps = [
-        { progress: 15, log: '[ 0.05s ] Cargando WASM Hardware Abstraction Layer...' },
-        { progress: 35, log: '[ 0.22s ] Inicializando POSIX Process Manager (PID 1)...' },
-        { progress: 55, log: '[ 0.45s ] Montando Virtual File System en /home/user...' },
-        { progress: 75, log: '[ 0.68s ] Comprobando permisos ACL y D-Bus sockets...' },
-        { progress: 90, log: '[ 0.88s ] Servidor X11 y Display Manager listos.' },
-        { progress: 100, log: '[ 1.05s ] Arranque completado con éxito. Iniciando Pantalla de Acceso.' }
-      ];
-
-      bootSteps.forEach((step, idx) => {
-        setTimeout(() => {
-          setBootProgress(step.progress);
-          setRebootLogs(prev => [...prev, step.log]);
-        }, (idx + 1) * 350);
-      });
-
-      // Finish Boot
-      setTimeout(() => {
-        soundEngine.playStartupChime();
-        setIsRebooting(false);
-        setPassword('');
-        setError(false);
-      }, 2600);
+      window.location.reload();
     }, 2200);
+
   };
 
   return (

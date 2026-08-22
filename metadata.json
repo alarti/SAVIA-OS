@@ -1,6 +1,6 @@
 {
   "name": "SAVIA-OS",
-  "description": "SAVIA-OS Web Desktop Operating System by Alberto Arce",
+  "description": "SAVIA-OS Web Desktop Operating System with Savia PDF PRO 2 Advanced PDF Editor Suite",
   "requestFramePermissions": ["camera", "microphone"],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

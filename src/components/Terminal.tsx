@@ -7,6 +7,9 @@ import { verifyUserPassword } from '../utils/auth';
 import { networkManager } from '../utils/networkManager';
 import { sessionManager } from '../utils/sessionManager';
 import { fileLockEngine } from '../utils/fileLockEngine';
+import { rustWasmCore } from '../utils/rustWasmCore';
+import { vfs } from '../utils/vfs';
+import { aiOsExecutor } from '../utils/aiOsExecutor';
 
 type FileSystem = {
   [path: string]: {
@@ -49,7 +52,15 @@ const initialFS: FileSystem = {
   '/Applications': { type: 'dir', permissions: 'rwxr-xr-x', owner: 'root' },
 };
 
-export default function TerminalApp({ user, onOpenApp }: { user: UserData; onOpenApp?: (type: string, title: string) => void }) {
+export default function TerminalApp({ 
+  user, 
+  onOpenApp,
+  initialCommand 
+}: { 
+  user: UserData; 
+  onOpenApp?: (type: string, title: string) => void;
+  initialCommand?: string;
+}) {
   const [input, setInput] = useState('');
   const [shellMode, setShellMode] = useState<'bash' | 'cmd' | 'powershell'>('bash');
   const [activeTerminalUser, setActiveTerminalUser] = useState<string>(user.username);
@@ -69,6 +80,7 @@ export default function TerminalApp({ user, onOpenApp }: { user: UserData; onOpe
   const [fs, setFs] = useState<FileSystem>(initialFS);
   const [matrixActive, setMatrixActive] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
+  const hasRunInitialCmd = useRef(false);
 
   // Sync installed packages into filesystem /bin
   useEffect(() => {
@@ -81,6 +93,16 @@ export default function TerminalApp({ user, onOpenApp }: { user: UserData; onOpe
       return next;
     });
   }, []);
+
+  useEffect(() => {
+    if (initialCommand && !hasRunInitialCmd.current) {
+      hasRunInitialCmd.current = true;
+      const timer = setTimeout(() => {
+        handleCommand(initialCommand);
+      }, 100);
+      return () => clearTimeout(timer);
+    }
+  }, [initialCommand]);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -235,6 +257,8 @@ export default function TerminalApp({ user, onOpenApp }: { user: UserData; onOpe
       case 'help':
         setOutput(prev => [...prev, 
           'Available Commands & Utilities:',
+          '  ai-mode / aios / lui   - Switch to the AI-First Interface Layer (LUI Shell)',
+          '  ai / ask <prompt>      - Execute natural language request via AI-OS Engine',
           '  cmd.exe / powershell.exe - Switch to Windows command line environment',
           '  snake / tetris         - Launch interactive arcade games',
           '  paint / notepad        - Launch GUI media and text tools',
@@ -249,8 +273,70 @@ export default function TerminalApp({ user, onOpenApp }: { user: UserData; onOpe
           '  neofetch / htop        - System specs & process monitor',
           '  cmatrix / figlet / calc- Animated rain, text banner, math calculator',
           '  curl <url>             - Make real HTTP network request',
-          '  sound / beep           - Test audio server chime'
+          '  sound / beep           - Test audio server chime',
+          '  rust / wasm-bench      - Native Rust WebAssembly benchmark suite',
+          '  wasm-info / rust-info  - Rust Core memory heap and module status',
+          '  sha256 <file/text>     - Cryptographic SHA-256 (Rust engine)',
+          '  crc32 <file/text>      - Checksum CRC32 computation (Rust engine)',
+          '  grep <pat> <file>      - High-speed Rust pattern search in files',
+          '  diff <f1> <f2>         - High-speed Rust Myers file difference',
+          '  compress <file>        - Lossless Rust RLE file compression'
         ]);
+        break;
+
+      case 'ai-mode':
+      case 'aios':
+      case 'startai':
+      case 'lui':
+      case 'ai-layer':
+        soundEngine.playStartupChime();
+        setOutput(prev => [
+          ...prev, 
+          '[AI-OS] Conmutando a la Capa Superior de Interfaz Inteligente (LUI Shell)...',
+          'Ejecutando transición de entorno...'
+        ]);
+        setTimeout(() => {
+          window.dispatchEvent(new CustomEvent('savia_switch_to_ai_mode'));
+        }, 300);
+        break;
+
+      case 'ai':
+      case 'ask':
+      case 'savia':
+        const promptText = args.join(' ').trim();
+        if (!promptText) {
+          setOutput(prev => [
+            ...prev,
+            'Uso: ai <petición en lenguaje natural>',
+            'Ejemplo: ai crear una nota sobre mi proyecto',
+            'Ejemplo: ai ejecutar benchmark de rust wasm',
+            'O escribe "ai-mode" para entrar en la interfaz visual inteligente completa.'
+          ]);
+          break;
+        }
+        setOutput(prev => [
+          ...prev,
+          `[AI-OS] Analizando petición: "${promptText}"...`,
+          '[AI-OS] Despachando a Kernel & SubSistemas...'
+        ]);
+        aiOsExecutor.processIntent(promptText, (type, title, data) => {
+          if (onOpenApp) onOpenApp(type, title || type);
+        }).then(res => {
+          const lines = [
+            `================================================================`,
+            `💡 [SAVIA-OS IA]: ${res.assistantSummary}`,
+            `----------------------------------------------------------------`,
+            `⚙️ COMANDOS EJECUTADOS POR DEBAJO (${res.underlyingCommands.length}):`
+          ];
+          res.underlyingCommands.forEach(c => {
+            lines.push(`  ✓ [${c.subsystem}] ${c.command} (${c.executionTimeMs}ms)`);
+            lines.push(`    -> ${c.resultSummary}`);
+          });
+          lines.push(`================================================================`);
+          setOutput(prev => [...prev, ...lines]);
+        }).catch(err => {
+          setOutput(prev => [...prev, `[AI-OS ERROR]: ${err?.message || 'Error al procesar petición'}`]);
+        });
         break;
 
       case 'snake':
@@ -836,6 +922,162 @@ export default function TerminalApp({ user, onOpenApp }: { user: UserData; onOpe
       case 'beep':
         soundEngine.playStartupChime();
         setOutput(prev => [...prev, `[Audio Server] Played startup audio chime.`]);
+        break;
+
+      case 'rust':
+      case 'rust-bench':
+      case 'wasm-bench':
+        setOutput(prev => [
+          ...prev,
+          `\x1b[35m[RUST KERNEL] Ejecutando suite de benchmark en WebAssembly nativo...\x1b[0m`,
+        ]);
+        setTimeout(() => {
+          const bench = rustWasmCore.runFullBenchmark();
+          setOutput(prev => [
+            ...prev,
+            `\x1b[32m════════════════ RUST WASM BENCHMARK REPORT ════════════════\x1b[0m`,
+            `  • Target Arquitectura   : ${rustWasmCore.getStatus().arch}`,
+            `  • Heap WASM Asignado    : ${Math.round(rustWasmCore.getStatus().heapSizeBytes / 1024 / 1024)} MB (${rustWasmCore.getStatus().memoryPages} páginas)`,
+            `  • Criba de Primos (200k): ${bench.primeSieveTimeMs} ms (${bench.primeCount.toLocaleString()} primos encontrados)`,
+            `  • Multiplicación Matrices: ${bench.matrixMulTimeMs} ms (50,000 matrices 4x4)`,
+            `  • Tasa SHA-256 (64-rnd) : ${bench.sha256RateMbps} MB/s`,
+            `  • Tasa CRC32            : ${bench.crc32RateMbps} MB/s`,
+            `  • Puntuación de Rendimiento: \x1b[1;33m${bench.totalScore} Pts\x1b[0m`,
+            `════════════════════════════════════════════════════════════`
+          ]);
+          soundEngine.playSuccessTone();
+        }, 50);
+        break;
+
+      case 'wasm-info':
+      case 'rust-info':
+        const rStatus = rustWasmCore.getStatus();
+        setOutput(prev => [
+          ...prev,
+          `\x1b[36m=== INFORMACIÓN DEL NÚCLEO RUST WEBASSEMBLY ===\x1b[0m`,
+          `  • Estado          : \x1b[32m${rStatus.loaded ? 'Activo & Seguro' : 'Inicializando'}\x1b[0m`,
+          `  • Target          : ${rStatus.arch}`,
+          `  • Páginas Memoria : ${rStatus.memoryPages} (Heap: ${Math.round(rStatus.heapSizeBytes / 1024 / 1024)} MB)`,
+          `  • Ops Verificadas : ${rStatus.verifiedOpsCount.toLocaleString()}`,
+          `  • Módulos Rust    : ${rStatus.modules.join(', ')}`
+        ]);
+        break;
+
+      case 'sha256':
+      case 'sha256sum':
+        if (!args[1]) {
+          setOutput(prev => [...prev, `Uso: ${cmd} <archivo o texto>`]);
+          break;
+        }
+        const getAbsPath = (p: string) => (p.startsWith('/') ? p : (cwd === '/' ? `/${p}` : `${cwd}/${p}`));
+        const targetInput = args.slice(1).join(' ');
+        let contentToHash = targetInput;
+        // Check if argument corresponds to a file
+        const resolvedPath = getAbsPath(args[1]);
+        const vfsLookup = vfs.readFile(resolvedPath) || (fs[resolvedPath] ? { content: fs[resolvedPath].content || '' } : null);
+        if (vfsLookup && vfsLookup.content !== undefined) {
+          contentToHash = vfsLookup.content;
+          const hashVal = rustWasmCore.sha256(contentToHash);
+          setOutput(prev => [...prev, `${hashVal}  ${resolvedPath}`]);
+        } else {
+          const hashVal = rustWasmCore.sha256(contentToHash);
+          setOutput(prev => [...prev, `${hashVal}  (entrada de texto directo)`]);
+        }
+        break;
+
+      case 'crc32':
+        if (!args[1]) {
+          setOutput(prev => [...prev, `Uso: crc32 <archivo o texto>`]);
+          break;
+        }
+        const resolveCrcPath = (p: string) => (p.startsWith('/') ? p : (cwd === '/' ? `/${p}` : `${cwd}/${p}`));
+        const crcInput = args.slice(1).join(' ');
+        const crcPath = resolveCrcPath(args[1]);
+        const crcFile = vfs.readFile(crcPath) || (fs[crcPath] ? { content: fs[crcPath].content || '' } : null);
+        const textForCrc = crcFile && crcFile.content !== undefined ? crcFile.content : crcInput;
+        const crcResult = rustWasmCore.crc32(textForCrc);
+        setOutput(prev => [...prev, `CRC32: 0x${crcResult.toString(16).toUpperCase().padStart(8, '0')} (${crcResult})`]);
+        break;
+
+      case 'grep':
+        if (args.length < 3) {
+          setOutput(prev => [...prev, `Uso: grep <patrón> <archivo>`]);
+          break;
+        }
+        const resolveGrepPath = (p: string) => (p.startsWith('/') ? p : (cwd === '/' ? `/${p}` : `${cwd}/${p}`));
+        const grepPattern = args[1];
+        const grepFilePath = resolveGrepPath(args[2]);
+        const grepFileTarget = vfs.readFile(grepFilePath) || (fs[grepFilePath] ? { content: fs[grepFilePath].content || '' } : null);
+        if (!grepFileTarget || grepFileTarget.content === undefined) {
+          setOutput(prev => [...prev, `grep: ${args[2]}: Archivo no encontrado`]);
+          break;
+        }
+        const matches = rustWasmCore.fastGrep(grepFileTarget.content, grepPattern, false);
+        if (matches.length === 0) {
+          setOutput(prev => [...prev, `[Rust Grep] Ninguna coincidencia para "${grepPattern}".`]);
+        } else {
+          setOutput(prev => [
+            ...prev,
+            `\x1b[32m[Rust Grep]\x1b[0m ${matches.length} coincidencia(s) en ${grepFilePath}:`,
+            ...matches.map(m => `  \x1b[33mLínea ${m.line}:\x1b[0m ${m.text}`)
+          ]);
+        }
+        break;
+
+      case 'diff':
+        if (args.length < 3) {
+          setOutput(prev => [...prev, `Uso: diff <archivo1> <archivo2>`]);
+          break;
+        }
+        const resolveDiffPath = (p: string) => (p.startsWith('/') ? p : (cwd === '/' ? `/${p}` : `${cwd}/${p}`));
+        const path1 = resolveDiffPath(args[1]);
+        const path2 = resolveDiffPath(args[2]);
+        const f1 = vfs.readFile(path1) || (fs[path1] ? { content: fs[path1].content || '' } : null);
+        const f2 = vfs.readFile(path2) || (fs[path2] ? { content: fs[path2].content || '' } : null);
+        if (!f1) {
+          setOutput(prev => [...prev, `diff: ${args[1]}: Archivo no encontrado`]);
+          break;
+        }
+        if (!f2) {
+          setOutput(prev => [...prev, `diff: ${args[2]}: Archivo no encontrado`]);
+          break;
+        }
+        const diffResults = rustWasmCore.fastDiff(f1.content || '', f2.content || '');
+        if (diffResults.length === 0) {
+          setOutput(prev => [...prev, `[Rust Diff] Los archivos son idénticos.`]);
+        } else {
+          setOutput(prev => [
+            ...prev,
+            `\x1b[36m--- ${path1}\x1b[0m`,
+            `\x1b[36m+++ ${path2}\x1b[0m`,
+            ...diffResults.map(d => {
+              if (d.type === 'added') return `\x1b[32m+ L${d.line}: ${d.text}\x1b[0m`;
+              if (d.type === 'removed') return `\x1b[31m- L${d.line}: ${d.text}\x1b[0m`;
+              return `  L${d.line}: ${d.text}`;
+            })
+          ]);
+        }
+        break;
+
+      case 'compress':
+        if (!args[1]) {
+          setOutput(prev => [...prev, `Uso: compress <archivo>`]);
+          break;
+        }
+        const resolveCompPath = (p: string) => (p.startsWith('/') ? p : (cwd === '/' ? `/${p}` : `${cwd}/${p}`));
+        const compTarget = resolveCompPath(args[1]);
+        const compRes = vfs.compressFile(compTarget);
+        if (!compRes) {
+          setOutput(prev => [...prev, `compress: ${args[1]}: No se pudo leer el archivo o está vacío.`]);
+        } else {
+          setOutput(prev => [
+            ...prev,
+            `\x1b[32m[Rust RLE Compression]\x1b[0m Archivo comprimido con éxito:`,
+            `  • Origen     : ${compTarget} (${compRes.originalSize} bytes)`,
+            `  • Comprimido : ${compRes.compressedPath} (${compRes.compressedSize} bytes)`,
+            `  • Ratio      : ${compRes.ratio}% del tamaño original`
+          ]);
+        }
         break;
 
       default:

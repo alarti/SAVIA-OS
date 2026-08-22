@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Terminal, Folder, Globe, Cpu, X, Square, Minus, Zap, User, Users, Lock, Monitor, Search, FileText, FileImage, Power, Activity, Gamepad2, Volume2, VolumeX, Box, Radio, Palette, Download, Upload, Sliders, ShieldCheck, ShieldAlert, Info, Settings, Wifi, WifiOff, Battery, CheckCircle, Image as ImageIcon, Calculator as CalcIcon, Calendar as CalendarIcon, Move, Maximize2, Minimize2, RefreshCcw, Plus, Trash2, Edit2, Play, ChevronRight, ChevronLeft, Grid, Sparkles, Trophy, Rocket, FileCode, Cloud, RefreshCw, AlertTriangle, Eye, EyeOff, ChevronUp } from 'lucide-react';
+import { Terminal, Folder, Globe, Cpu, X, Square, Minus, Zap, User, Users, Lock, Monitor, Search, FileText, FileImage, Power, Activity, Gamepad2, Volume2, VolumeX, Box, Radio, Palette, Download, Upload, Sliders, ShieldCheck, ShieldAlert, Shield, Info, Settings, Wifi, WifiOff, Battery, CheckCircle, Image as ImageIcon, Calculator as CalcIcon, Calendar as CalendarIcon, Move, Maximize2, Minimize2, RefreshCcw, Plus, Trash2, Edit2, Play, ChevronRight, ChevronLeft, Grid, Sparkles, Trophy, Rocket, FileCode, Cloud, RefreshCw, AlertTriangle, Eye, EyeOff, ChevronUp } from 'lucide-react';
 import { networkManager } from '../utils/networkManager';
 import { sessionManager } from '../utils/sessionManager';
 import { isTouchDevice, isMobileOrTablet, calculateResponsiveWindowBounds } from '../utils/deviceUtils';
@@ -19,6 +19,7 @@ import ControlCenter from './ControlCenter';
 import ThemeCustomizerApp, { PRESET_WALLPAPERS } from './ThemeCustomizerApp';
 import BrowserApp from './BrowserApp';
 import PdfViewerApp from './PdfViewerApp';
+import SaviaPdfProApp from './SaviaPdfProApp';
 import OfficeApp from './OfficeApp';
 import CalculatorApp from './CalculatorApp';
 import CalendarClockApp from './CalendarClockApp';
@@ -36,11 +37,12 @@ import { trashAndUndo } from '../utils/trashAndUndo';
 import { isSystemDesktopIcon, vfs } from '../utils/vfs';
 import AiDevCopilotApp from './AiDevCopilotApp';
 import { copilotOsBridge } from '../utils/copilotOsBridge';
+import { ErrorBoundary } from './common/ErrorBoundary';
 
 type WindowData = {
   id: string;
   title: string;
-  type: 'terminal' | 'webgl' | 'folder' | 'browser' | 'texteditor' | 'pdfviewer' | 'office' | 'taskmanager' | 'tetris' | 'appstore' | 'soundsettings' | 'paint' | 'about' | 'controlpanel' | 'theme' | 'calculator' | 'calendar' | 'imageviewer' | 'webamp' | 'wine' | 'trash' | 'equipo' | 'diskmanager' | 'ai_copilot';
+  type: 'terminal' | 'webgl' | 'folder' | 'browser' | 'texteditor' | 'pdfviewer' | 'pdfviewerpro' | 'office' | 'taskmanager' | 'tetris' | 'appstore' | 'soundsettings' | 'paint' | 'about' | 'controlpanel' | 'theme' | 'calculator' | 'calendar' | 'imageviewer' | 'webamp' | 'wine' | 'trash' | 'equipo' | 'diskmanager' | 'ai_copilot';
   data?: any;
   docData?: any;
   x: number;
@@ -78,7 +80,7 @@ const DEFAULT_DESKTOP_ICONS: DesktopIcon[] = [
   { id: 'files', title: 'Explorador Archivos', appType: 'folder', iconType: 'folder', x: 20, y: 220 },
   { id: 'browser', title: 'Navegador Web', appType: 'browser', iconType: 'browser', x: 20, y: 320 },
   { id: 'term', title: 'Terminal POSIX', appType: 'terminal', iconType: 'terminal', x: 20, y: 420 },
-  { id: 'ai_copilot', title: 'AI Copilot', appType: 'ai_copilot', iconType: 'ai_copilot', x: 20, y: 520 },
+  
 
   // Columna 2 (x: 130) - Ofimática y Documentos
   { id: 'office', title: 'Suite Ofimática', appType: 'office', iconType: 'office', x: 130, y: 20 },
@@ -86,6 +88,7 @@ const DEFAULT_DESKTOP_ICONS: DesktopIcon[] = [
   { id: 'savia_xls', title: 'Savia Xls', appType: 'office', iconType: 'xls', docData: 'nuevo documento.xlsx', x: 130, y: 220 },
   { id: 'savia_ppt', title: 'Savia Ppt', appType: 'office', iconType: 'ppt', docData: 'nuevo documento.pptx', x: 130, y: 320 },
   { id: 'pdfviewer', title: 'Savia Pdf', appType: 'pdfviewer', iconType: 'pdf', x: 130, y: 420 },
+  { id: 'saviapdfpro', title: 'Savia PDF PRO 2', appType: 'pdfviewerpro', iconType: 'pdfpro', x: 130, y: 520 },
 
   // Columna 3 (x: 240) - Herramientas y Multimedia
   { id: 'savia_nano', title: 'Savia Nano', appType: 'texteditor', iconType: 'editor', x: 240, y: 20 },
@@ -334,12 +337,14 @@ export const DESKTOP_THEME_STYLES: Record<string, DesktopThemeStyle> = {
 export default function DesktopEnvironment({ 
   user, 
   onExit,
-  onSwitchUser
+  onSwitchUser,
+  onSwitchToAiMode
 }: { 
   key?: React.Key;
   user: UserData; 
   onExit: () => void;
   onSwitchUser?: (targetUser: UserData) => void;
+  onSwitchToAiMode?: () => void;
 }) {
   const [windows, setWindows] = useState<WindowData[]>(() => {
     const currentSess = sessionManager.getCurrentSession();
@@ -363,6 +368,18 @@ export default function DesktopEnvironment({
     };
     window.addEventListener('savia_sessions_updated', handleSessionsUpdated);
     return () => window.removeEventListener('savia_sessions_updated', handleSessionsUpdated);
+  }, []);
+
+  // Listen for apps requested externally from AI-OS mode
+  useEffect(() => {
+    const handleOpenExternal = (e: Event) => {
+      const customEvt = e as CustomEvent<{ type: string; title?: string; data?: any }>;
+      if (customEvt.detail?.type) {
+        openApp(customEvt.detail.type as any, customEvt.detail.title, customEvt.detail.data);
+      }
+    };
+    window.addEventListener('savia_open_app_external', handleOpenExternal);
+    return () => window.removeEventListener('savia_open_app_external', handleOpenExternal);
   }, []);
 
   const [isStartMenuOpen, setIsStartMenuOpen] = useState(false);
@@ -597,11 +614,18 @@ export default function DesktopEnvironment({
     const handleDesktopIconsUpdate = () => {
       setDesktopIcons(userStorage.getDesktopIcons(user.username));
     };
+    const handlePackageUpdate = () => {
+      setInstalledPackages(getInstalledPackageIds());
+    };
     window.addEventListener('savia_os_desktop_icons_updated', handleDesktopIconsUpdate);
     window.addEventListener('savia_os_guest_reset', handleDesktopIconsUpdate);
+    window.addEventListener('savia_os_package_updated', handlePackageUpdate);
+    window.addEventListener('webos_package_updated', handlePackageUpdate);
     return () => {
       window.removeEventListener('savia_os_desktop_icons_updated', handleDesktopIconsUpdate);
       window.removeEventListener('savia_os_guest_reset', handleDesktopIconsUpdate);
+      window.removeEventListener('savia_os_package_updated', handlePackageUpdate);
+      window.removeEventListener('webos_package_updated', handlePackageUpdate);
     };
   }, [user.username]);
 
@@ -676,7 +700,7 @@ export default function DesktopEnvironment({
               title: vfsItem.name,
               appType,
               iconType,
-              docData: (vfsItem as any).docData || vfsItem.name,
+              docData: (vfsItem as any).docData || `${userDesktopPath}/${vfsItem.name}`,
               x: pos.x,
               y: pos.y
             };
@@ -703,19 +727,7 @@ export default function DesktopEnvironment({
           }
         });
 
-        // 3. Ensure AI Copilot icon is present on desktop
-        if (!updated.some(ic => ic.id === 'ai_copilot' || ic.appType === 'ai_copilot')) {
-          const pos = getNextPosition(updated);
-          updated.push({
-            id: 'ai_copilot',
-            title: 'AI Copilot',
-            appType: 'ai_copilot',
-            iconType: 'ai_copilot',
-            x: pos.x,
-            y: pos.y
-          });
-          changed = true;
-        }
+        
 
         if (changed) {
           userStorage.setDesktopIcons(user.username, updated);
@@ -797,7 +809,7 @@ export default function DesktopEnvironment({
             } else if (lowerName.endsWith('.png') || lowerName.endsWith('.jpg') || lowerName.endsWith('.jpeg')) {
               appType = 'imageviewer';
               iconType = 'image';
-            } else if (lowerName.endsWith('.mp3') || lowerName.endsWith('.wav')) {
+            } else if (lowerName.endsWith('.mp3') || lowerName.endsWith('.wav') || lowerName.endsWith('.ogg')) {
               appType = 'webamp';
               iconType = 'music';
             }
@@ -806,8 +818,7 @@ export default function DesktopEnvironment({
               iconType: iconType as any,
               owner: user.username
             });
-
-            createNewDesktopIcon(fileName, appType, iconType, fileName);
+            // The desktop VFS sync effect will automatically create the desktop icon.
             triggerSystemToast(`📥 "${fileName}" importado a SaviaOS Desktop`);
             soundEngine.playSuccessTone();
           }
@@ -1831,6 +1842,16 @@ export default function DesktopEnvironment({
             >
             {(() => {
               const type = icon.iconType || icon.appType;
+              if (type === 'pdfpro' || icon.appType === 'pdfviewerpro' || icon.id === 'saviapdfpro' || icon.title.toLowerCase().includes('pdf pro')) {
+                return (
+                  <div className="p-2 bg-gradient-to-tr from-red-600 via-rose-600 to-amber-600 rounded-2xl shadow-xl border border-white/25 group-hover:scale-105 transition-transform relative">
+                    <FileText className="w-7 h-7 text-white" />
+                    <span className="absolute -bottom-1 -right-1 bg-black/90 text-[8px] font-black text-amber-300 px-1 py-0.5 rounded-full border border-amber-400/80 leading-none shadow">
+                      PRO 2
+                    </span>
+                  </div>
+                );
+              }
               if (type === 'equipo' || icon.appType === 'equipo' || icon.appType === 'diskmanager') {
                 return (
                   <div className="p-2 bg-gradient-to-tr from-cyan-600 to-blue-600 rounded-2xl shadow-xl border border-white/20 group-hover:scale-105 transition-transform">
@@ -1979,6 +2000,7 @@ export default function DesktopEnvironment({
                 {w.type === 'browser' && <Globe className="w-3.5 h-3.5" />}
                 {w.type === 'texteditor' && <FileCode className="w-3.5 h-3.5 text-emerald-400" />}
                 {w.type === 'pdfviewer' && <FileImage className="w-3.5 h-3.5 text-red-500" />}
+                {w.type === 'pdfviewerpro' && <Shield className="w-3.5 h-3.5 text-red-500" />}
                 {w.type === 'taskmanager' && <Activity className="w-3.5 h-3.5 text-emerald-400 animate-pulse" />}
                 {w.type === 'tetris' && <Gamepad2 className="w-3.5 h-3.5" />}
                 {w.type === 'calculator' && <CalcIcon className="w-3.5 h-3.5 text-amber-400" />}
@@ -2002,42 +2024,46 @@ export default function DesktopEnvironment({
             </div>
             {/* Window Content */}
             <div className={`flex-1 relative ${activeThemeStyle.windowBg} ${activeThemeStyle.windowText} overflow-hidden cursor-auto`} onMouseDown={e => e.stopPropagation()}>
-              {w.type === 'about' && <AboutApp />}
-              {w.type === 'controlpanel' && <ControlPanelApp user={user} onOpenApp={(type, title) => openApp(type as any, title)} />}
-              {w.type === 'terminal' && <TerminalApp user={user} onOpenApp={(type, title) => openApp(type as any, title)} />}
-              {w.type === 'appstore' && <AppStore user={user} onOpenApp={(type, title) => openApp(type as any, title)} />}
-              {w.type === 'soundsettings' && <SoundSettings />}
-              {w.type === 'paint' && <PaintApp />}
-              {w.type === 'theme' && <ThemeCustomizerApp user={user} />}
-              {w.type === 'webgl' && <WebGLApp />}
-              {w.type === 'folder' && <FileExplorer user={user} initialPath={w.data || w.docData} onOpenFile={(type, title, data) => openApp(type as any, title, data)} />}
-              {w.type === 'browser' && <BrowserApp user={user} />}
-              {w.type === 'texteditor' && <TextEditorApp data={w.data} user={user} />}
-              {w.type === 'pdfviewer' && <PdfViewerApp user={user} initialFile={w.data} />}
-              {w.type === 'office' && <OfficeApp user={user} initialFile={w.data} />}
-              {w.type === 'taskmanager' && <TaskManager windows={windows} closeWindow={closeWindow} />}
-              {w.type === 'tetris' && <TetrisApp />}
-              {w.type === 'calculator' && <CalculatorApp />}
-              {w.type === 'calendar' && <CalendarClockApp />}
-              {w.type === 'imageviewer' && <ImageViewerApp />}
-              {w.type === 'trash' && <TrashApp onOpenFile={(type, title, data) => openApp(type as any, title, data)} />}
-              {(w.type === 'equipo' || w.type === 'diskmanager') && <DiskManagerApp onOpenApp={(type, title, data) => openApp(type as any, title, data)} />}
-              {w.type === 'ai_copilot' && (
-                <AiDevCopilotApp
-                  osApi={{
-                    openApp: (type, title, data) => openApp(type as any, title, data),
-                    closeApp: (target) => closeWindowByTypeOrId(target),
-                    minimizeApp: (target) => minimizeWindowByTypeOrId(target),
-                    maximizeApp: (target) => maximizeWindowByTypeOrId(target),
-                    tileWindows: (mode) => tileWindows(mode),
-                    notify: (msg) => triggerSystemToast(msg),
-                    changeTheme: (theme) => setCurrentTheme(theme),
-                    changeAccent: (accent) => setCurrentAccent(accent),
-                    changeWallpaper: (url) => setWallpaper(url),
-                    setTaskbarAutoHide: (enabled) => setTaskbarAutoHideState(enabled),
-                  }}
-                />
-              )}
+              <ErrorBoundary fallbackTitle={`Error en ${w.title}`}>
+                {w.type === 'about' && <AboutApp />}
+                {w.type === 'controlpanel' && <ControlPanelApp user={user} onOpenApp={(type, title) => openApp(type as any, title)} />}
+                {w.type === 'terminal' && <TerminalApp user={user} onOpenApp={(type, title) => openApp(type as any, title)} initialCommand={typeof w.data === 'string' ? w.data : undefined} />}
+                {w.type === 'appstore' && <AppStore user={user} onOpenApp={(type, title, data) => openApp(type as any, title, data)} />}
+                {w.type === 'soundsettings' && <SoundSettings />}
+                {w.type === 'paint' && <PaintApp />}
+                {w.type === 'theme' && <ThemeCustomizerApp user={user} />}
+                {w.type === 'webgl' && <ThreeGamesApp />}
+                {w.type === 'wine' && <ThreeGamesApp />}
+                {w.type === 'folder' && <FileExplorer user={user} initialPath={w.data || w.docData} onOpenFile={(type, title, data) => openApp(type as any, title, data)} />}
+                {w.type === 'browser' && <BrowserApp user={user} />}
+                {w.type === 'texteditor' && <TextEditorApp data={w.data} user={user} />}
+                {w.type === 'pdfviewer' && <PdfViewerApp user={user} initialFile={w.data} />}
+                {w.type === 'pdfviewerpro' && <SaviaPdfProApp user={user} initialFile={w.data} />}
+                {w.type === 'office' && <OfficeApp user={user} initialFile={w.data} />}
+                {w.type === 'taskmanager' && <TaskManager windows={windows} closeWindow={closeWindow} />}
+                {w.type === 'tetris' && <TetrisApp />}
+                {w.type === 'calculator' && <CalculatorApp />}
+                {w.type === 'calendar' && <CalendarClockApp />}
+                {w.type === 'imageviewer' && <ImageViewerApp />}
+                {w.type === 'trash' && <TrashApp onOpenFile={(type, title, data) => openApp(type as any, title, data)} />}
+                {(w.type === 'equipo' || w.type === 'diskmanager') && <DiskManagerApp onOpenApp={(type, title, data) => openApp(type as any, title, data)} />}
+                {w.type === 'ai_copilot' && (
+                  <AiDevCopilotApp
+                    osApi={{
+                      openApp: (type, title, data) => openApp(type as any, title, data),
+                      closeApp: (target) => closeWindowByTypeOrId(target),
+                      minimizeApp: (target) => minimizeWindowByTypeOrId(target),
+                      maximizeApp: (target) => maximizeWindowByTypeOrId(target),
+                      tileWindows: (mode) => tileWindows(mode),
+                      notify: (msg) => triggerSystemToast(msg),
+                      changeTheme: (theme) => setCurrentTheme(theme),
+                      changeAccent: (accent) => setCurrentAccent(accent),
+                      changeWallpaper: (url) => setWallpaper(url),
+                      setTaskbarAutoHide: (enabled) => setTaskbarAutoHideState(enabled),
+                    }}
+                  />
+                )}
+              </ErrorBoundary>
             </div>
 
             {/* Window Resizing Handle */}
@@ -2250,6 +2276,22 @@ export default function DesktopEnvironment({
                   </div>
 
                   <div 
+                    onClick={() => { openApp('pdfviewerpro', 'Savia PDF PRO 2'); setIsStartMenuOpen(false); }}
+                    className="flex items-center gap-3 p-2.5 bg-red-600/20 hover:bg-red-600/30 border border-red-500/40 rounded-xl cursor-pointer transition-all group shadow-sm"
+                  >
+                    <div className="p-2 bg-gradient-to-tr from-red-600 to-amber-600 rounded-lg border border-red-500/40 group-hover:scale-110 transition-transform">
+                      <FileText className="w-5 h-5 text-white" />
+                    </div>
+                    <div className="flex flex-col min-w-0">
+                      <span className="text-xs font-bold text-white flex items-center gap-1.5">
+                        <span>Savia PDF PRO 2</span>
+                        <span className="px-1.5 py-0.2 bg-gradient-to-r from-red-500 to-amber-500 text-white text-[9px] rounded font-bold shadow-sm">PRO 2</span>
+                      </span>
+                      <span className="text-[10px] text-gray-300 truncate">Suite y Editor PDF nativo profesional</span>
+                    </div>
+                  </div>
+
+                  <div 
                     onClick={() => { openApp('pdfviewer', 'Savia Pdf'); setIsStartMenuOpen(false); }}
                     className="flex items-center gap-3 p-2.5 bg-red-500/10 hover:bg-red-500/20 border border-red-500/20 rounded-xl cursor-pointer transition-all group"
                   >
@@ -2286,21 +2328,7 @@ export default function DesktopEnvironment({
                   Sistema, IA y Utilidades
                 </h4>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                  <div 
-                    onClick={() => { openApp('ai_copilot', 'SAVIA AI Dev Copilot'); setIsStartMenuOpen(false); }}
-                    className="flex items-center gap-3 p-2.5 bg-gradient-to-r from-purple-900/30 to-indigo-900/30 hover:from-purple-900/50 hover:to-indigo-900/50 border border-purple-500/30 rounded-xl cursor-pointer transition-all group col-span-1 sm:col-span-2 shadow-sm"
-                  >
-                    <div className="p-2 bg-gradient-to-br from-purple-500 to-indigo-600 rounded-lg border border-purple-400/40 shadow-sm">
-                      <Sparkles className="w-5 h-5 text-white animate-pulse" />
-                    </div>
-                    <div className="flex flex-col min-w-0">
-                      <div className="flex items-center gap-2">
-                        <span className="text-xs font-bold text-white group-hover:text-purple-300 transition-colors">SAVIA AI Dev Copilot</span>
-                        <span className="text-[9px] bg-purple-500/20 text-purple-300 px-1.5 py-0.2 rounded font-semibold border border-purple-500/30">Gemini 3.7</span>
-                      </div>
-                      <span className="text-[10px] text-slate-300 truncate">Copilot de desarrollo, revisión de PRs, gestión de sprints y sincronización Git</span>
-                    </div>
-                  </div>
+                  
 
                   <div 
                     onClick={() => { openApp('terminal', 'Terminal POSIX'); setIsStartMenuOpen(false); }}
@@ -2504,6 +2532,20 @@ export default function DesktopEnvironment({
                 </div>
 
                 <div className="grid grid-cols-4 sm:grid-cols-6 gap-2">
+                  <div 
+                    className="flex flex-col items-center gap-1 cursor-pointer hover:bg-purple-600/30 p-2 rounded-xl transition-colors border border-purple-500/40 bg-gradient-to-tr from-purple-600/20 to-blue-600/20" 
+                    onClick={() => { 
+                      setIsStartMenuOpen(false);
+                      if (onSwitchToAiMode) {
+                        onSwitchToAiMode();
+                      } else {
+                        window.dispatchEvent(new CustomEvent('savia_switch_to_ai_mode'));
+                      }
+                    }}
+                  >
+                    <Sparkles className="w-6 h-6 text-purple-300 animate-pulse" />
+                    <span className="text-[10px] font-bold text-center text-purple-200">Modo AI-OS</span>
+                  </div>
                   <div className="flex flex-col items-center gap-1 cursor-pointer hover:bg-purple-500/20 p-2 rounded-xl transition-colors border border-purple-500/30 bg-purple-500/10" onClick={() => { openApp('webgl', 'Centro de Juegos 3D'); setIsStartMenuOpen(false); }}>
                     <Gamepad2 className="w-6 h-6 text-purple-400" />
                     <span className="text-[10px] font-bold text-center text-purple-200">Juegos 3D</span>
@@ -2680,18 +2722,6 @@ export default function DesktopEnvironment({
           <span className="sr-only">Start</span>
         </button>
 
-        {/* Dedicated Direct AI Copilot Launcher */}
-        <button 
-          onClick={() => {
-            openApp('ai_copilot', 'SAVIA AI Dev Copilot');
-            soundEngine.playButtonClick();
-          }} 
-          className="flex items-center gap-1.5 px-3 py-1.5 bg-gradient-to-r from-purple-600/50 via-indigo-600/50 to-pink-600/40 hover:from-purple-600/80 hover:to-indigo-600/80 border border-purple-400/50 text-white rounded-xl transition-all shadow-lg active:scale-95 group cursor-pointer"
-          title="Abrir SAVIA AI Dev Copilot (Gemini 3.7)"
-        >
-          <Sparkles className="w-4 h-4 text-purple-200 animate-pulse group-hover:scale-110 transition-transform" />
-          <span className="text-xs font-bold tracking-wide hidden sm:inline bg-gradient-to-r from-white via-purple-100 to-pink-200 bg-clip-text text-transparent">AI Copilot</span>
-        </button>
 
         <div className="h-7 w-px bg-white/15 mx-1.5"></div>
         <div className="flex items-center gap-1.5 overflow-x-auto px-1 max-w-[55vw] sm:max-w-[65vw] no-scrollbar">

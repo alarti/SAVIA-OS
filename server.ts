@@ -2,6 +2,7 @@ import express from "express";
 import path from "path";
 import { createServer as createViteServer } from "vite";
 import { handleAiChat, handleAiCommand, projectState, getCodebaseSummary } from "./server/ai/aiAgent";
+import { PdfServerController } from "./server/pdf/pdfController";
 
 async function startServer() {
   const app = express();
@@ -10,8 +11,8 @@ async function startServer() {
   // Security: Disable X-Powered-By header
   app.disable('x-powered-by');
 
-  // JSON Body Parser for API requests
-  app.use(express.json({ limit: "10mb" }));
+  // JSON Body Parser for API requests (support up to 50MB for PDFs)
+  app.use(express.json({ limit: "50mb" }));
 
   // Security Headers Middleware
   app.use((req, res, next) => {
@@ -21,6 +22,14 @@ async function startServer() {
     res.setHeader("Referrer-Policy", "strict-origin-when-cross-origin");
     next();
   });
+
+  // ==========================================
+  // SAVIA PDF PRO 2 - Advanced PDF Engine APIs
+  // ==========================================
+  app.get("/api/pdf/health", (req, res) => PdfServerController.getHealth(req, res));
+  app.post("/api/pdf/upload", (req, res) => PdfServerController.uploadPdf(req, res));
+  app.post("/api/pdf/merge", (req, res) => PdfServerController.mergePdfs(req, res));
+  app.post("/api/pdf/split", (req, res) => PdfServerController.splitPdf(req, res));
 
   // Web Proxy API Route with SSRF & Timeout Protection
   app.get("/api/proxy", async (req, res) => {

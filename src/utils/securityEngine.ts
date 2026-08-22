@@ -10,6 +10,7 @@
  */
 
 import { verifyUserPassword } from './auth';
+import { rustWasmCore } from './rustWasmCore';
 
 export type ThreatLevel = 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
 
@@ -236,16 +237,10 @@ class SecurityEngine {
   }
 
   /**
-   * Simple non-cryptographic polynomial hash for ledger chaining in browser runtime
+   * Cryptographic SHA-256 hash powered by Rust WebAssembly Core for SIEM ledger anti-tamper chaining
    */
   private computeHash(str: string): string {
-    let hash = 5381;
-    for (let i = 0; i < str.length; i++) {
-      hash = ((hash << 5) + hash) + str.charCodeAt(i);
-      hash = hash & hash; // Convert to 32bit integer
-    }
-    const hex = Math.abs(hash).toString(16).padStart(8, '0');
-    return `${hex}-${Date.now().toString(16)}`;
+    return rustWasmCore.sha256(str);
   }
 
   public setShieldActive(active: boolean) {
@@ -289,40 +284,18 @@ class SecurityEngine {
   }
 
   /**
-   * Rust-inspired Strict Canonicalization (PathBuf::canonicalize)
+   * Rust-Core Strict Canonicalization (PathBuf::canonicalize)
    */
   public canonicalizePath(pathStr: string): { safePath: string; isSafe: boolean; reason?: string } {
-    // 1. Detect Null-Byte Injection
-    if (pathStr.includes('\0')) {
-      return { safePath: '', isSafe: false, reason: 'Inyección de Byte Nulo (\\0) detectada.' };
-    }
-
-    // 2. Decode double URL encoding trick (%252e%252e%252f)
-    let decoded = pathStr;
-    try {
-      decoded = decodeURIComponent(pathStr);
-      if (decoded.includes('%')) {
-        decoded = decodeURIComponent(decoded);
-      }
-    } catch {
-      // Ignore URL decode errors
-    }
-
-    // 3. Normalize separators
-    const normalized = decoded.replace(/\\/g, '/');
-
-    // 4. Path traversal patterns
-    if (normalized.includes('../') || normalized.includes('..\\') || normalized.endsWith('/..') || normalized === '..') {
+    const res = rustWasmCore.canonicalizePath(pathStr);
+    if (!res.isSafe) {
       this.baseline.pathTraversalAttempts++;
-      return { safePath: '', isSafe: false, reason: 'Intento de evasión de VFS Sandbox (Path Traversal).' };
     }
-
-    // 5. Restrict direct host system access strings
-    if (normalized.startsWith('/etc/shadow') || normalized.startsWith('/etc/passwd') || normalized.startsWith('/proc/')) {
-      return { safePath: '', isSafe: false, reason: 'Acceso a descriptores de núcleo protegidos denegado.' };
-    }
-
-    return { safePath: normalized, isSafe: true };
+    return {
+      safePath: res.safePath,
+      isSafe: res.isSafe,
+      reason: res.reason
+    };
   }
 
   /**

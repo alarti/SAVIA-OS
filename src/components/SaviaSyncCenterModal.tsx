@@ -44,13 +44,11 @@ export default function SaviaSyncCenterModal({ onClose }: SaviaSyncCenterModalPr
     const res = await syncService.linkNewLocalDirectory();
     if (res.success) {
       refreshData();
-    } else if (res.error === 'showDirectoryPicker_not_supported') {
-      // Fallback to file input picker
+    } else if (res.error === 'showDirectoryPicker_not_supported' || (res.error && res.error !== 'Proceso cancelado por el usuario.')) {
+      // Fallback to HTML folder input picker
       if (fallbackFolderInputRef.current) {
         fallbackFolderInputRef.current.click();
       }
-    } else if (res.error && res.error !== 'Proceso cancelado por el usuario.') {
-      alert(`Información de sincronización: ${res.error}`);
     }
   };
 

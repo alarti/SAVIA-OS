@@ -1,5 +1,7 @@
 // SAVIA-OS Sound Engine & Audio Server using Web Audio API
 
+import { rustWasmCore } from './rustWasmCore';
+
 let audioCtx: AudioContext | null = null;
 let masterVolume = 0.8;
 let isMuted = false;
@@ -196,5 +198,32 @@ export const soundEngine = {
 
   playPopSound: () => {
     soundEngine.playTone(600, 0.04, 'sine', 0.1);
+  },
+
+  /**
+   * Plays a high-precision audio buffer synthesized in pure Rust DSP
+   */
+  playRustSynthesizedAudio: (type: 'sine' | 'triangle' | 'sawtooth' | 'chime', freq: number, durationSec: number = 0.2) => {
+    if (isMuted || masterVolume <= 0) return;
+    const ctx = getAudioContext();
+    if (!ctx) return;
+
+    try {
+      const samples = rustWasmCore.generateAudioBuffer(type, freq, durationSec, ctx.sampleRate);
+      const audioBuffer = ctx.createBuffer(1, samples.length, ctx.sampleRate);
+      audioBuffer.getChannelData(0).set(samples);
+
+      const source = ctx.createBufferSource();
+      source.buffer = audioBuffer;
+
+      const gain = ctx.createGain();
+      gain.gain.value = masterVolume;
+
+      source.connect(gain);
+      gain.connect(ctx.destination);
+      source.start();
+    } catch {
+      // Audio fallback
+    }
   }
 };

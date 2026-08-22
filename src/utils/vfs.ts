@@ -1,6 +1,7 @@
 import { userStorage } from './userStorage';
 import { fileLockEngine } from './fileLockEngine';
 import { securityEngine } from './securityEngine';
+import { rustWasmCore } from './rustWasmCore';
 
 export interface VFSFileItem {
   id: string;
@@ -404,8 +405,18 @@ export const vfs = {
     const map = this.getVFS();
     const cleanFolder = folderPath.endsWith('/') && folderPath !== '/' ? folderPath.slice(0, -1) : folderPath;
     if (map[cleanFolder]) {
+      const itemToRemove = map[cleanFolder].find(i => i.name.toLowerCase() === itemName.toLowerCase() || i.id === itemName || i.name === `📂 ${itemName}`);
       map[cleanFolder] = map[cleanFolder].filter(i => i.name.toLowerCase() !== itemName.toLowerCase() && i.id !== itemName && i.name !== `📂 ${itemName}`);
       this.saveVFS(map);
+
+      // If this directory has an active physical local disk handle, delete from disk as well
+      const handle = localDirHandles[cleanFolder];
+      if (handle && handle.removeEntry && itemToRemove) {
+        handle.removeEntry(itemToRemove.name).catch((err: any) => {
+          console.warn('[VFS] Could not remove entry from physical local handle immediately:', itemToRemove.name, err);
+        });
+      }
+
       window.dispatchEvent(new CustomEvent('savia_os_vfs_updated'));
     }
   },
@@ -641,6 +652,59 @@ export const vfs = {
     }
 
     return { ...syncResult, content };
+  },
+
+  /**
+   * High-speed Rust Grep over a VFS file
+   */
+  grepFile(filePath: string, pattern: string, caseSensitive: boolean = false): Array<{ line: number; text: string }> {
+    const file = this.readFile(filePath);
+    if (!file || !file.content) return [];
+    return rustWasmCore.fastGrep(file.content, pattern, caseSensitive);
+  },
+
+  /**
+   * High-speed Rust Myers/Levenshtein diff between two VFS files
+   */
+  diffFiles(pathA: string, pathB: string): Array<{ type: 'added' | 'removed' | 'unchanged'; line: number; text: string }> {
+    const fileA = this.readFile(pathA);
+    const fileB = this.readFile(pathB);
+    const contentA = fileA?.content ?? '';
+    const contentB = fileB?.content ?? '';
+    return rustWasmCore.fastDiff(contentA, contentB);
+  },
+
+  /**
+   * Computes cryptographic SHA-256 and CRC32 of a VFS file using Rust Core
+   */
+  getFileChecksum(filePath: string): { sha256: string; crc32: number; sizeBytes: number } | null {
+    const file = this.readFile(filePath);
+    if (!file) return null;
+    const content = file.content || '';
+    const sha256 = rustWasmCore.sha256(content);
+    const crc32 = rustWasmCore.crc32(content);
+    const sizeBytes = new TextEncoder().encode(content).length;
+    return { sha256, crc32, sizeBytes };
+  },
+
+  /**
+   * Lossless compression of a VFS file using Rust RLE
+   */
+  compressFile(filePath: string): { originalSize: number; compressedSize: number; ratio: number; compressedPath: string } | null {
+    const file = this.readFile(filePath);
+    if (!file || !file.content) return null;
+    const { compressed, ratio, originalSize } = rustWasmCore.rleCompress(file.content);
+    const compressedStr = Array.from(compressed).map(b => String.fromCharCode(b)).join('');
+    const folder = filePath.substring(0, filePath.lastIndexOf('/')) || '/';
+    const originalName = filePath.substring(filePath.lastIndexOf('/') + 1);
+    const newName = `${originalName}.rle`;
+    this.saveFile(folder, newName, compressedStr, { iconType: 'file' });
+    return {
+      originalSize,
+      compressedSize: compressed.length,
+      ratio,
+      compressedPath: `${folder === '/' ? '' : folder}/${newName}`
+    };
   }
 };
 

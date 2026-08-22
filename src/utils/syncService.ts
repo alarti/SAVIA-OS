@@ -187,73 +187,85 @@ export const syncService = {
   async linkNewLocalDirectory(): Promise<{ success: boolean; folderName?: string; count?: number; error?: string }> {
     try {
       if ('showDirectoryPicker' in window) {
-        const dirHandle = await (window as any).showDirectoryPicker({ mode: 'readwrite' });
-        const files: File[] = [];
-        for await (const entry of dirHandle.values()) {
-          if (entry.kind === 'file') {
-            const file = await entry.getFile();
-            files.push(file);
+        let dirHandle: any;
+        try {
+          dirHandle = await (window as any).showDirectoryPicker({ mode: 'readwrite' });
+        } catch (pickerErr: any) {
+          if (pickerErr.name === 'AbortError') {
+            return { success: false, error: 'Proceso cancelado por el usuario.' };
           }
+          console.warn('showDirectoryPicker blocked or failed, returning showDirectoryPicker_not_supported fallback', pickerErr);
+          return { success: false, error: 'showDirectoryPicker_not_supported' };
         }
 
-        const cleanFolderName = dirHandle.name.replace(/[^a-zA-Z0-9_-]/g, '_') || 'Carpeta_Local';
-        const mountPointPath = `/mnt/local/${cleanFolderName}`;
+        if (dirHandle) {
+          const files: File[] = [];
+          for await (const entry of dirHandle.values()) {
+            if (entry.kind === 'file') {
+              const file = await entry.getFile();
+              files.push(file);
+            }
+          }
 
-        await this.registerHandle(mountPointPath, dirHandle);
+          const cleanFolderName = dirHandle.name.replace(/[^a-zA-Z0-9_-]/g, '_') || 'Carpeta_Local';
+          const mountPointPath = `/mnt/local/${cleanFolderName}`;
 
-        // Update VFS
-        const currentVFS = vfs.getVFS();
-        if (!currentVFS['/mnt']) {
-          currentVFS['/mnt'] = [{ id: 'usr_mnt_dir', name: 'local', type: 'folder', iconType: 'folder', date: 'Hoy', permissions: 'drwxr-xr-x', owner: 'root' }];
-        }
-        if (!currentVFS['/mnt/local']) {
-          currentVFS['/mnt/local'] = [];
-        }
+          await this.registerHandle(mountPointPath, dirHandle);
 
-        if (!currentVFS['/mnt/local'].some(i => i.name === cleanFolderName)) {
-          currentVFS['/mnt/local'].push({
-            id: 'dir_' + Date.now(),
-            name: cleanFolderName,
-            type: 'folder',
-            iconType: 'folder',
-            date: 'Hoy',
-            permissions: 'drwxr-xr-x',
-            owner: 'root'
-          });
-        }
+          // Update VFS
+          const currentVFS = vfs.getVFS();
+          if (!currentVFS['/mnt']) {
+            currentVFS['/mnt'] = [{ id: 'usr_mnt_dir', name: 'local', type: 'folder', iconType: 'folder', date: 'Hoy', permissions: 'drwxr-xr-x', owner: 'root' }];
+          }
+          if (!currentVFS['/mnt/local']) {
+            currentVFS['/mnt/local'] = [];
+          }
 
-        const existingItems = currentVFS[mountPointPath] || [];
-        for (const file of files) {
-          if (!existingItems.some(i => i.name === file.name)) {
-            const fileContent = await getFileContent(file);
-            existingItems.push({
-              id: 'real_local_' + Date.now() + '_' + crypto.randomUUID().substring(0, 8),
-              name: file.name,
-              type: 'file',
-              iconType: file.type.startsWith('image/') ? 'image' : 'text',
-              size: `${Math.round(file.size / 1024)} KB`,
-              date: new Date(file.lastModified).toLocaleDateString(),
-              permissions: '-rw-r--r--',
-              owner: 'local_user',
-              content: fileContent
+          if (!currentVFS['/mnt/local'].some(i => i.name === cleanFolderName)) {
+            currentVFS['/mnt/local'].push({
+              id: 'dir_' + Date.now(),
+              name: cleanFolderName,
+              type: 'folder',
+              iconType: 'folder',
+              date: 'Hoy',
+              permissions: 'drwxr-xr-x',
+              owner: 'root'
             });
           }
+
+          const existingItems = currentVFS[mountPointPath] || [];
+          for (const file of files) {
+            if (!existingItems.some(i => i.name === file.name)) {
+              const fileContent = await getFileContent(file);
+              existingItems.push({
+                id: 'real_local_' + Date.now() + '_' + crypto.randomUUID().substring(0, 8),
+                name: file.name,
+                type: 'file',
+                iconType: file.type.startsWith('image/') ? 'image' : 'text',
+                size: `${Math.round(file.size / 1024)} KB`,
+                date: new Date(file.lastModified).toLocaleDateString(),
+                permissions: '-rw-r--r--',
+                owner: 'local_user',
+                content: fileContent
+              });
+            }
+          }
+          currentVFS[mountPointPath] = existingItems;
+          vfs.saveVFS(currentVFS);
+
+          await this.syncMountPoint(mountPointPath);
+          window.dispatchEvent(new CustomEvent('savia_os_vfs_updated'));
+          window.dispatchEvent(new CustomEvent('savia_sync_status_updated'));
+
+          return { success: true, folderName: dirHandle.name, count: files.length };
         }
-        currentVFS[mountPointPath] = existingItems;
-        vfs.saveVFS(currentVFS);
-
-        await this.syncMountPoint(mountPointPath);
-        window.dispatchEvent(new CustomEvent('savia_os_vfs_updated'));
-        window.dispatchEvent(new CustomEvent('savia_sync_status_updated'));
-
-        return { success: true, folderName: dirHandle.name, count: files.length };
       }
       return { success: false, error: 'showDirectoryPicker_not_supported' };
     } catch (err: any) {
       if (err.name === 'AbortError') {
         return { success: false, error: 'Proceso cancelado por el usuario.' };
       }
-      return { success: false, error: err.message || 'Error al conectar carpeta' };
+      return { success: false, error: 'showDirectoryPicker_not_supported' };
     }
   },
 
@@ -336,7 +348,7 @@ export const syncService = {
     const catalog = fileCatalog[mountPath];
 
     const map = vfs.getVFS();
-    const vfsItems = map[mountPath] || [];
+    let vfsItems = map[mountPath] || [];
 
     // 1. Scan physical files in disk
     const diskFiles: { name: string; content: string; mtime: number; size: number }[] = [];
@@ -366,7 +378,7 @@ export const syncService = {
 
     let updatedVfs = false;
 
-    // --- A. PHYSICAL DISK -> VFS SYNC & CONFLICT DETECTION ---
+    // --- A. PHYSICAL DISK -> VFS SYNC, DELETIONS & CONFLICT DETECTION ---
     for (const diskFile of diskFiles) {
       const vfsItem = vfsItems.find(i => i.name === diskFile.name);
       const cat = catalog[diskFile.name];
@@ -375,21 +387,35 @@ export const syncService = {
       const dateStr = new Date(diskFile.mtime).toLocaleString();
 
       if (!vfsItem) {
-        // New file added on physical disk -> Add to VFS
-        vfsItems.push({
-          id: 'sync_real_' + Date.now() + '_' + crypto.randomUUID().substring(0, 8),
-          name: diskFile.name,
-          type: 'file',
-          iconType: diskFile.name.match(/\.(png|jpg|jpeg|svg|gif)$/i) ? 'image' : 'text',
-          size: sizeStr,
-          date: dateStr,
-          permissions: '-rw-r--r--',
-          owner: 'local_user',
-          content: diskFile.content
-        });
-        catalog[diskFile.name] = { content: diskFile.content, mtime: diskFile.mtime, status: 'synced' };
-        updatedVfs = true;
-        this.addLog('info', `📥 Sincronizado desde Disco Local: "${diskFile.name}"`, mountPath);
+        if (cat) {
+          // File previously existed in sync catalog, but user deleted it from VFS inside SaviaOS!
+          // Sync action: Delete file from physical disk to keep in sync
+          try {
+            if (handle.removeEntry) {
+              await handle.removeEntry(diskFile.name);
+              this.addLog('info', `🗑️ Archivo eliminado en SaviaOS: "${diskFile.name}". Eliminado de Disco Local.`, mountPath);
+            }
+          } catch (rmErr) {
+            console.warn('Could not remove file from physical disk:', diskFile.name, rmErr);
+          }
+          delete catalog[diskFile.name];
+        } else {
+          // New file added on physical disk -> Add to VFS
+          vfsItems.push({
+            id: 'sync_real_' + Date.now() + '_' + crypto.randomUUID().substring(0, 8),
+            name: diskFile.name,
+            type: 'file',
+            iconType: diskFile.name.match(/\.(png|jpg|jpeg|svg|gif)$/i) ? 'image' : 'text',
+            size: sizeStr,
+            date: dateStr,
+            permissions: '-rw-r--r--',
+            owner: 'local_user',
+            content: diskFile.content
+          });
+          catalog[diskFile.name] = { content: diskFile.content, mtime: diskFile.mtime, status: 'synced' };
+          updatedVfs = true;
+          this.addLog('info', `📥 Sincronizado desde Disco Local: "${diskFile.name}"`, mountPath);
+        }
       } else {
         // File exists in both VFS and Physical Disk -> Check for changes
         const localChanged = !cat || cat.mtime !== diskFile.mtime || cat.content !== diskFile.content;
@@ -472,14 +498,23 @@ export const syncService = {
       }
     }
 
-    // --- B. VFS -> PHYSICAL DISK (NEW FILES CREATED IN SAVIA OS) ---
+    // --- B. VFS -> PHYSICAL DISK & VFS DELETIONS (FILES DELETED ON DISK OR CREATED IN SAVIA OS) ---
+    const idsToRemoveFromVfs: string[] = [];
+
     for (const vfsItem of vfsItems) {
       if (vfsItem.type !== 'file') continue;
 
       const diskExists = diskFiles.some(df => df.name === vfsItem.name);
       if (!diskExists) {
         const cat = catalog[vfsItem.name];
-        if (!cat) {
+        if (cat) {
+          // File was previously synced in catalog, but it NO LONGER EXISTS on physical disk.
+          // Sync action: Delete from VFS as well!
+          idsToRemoveFromVfs.push(vfsItem.id);
+          delete catalog[vfsItem.name];
+          updatedVfs = true;
+          this.addLog('info', `🗑️ Archivo eliminado en Disco Local: "${vfsItem.name}". Eliminado de SaviaOS.`, mountPath);
+        } else {
           // File was created in VFS -> Export to Physical Disk
           try {
             if (handle.getFileHandle) {
@@ -494,6 +529,20 @@ export const syncService = {
             console.warn('Could not write new VFS file to physical disk:', vfsItem.name, writeErr);
           }
         }
+      }
+    }
+
+    if (idsToRemoveFromVfs.length > 0) {
+      vfsItems = vfsItems.filter(i => !idsToRemoveFromVfs.includes(i.id));
+      updatedVfs = true;
+    }
+
+    // Clean catalog of orphan entries
+    for (const catName of Object.keys(catalog)) {
+      const inDisk = diskFiles.some(df => df.name === catName);
+      const inVfs = vfsItems.some(vi => vi.name === catName);
+      if (!inDisk && !inVfs) {
+        delete catalog[catName];
       }
     }
 

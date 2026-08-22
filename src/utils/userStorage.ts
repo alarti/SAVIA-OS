@@ -3,7 +3,7 @@ import { PRESET_WALLPAPERS } from '../components/ThemeCustomizerApp';
 export interface DesktopIcon {
   id: string;
   title: string;
-  appType: 'terminal' | 'webgl' | 'folder' | 'browser' | 'texteditor' | 'pdfviewer' | 'office' | 'taskmanager' | 'tetris' | 'appstore' | 'soundsettings' | 'paint' | 'about' | 'controlpanel' | 'theme' | 'calculator' | 'calendar' | 'imageviewer' | 'webamp' | 'wine' | 'trash' | 'equipo' | 'diskmanager' | 'ai_copilot';
+  appType: any;
   iconType: string;
   docData?: any;
   x: number;
@@ -27,7 +27,6 @@ const DEFAULT_DESKTOP_ICONS: DesktopIcon[] = [
   { id: 'files', title: 'Explorador Archivos', appType: 'folder', iconType: 'folder', x: 20, y: 220 },
   { id: 'browser', title: 'Navegador Web', appType: 'browser', iconType: 'browser', x: 20, y: 320 },
   { id: 'term', title: 'Terminal POSIX', appType: 'terminal', iconType: 'terminal', x: 20, y: 420 },
-  { id: 'ai_copilot', title: 'AI Copilot', appType: 'ai_copilot', iconType: 'ai_copilot', x: 20, y: 520 },
 
   // Columna 2 (x: 130) - Ofimática y Documentos
   { id: 'office', title: 'Suite Ofimática', appType: 'office', iconType: 'office', x: 130, y: 20 },
@@ -35,6 +34,7 @@ const DEFAULT_DESKTOP_ICONS: DesktopIcon[] = [
   { id: 'savia_xls', title: 'Savia Xls', appType: 'office', iconType: 'xls', docData: 'nuevo documento.xlsx', x: 130, y: 220 },
   { id: 'savia_ppt', title: 'Savia Ppt', appType: 'office', iconType: 'ppt', docData: 'nuevo documento.pptx', x: 130, y: 320 },
   { id: 'pdfviewer', title: 'Savia Pdf', appType: 'pdfviewer', iconType: 'pdf', x: 130, y: 420 },
+  { id: 'saviapdfpro', title: 'Savia PDF PRO 2', appType: 'pdfviewerpro', iconType: 'pdfpro', x: 130, y: 520 },
 
   // Columna 3 (x: 240) - Herramientas y Multimedia
   { id: 'savia_nano', title: 'Savia Nano', appType: 'texteditor', iconType: 'editor', x: 240, y: 20 },
@@ -65,6 +65,9 @@ export const userStorage = {
         
         // Normalize icons
         parsed = parsed.map(ic => {
+          if (ic.id === 'saviapdfpro' || ic.appType === 'pdfviewerpro' || ic.title.toLowerCase().includes('pdf pro')) {
+            return { ...ic, id: 'saviapdfpro', title: 'Savia PDF PRO 2', appType: 'pdfviewerpro', iconType: 'pdfpro' };
+          }
           if (ic.id === 'webgl_games' || ic.appType === 'webgl') {
             return { ...ic, title: 'Savia Games', iconType: 'game' };
           }
@@ -80,15 +83,15 @@ export const userStorage = {
           return ic;
         });
 
-        // Ensure key system icons exist
+        // Ensure key system and productivity apps exist
         if (!parsed.some(i => i.id === 'equipo' || i.appType === 'equipo')) {
           parsed.unshift({ id: 'equipo', title: 'Equipo', appType: 'equipo', iconType: 'equipo', x: 20, y: 20 });
         }
         if (!parsed.some(i => i.id === 'trash' || i.appType === 'trash')) {
           parsed.unshift({ id: 'trash', title: 'Papelera', appType: 'trash', iconType: 'trash', x: 20, y: 120 });
         }
-        if (!parsed.some(i => i.id === 'ai_copilot' || i.appType === 'ai_copilot')) {
-          parsed.push({ id: 'ai_copilot', title: 'AI Copilot', appType: 'ai_copilot', iconType: 'ai_copilot', x: 20, y: 520 });
+        if (!parsed.some(i => i.id === 'saviapdfpro' || i.appType === 'pdfviewerpro')) {
+          parsed.push({ id: 'saviapdfpro', title: 'Savia PDF PRO 2', appType: 'pdfviewerpro', iconType: 'pdfpro', x: 130, y: 520 });
         }
         if (!parsed.some(i => i.id === 'webamp' || i.appType === 'webamp')) {
           parsed.push({ id: 'webamp', title: 'Webamp Music', appType: 'webamp', iconType: 'music', x: 350, y: 120 });
@@ -106,7 +109,6 @@ export const userStorage = {
       return [
         { id: 'equipo', title: 'Equipo', appType: 'equipo', iconType: 'equipo', x: 20, y: 20 },
         { id: 'trash', title: 'Papelera', appType: 'trash', iconType: 'trash', x: 20, y: 120 },
-        { id: 'ai_copilot', title: 'AI Copilot (Root)', appType: 'ai_copilot', iconType: 'ai_copilot', x: 20, y: 520 },
         { id: 'term', title: 'Terminal Root (#)', appType: 'terminal', iconType: 'terminal', x: 20, y: 220 },
         { id: 'control', title: 'Centro de Seguridad Kernel', appType: 'controlpanel', iconType: 'controlpanel', x: 20, y: 320 },
         { id: 'files', title: 'Sistema de Archivos Root', appType: 'folder', iconType: 'folder', x: 130, y: 20 },

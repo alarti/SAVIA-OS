@@ -1,4 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { Document, Page, pdfjs } from 'react-pdf';
+import { PDFDocument, rgb, StandardFonts, degrees } from 'pdf-lib';
+import 'react-pdf/dist/Page/AnnotationLayer.css';
+import 'react-pdf/dist/Page/TextLayer.css';
 import {
   FileImage, Link as LinkIcon, Download, Save, Printer, Upload, Info, FileText, X,
   ChevronDown, RefreshCw, Folder, Sparkles, HardDrive, Edit3, Type, Highlighter,
@@ -15,6 +19,8 @@ import { vfs } from '../utils/vfs';
 import { userStorage } from '../utils/userStorage';
 import type { UserData } from '../utils/auth';
 
+pdfjs.GlobalWorkerOptions.workerSrc = `//unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.mjs`;
+
 interface PdfViewerAppProps {
   initialFile?: string;
   user?: UserData;
@@ -24,7 +30,7 @@ const SAMPLE_PDF_URL = 'https://raw.githubusercontent.com/mozilla/pdf.js/ba2edea
 
 export interface PdfElement {
   id: string;
-  type: 'text' | 'note' | 'stamp' | 'signature' | 'drawing' | 'highlight' | 'image' | 'shape' | 'redaction' | 'formField';
+  type: 'text' | 'note' | 'stamp' | 'signature' | 'drawing' | 'highlight' | 'image' | 'shape' | 'redaction' | 'formField' | 'whiteout';
   x: number;
   y: number;
   width?: number;
@@ -66,10 +72,13 @@ export default function PdfViewerApp({ initialFile, user }: PdfViewerAppProps) {
   const [pdfUrl, setPdfUrl] = useState<string>('');
   const [inputUrl, setInputUrl] = useState<string>('');
   const [fileName, setFileName] = useState<string>('Sin Documento.pdf');
+  const [currentFolderPath, setCurrentFolderPath] = useState<string>(username === 'root' ? '/root/Documents' : `/home/${username}/Documents`);
   const [statusMsg, setStatusMsg] = useState('Listo');
 
   // Mode: 'editor' (PDFgear Visual Interactive Suite) vs 'viewer' (Mozilla PDF.js Native)
   const [activeViewMode, setActiveViewMode] = useState<'editor' | 'viewer'>('editor');
+
+  const [numPages, setNumPages] = useState<number | null>(null);
 
   // Reading Theme Mode: 'normal' | 'dark' | 'sepia' | 'eyecare'
   const [readerTheme, setReaderTheme] = useState<'normal' | 'dark' | 'sepia' | 'eyecare'>('normal');
@@ -93,7 +102,7 @@ export default function PdfViewerApp({ initialFile, user }: PdfViewerAppProps) {
       elements: [
         {
           id: 'el-header',
-          type: 'text',
+          type: 'text' as const,
           x: 40,
           y: 40,
           text: 'DOCUMENTO OFICIAL Y EDITABLE',
@@ -104,7 +113,7 @@ export default function PdfViewerApp({ initialFile, user }: PdfViewerAppProps) {
         },
         {
           id: 'el-sub',
-          type: 'text',
+          type: 'text' as 'text',
           x: 40,
           y: 80,
           text: 'Procesado con SaviaPdf Studio (Editor Completo PDFgear)',
@@ -147,7 +156,7 @@ export default function PdfViewerApp({ initialFile, user }: PdfViewerAppProps) {
   ]);
 
   const [activePageIdx, setActivePageIdx] = useState<number>(0);
-  const [selectedTool, setSelectedTool] = useState<'select' | 'hand' | 'text' | 'highlight' | 'pen' | 'eraser' | 'stamp' | 'signature' | 'note' | 'shape' | 'redact' | 'form'>('select');
+  const [selectedTool, setSelectedTool] = useState<'select' | 'hand' | 'text' | 'edit_text' | 'highlight' | 'pen' | 'eraser' | 'stamp' | 'signature' | 'note' | 'shape' | 'redact' | 'form'>('select');
   const [zoomLevel, setZoomLevel] = useState<number>(100);
   const [showThumbnails, setShowThumbnails] = useState<boolean>(true);
   const [showAiCopilot, setShowAiCopilot] = useState<boolean>(false);
@@ -198,14 +207,291 @@ export default function PdfViewerApp({ initialFile, user }: PdfViewerAppProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const imageInputRef = useRef<HTMLInputElement>(null);
 
+  function onDocumentLoadSuccess({ numPages }: { numPages: number }) {
+    setNumPages(numPages);
+    
+    // If the pages array doesn't have the same number of pages, and we haven't loaded a JSON document,
+    // initialize empty pages so the user can annotate over the real PDF pages.
+    if (pages.length === 1 && pages[0].elements.length > 0 && pages[0].elements[0].text === 'DOCUMENTO OFICIAL Y EDITABLE') {
+      const newPages = Array.from(new Array(numPages), (el, index) => ({
+        id: `page-${index + 1}`,
+        pageNumber: index + 1,
+        rotation: 0,
+        title: `Página ${index + 1}`,
+        watermarkText: '',
+        elements: []
+      }));
+      setPages(newPages);
+    }
+  }
+
   // Auto-save debounced effect
   useEffect(() => {
     if (!isAutoSaveEnabled || isSaved) return;
     const timer = setTimeout(() => {
       handleSaveDocumentInternal();
-    }, 1500);
+    }, 2000);
     return () => clearTimeout(timer);
   }, [pages, fileName, isAutoSaveEnabled, isSaved]);
+
+  // Keyboard shortcut listener for Ctrl+S / Cmd+S (Quick Save)
+  useEffect(() => {
+    const handleGlobalSaveShortcut = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') {
+        e.preventDefault();
+        handleSaveDocumentInternal();
+      }
+    };
+    window.addEventListener('keydown', handleGlobalSaveShortcut);
+    return () => window.removeEventListener('keydown', handleGlobalSaveShortcut);
+  }, [pages, fileName, currentFolderPath, activeViewMode, pdfUrl]);
+
+  const parseColorToRgb = (colorStr?: string) => {
+    if (!colorStr) return rgb(0, 0, 0);
+    const s = colorStr.trim();
+    if (s.startsWith('#')) {
+      let hex = s.substring(1);
+      if (hex.length === 3) {
+        hex = hex.split('').map(c => c + c).join('');
+      }
+      if (hex.length === 6) {
+        const r = parseInt(hex.substring(0, 2), 16) / 255;
+        const g = parseInt(hex.substring(2, 4), 16) / 255;
+        const b = parseInt(hex.substring(4, 6), 16) / 255;
+        return rgb(isNaN(r) ? 0 : r, isNaN(g) ? 0 : g, isNaN(b) ? 0 : b);
+      }
+    } else if (s.startsWith('rgb')) {
+      const matches = s.match(/[\d.]+/g);
+      if (matches && matches.length >= 3) {
+        const r = parseFloat(matches[0]) / 255;
+        const g = parseFloat(matches[1]) / 255;
+        const b = parseFloat(matches[2]) / 255;
+        return rgb(Math.max(0, Math.min(1, r)), Math.max(0, Math.min(1, g)), Math.max(0, Math.min(1, b)));
+      }
+    }
+    return rgb(0, 0, 0);
+  };
+
+  const generateRealPdfDataUrl = async (): Promise<string> => {
+    let pdfDoc: PDFDocument;
+    
+    if (pdfUrl && (pdfUrl.startsWith('data:') || pdfUrl.startsWith('blob:') || pdfUrl.startsWith('http'))) {
+      try {
+        const existingPdfBytes = await fetch(pdfUrl).then(res => res.arrayBuffer());
+        pdfDoc = await PDFDocument.load(existingPdfBytes);
+      } catch (e) {
+        console.warn('Could not load existing pdfUrl with PDFDocument.load, creating new document:', e);
+        pdfDoc = await PDFDocument.create();
+      }
+    } else {
+      pdfDoc = await PDFDocument.create();
+    }
+
+    // Ensure there are at least as many pages as in the editor state
+    while (pdfDoc.getPageCount() < pages.length) {
+      pdfDoc.addPage([595.28, 841.89]); // Standard A4 points
+    }
+
+    const fontRegular = await pdfDoc.embedFont(StandardFonts.Helvetica);
+    const fontBold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
+    const fontItalic = await pdfDoc.embedFont(StandardFonts.HelveticaOblique);
+    const pdfPages = pdfDoc.getPages();
+
+    for (let pIdx = 0; pIdx < pages.length; pIdx++) {
+      const pageData = pages[pIdx];
+      if (pIdx >= pdfPages.length) continue;
+      const pdfPage = pdfPages[pIdx];
+      const { width: pdfWidth, height: pdfHeight } = pdfPage.getSize();
+
+      // Rotation if specified
+      if (pageData.rotation) {
+        pdfPage.setRotation(degrees(pageData.rotation));
+      }
+
+      // Scaling factors based on the standard 794x1123 canvas representation
+      const refWidth = 794;
+      const refHeight = 1123;
+      const scaleX = pdfWidth / refWidth;
+      const scaleY = pdfHeight / refHeight;
+
+      // Draw watermark if configured
+      if (pageData.watermarkText) {
+        try {
+          pdfPage.drawText(pageData.watermarkText, {
+            x: pdfWidth * 0.15,
+            y: pdfHeight * 0.45,
+            size: Math.max(16, 42 * scaleX),
+            font: fontBold,
+            color: rgb(0.65, 0.65, 0.65),
+            opacity: 0.18,
+            rotate: degrees(45),
+          });
+        } catch (err) {
+          console.warn('Watermark rendering error:', err);
+        }
+      }
+
+      const pageItems = pageData.elements || [];
+      for (const item of pageItems) {
+        const itemW = item.width || 100;
+        const itemH = item.height || 24;
+
+        const pdfX = Math.max(0, item.x * scaleX);
+        const pdfW = itemW * scaleX;
+        const pdfH = itemH * scaleY;
+        // In PDF coordinates: (0, 0) is at bottom-left
+        const pdfY = Math.max(0, pdfHeight - (item.y * scaleY) - pdfH);
+
+        if (item.type === 'whiteout') {
+          pdfPage.drawRectangle({
+            x: pdfX,
+            y: pdfY,
+            width: pdfW,
+            height: pdfH,
+            color: rgb(1, 1, 1),
+            borderColor: rgb(1, 1, 1),
+          });
+        } else if (item.type === 'text') {
+          const textVal = item.text ?? (item as any).content ?? '';
+          if (textVal) {
+            const textColorObj = parseColorToRgb(item.color);
+            const fontSize = Math.max(6, (item.fontSize || 14) * scaleY);
+            const font = item.fontWeight === 'bold' ? fontBold : item.fontStyle === 'italic' ? fontItalic : fontRegular;
+            
+            const lines = textVal.split('\n');
+            lines.forEach((line: string, lineIdx: number) => {
+              if (line.length > 0) {
+                const lineY = pdfHeight - (item.y * scaleY) - (fontSize * 0.9) - (lineIdx * fontSize * 1.25);
+                if (lineY > 0) {
+                  try {
+                    pdfPage.drawText(line, {
+                      x: pdfX,
+                      y: lineY,
+                      size: fontSize,
+                      font,
+                      color: textColorObj,
+                    });
+                  } catch {
+                    // Fallback sanitizing characters for standard font
+                    const clean = line.replace(/[^\x00-\x7F]/g, ' ');
+                    pdfPage.drawText(clean, {
+                      x: pdfX,
+                      y: lineY,
+                      size: fontSize,
+                      font,
+                      color: textColorObj,
+                    });
+                  }
+                }
+              }
+            });
+          }
+        } else if (item.type === 'highlight') {
+          const hlColor = parseColorToRgb(item.bgColor || '#fef08a');
+          pdfPage.drawRectangle({
+            x: pdfX,
+            y: pdfY,
+            width: pdfW,
+            height: pdfH,
+            color: hlColor,
+            opacity: 0.45,
+          });
+        } else if (item.type === 'stamp') {
+          const stampText = `✓ ${item.stampType || 'APROBADO'}`;
+          const stampColor = item.stampType === 'CONFIDENCIAL' ? rgb(0.88, 0.15, 0.15) :
+                             item.stampType === 'FIRMADO' ? rgb(0.15, 0.4, 0.85) :
+                             item.stampType === 'APROBADO' ? rgb(0.1, 0.65, 0.35) :
+                             rgb(0.85, 0.55, 0.1);
+          const sW = Math.max(140 * scaleX, pdfW);
+          const sH = Math.max(38 * scaleY, pdfH);
+          pdfPage.drawRectangle({
+            x: pdfX,
+            y: pdfY,
+            width: sW,
+            height: sH,
+            borderColor: stampColor,
+            borderWidth: 2,
+            color: stampColor,
+            opacity: 0.12,
+          });
+          pdfPage.drawText(stampText, {
+            x: pdfX + (8 * scaleX),
+            y: pdfY + (10 * scaleY),
+            size: Math.max(8, 12 * scaleY),
+            font: fontBold,
+            color: stampColor,
+          });
+        } else if (item.type === 'note' && item.text) {
+          pdfPage.drawRectangle({
+            x: pdfX,
+            y: pdfY,
+            width: Math.max(150 * scaleX, pdfW),
+            height: Math.max(60 * scaleY, pdfH),
+            color: rgb(0.99, 0.95, 0.6),
+            borderColor: rgb(0.9, 0.8, 0.3),
+            borderWidth: 1,
+          });
+          pdfPage.drawText(`[NOTA] ${item.text.substring(0, 80)}`, {
+            x: pdfX + 6,
+            y: pdfY + (itemH * scaleY) - 14,
+            size: Math.max(7, 9 * scaleY),
+            font: fontRegular,
+            color: rgb(0.4, 0.25, 0.05),
+          });
+        } else if (item.type === 'redaction') {
+          pdfPage.drawRectangle({
+            x: pdfX,
+            y: pdfY,
+            width: pdfW,
+            height: pdfH,
+            color: rgb(0, 0, 0),
+          });
+        } else if (item.type === 'shape') {
+          const shapeColor = parseColorToRgb(item.strokeColor || '#ef4444');
+          pdfPage.drawRectangle({
+            x: pdfX,
+            y: pdfY,
+            width: pdfW,
+            height: pdfH,
+            borderColor: shapeColor,
+            borderWidth: item.strokeWidth || 2,
+          });
+        } else if ((item.type === 'signature' && item.signatureDataUrl) || (item.type === 'image' && item.imageSrc)) {
+          const imgData = item.signatureDataUrl || item.imageSrc;
+          if (imgData && imgData.startsWith('data:')) {
+            try {
+              const isPng = imgData.startsWith('data:image/png');
+              const base64Data = imgData.split(',')[1];
+              const byteCharacters = atob(base64Data);
+              const byteNumbers = new Array(byteCharacters.length);
+              for (let i = 0; i < byteCharacters.length; i++) {
+                byteNumbers[i] = byteCharacters.charCodeAt(i);
+              }
+              const imgBytes = new Uint8Array(byteNumbers);
+              const embedded = isPng ? await pdfDoc.embedPng(imgBytes) : await pdfDoc.embedJpg(imgBytes);
+              pdfPage.drawImage(embedded, {
+                x: pdfX,
+                y: pdfY,
+                width: pdfW,
+                height: pdfH,
+              });
+            } catch (imgErr) {
+              console.warn('Could not embed image/signature in PDF', imgErr);
+            }
+          }
+        }
+      }
+    }
+
+    const pdfBytes = await pdfDoc.save();
+    let binary = '';
+    const bytes = new Uint8Array(pdfBytes);
+    const len = bytes.byteLength;
+    for (let i = 0; i < len; i++) {
+      binary += String.fromCharCode(bytes[i]);
+    }
+    return 'data:application/pdf;base64,' + btoa(binary);
+  };
 
   const dataURLtoBlob = (dataurl: string): Blob | null => {
     try {
@@ -263,12 +549,12 @@ export default function PdfViewerApp({ initialFile, user }: PdfViewerAppProps) {
         const blobUrl = URL.createObjectURL(blob);
         setPdfUrl(blobUrl);
         setInputUrl(blobUrl);
-        setActiveViewMode('viewer');
+        setActiveViewMode('editor');
         return;
       }
       setPdfUrl(content);
       setInputUrl(content);
-      setActiveViewMode('viewer');
+      setActiveViewMode('editor');
       return;
     }
 
@@ -276,7 +562,7 @@ export default function PdfViewerApp({ initialFile, user }: PdfViewerAppProps) {
     if (content.startsWith('blob:')) {
       setPdfUrl(content);
       setInputUrl(content);
-      setActiveViewMode('viewer');
+      setActiveViewMode('editor');
       return;
     }
 
@@ -286,7 +572,7 @@ export default function PdfViewerApp({ initialFile, user }: PdfViewerAppProps) {
       const blobUrl = URL.createObjectURL(blob);
       setPdfUrl(blobUrl);
       setInputUrl(blobUrl);
-      setActiveViewMode('viewer');
+      setActiveViewMode('editor');
       return;
     }
 
@@ -300,7 +586,7 @@ export default function PdfViewerApp({ initialFile, user }: PdfViewerAppProps) {
           const blobUrl = URL.createObjectURL(pdfBlob);
           setPdfUrl(blobUrl);
           setInputUrl(blobUrl);
-          setActiveViewMode('viewer');
+          setActiveViewMode('editor');
           return;
         }
       } catch {
@@ -308,7 +594,7 @@ export default function PdfViewerApp({ initialFile, user }: PdfViewerAppProps) {
       }
       setPdfUrl(content);
       setInputUrl(content);
-      setActiveViewMode('viewer');
+      setActiveViewMode('editor');
       return;
     }
 
@@ -320,7 +606,7 @@ export default function PdfViewerApp({ initialFile, user }: PdfViewerAppProps) {
         const blobUrl = URL.createObjectURL(blob);
         setPdfUrl(blobUrl);
         setInputUrl(blobUrl);
-        setActiveViewMode('viewer');
+        setActiveViewMode('editor');
         return;
       }
     }
@@ -362,7 +648,9 @@ export default function PdfViewerApp({ initialFile, user }: PdfViewerAppProps) {
     if (initialFile) {
       const parts = initialFile.split('/');
       const name = parts.pop() || 'Documento.pdf';
+      const folder = parts.join('/') || (username === 'root' ? '/root/Documents' : `/home/${username}/Documents`);
       setFileName(name);
+      setCurrentFolderPath(folder);
 
       vfs.readTextFileAsync(initialFile).then(fileData => {
         if (fileData && fileData.content) {
@@ -383,12 +671,21 @@ export default function PdfViewerApp({ initialFile, user }: PdfViewerAppProps) {
 
   const handleSaveDocumentInternal = async (customFileName?: string, customPath?: string) => {
     const targetTitle = customFileName || fileName;
-    const folderPath = customPath || `/home/${username}/Documents`;
+    const folderPath = customPath || currentFolderPath || (username === 'root' ? '/root/Documents' : `/home/${username}/Documents`);
     setIsSaving(true);
     try {
-      const contentToSave = activeViewMode === 'editor' ? JSON.stringify(pages, null, 2) : (pdfUrl || SAMPLE_PDF_URL);
+      let finalDataUrl = pdfUrl || SAMPLE_PDF_URL;
+      
+      if (activeViewMode === 'editor') {
+        try {
+          finalDataUrl = await generateRealPdfDataUrl();
+          setPdfUrl(finalDataUrl);
+        } catch (err) {
+          console.error("Error generating PDF with pdf-lib:", err);
+        }
+      }
 
-      vfs.saveFile(folderPath, targetTitle, contentToSave, {
+      vfs.saveFile(folderPath, targetTitle, finalDataUrl, {
         iconType: 'pdf',
         owner: username,
         author: authorName,
@@ -402,9 +699,12 @@ export default function PdfViewerApp({ initialFile, user }: PdfViewerAppProps) {
         iconType: 'pdf'
       });
 
+      window.dispatchEvent(new CustomEvent('savia_os_vfs_updated'));
+
       setIsSaved(true);
-      flashStatus(`Documento "${targetTitle}" guardado en ${folderPath}`);
-    } catch {
+      flashStatus(`Documento "${targetTitle}" guardado exitosamente`);
+    } catch (saveErr) {
+      console.error('Error al guardar documento:', saveErr);
       flashStatus('Error al guardar en memoria.');
     } finally {
       setIsSaving(false);
@@ -413,6 +713,11 @@ export default function PdfViewerApp({ initialFile, user }: PdfViewerAppProps) {
 
   const handleOpenVFSFile = (filePath: string, selectedFileName: string, fileContent?: string) => {
     setFileName(selectedFileName);
+    const parts = filePath.split('/');
+    parts.pop();
+    const folder = parts.join('/') || (username === 'root' ? '/root/Documents' : `/home/${username}/Documents`);
+    setCurrentFolderPath(folder);
+
     if (fileContent) {
       processAndLoadPdfContent(fileContent, selectedFileName);
     } else {
@@ -631,7 +936,7 @@ export default function PdfViewerApp({ initialFile, user }: PdfViewerAppProps) {
   const handleAddRedaction = () => {
     const newRedaction: PdfElement = {
       id: `redact-${Date.now()}`,
-      type: 'redaction',
+      type: 'whiteout' as const,
       x: 100,
       y: 150,
       width: 300,
@@ -708,7 +1013,19 @@ export default function PdfViewerApp({ initialFile, user }: PdfViewerAppProps) {
     flashStatus('Firma digital aplicada');
   };
 
-  // Freehand Pen Canvas Handlers
+  // Freehand Pen & Canvas Element Handlers
+  const handleElementMouseDown = (e: React.MouseEvent, id: string) => {
+    e.stopPropagation();
+    setSelectedElementId(id);
+    const el = activePage?.elements.find(item => item.id === id);
+    if (!el) return;
+    setDraggedElementId(id);
+    setDragOffset({
+      x: e.clientX - el.x,
+      y: e.clientY - el.y
+    });
+  };
+
   const handlePageMouseDown = (e: React.MouseEvent<HTMLDivElement>) => {
     if (selectedTool !== 'pen') return;
     setIsDrawingPen(true);
@@ -719,6 +1036,21 @@ export default function PdfViewerApp({ initialFile, user }: PdfViewerAppProps) {
   };
 
   const handlePageMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (draggedElementId) {
+      const x = Math.max(0, e.clientX - dragOffset.x);
+      const y = Math.max(0, e.clientY - dragOffset.y);
+      setPages(prev => {
+        const copy = [...prev];
+        if (!copy[activePageIdx]) return prev;
+        const curEl = copy[activePageIdx].elements.find(item => item.id === draggedElementId);
+        if (curEl) {
+          curEl.x = x;
+          curEl.y = y;
+        }
+        return copy;
+      });
+      return;
+    }
     if (!isDrawingPen || selectedTool !== 'pen') return;
     const rect = e.currentTarget.getBoundingClientRect();
     const x = e.clientX - rect.left;
@@ -727,6 +1059,10 @@ export default function PdfViewerApp({ initialFile, user }: PdfViewerAppProps) {
   };
 
   const handlePageMouseUp = () => {
+    if (draggedElementId) {
+      setDraggedElementId(null);
+      markUnsaved();
+    }
     if (isDrawingPen && currentPenPath.length > 1) {
       const newDrawing: PdfElement = {
         id: `draw-${Date.now()}`,
@@ -760,33 +1096,50 @@ export default function PdfViewerApp({ initialFile, user }: PdfViewerAppProps) {
     flashStatus('Elemento eliminado');
   };
 
+  // Keyboard shortcut listener for deleting selected elements
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (!selectedElementId) return;
+      const activeTag = document.activeElement?.tagName.toLowerCase();
+      const isEditingText = (document.activeElement as HTMLElement)?.isContentEditable || activeTag === 'input' || activeTag === 'textarea';
+      if ((e.key === 'Delete' || e.key === 'Backspace') && !isEditingText) {
+        e.preventDefault();
+        handleDeleteSelectedElement();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [selectedElementId, activePageIdx]);
+
   // Export Converters (PDFgear feature: Export to TXT / Local PC PDF)
-  const handleExportLocalPdf = () => {
+  const handleExportLocalPdf = async () => {
     let downloadName = fileName || 'documento.pdf';
     if (!downloadName.toLowerCase().endsWith('.pdf')) {
       downloadName += '.pdf';
     }
 
-    if (pdfUrl && (pdfUrl.startsWith('data:') || pdfUrl.startsWith('blob:') || pdfUrl.startsWith('http'))) {
+    try {
+      const realPdfDataUrl = await generateRealPdfDataUrl();
       const a = document.createElement('a');
-      a.href = pdfUrl;
+      a.href = realPdfDataUrl;
       a.download = downloadName;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
-      flashStatus(`Documento "${downloadName}" descargado a tu PC local`);
-    } else {
-      const content = JSON.stringify(pages, null, 2);
-      const blob = new Blob([content], { type: 'application/pdf' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = downloadName;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
       flashStatus(`Documento "${downloadName}" exportado a tu PC local`);
+    } catch (err) {
+      console.error('Error al exportar PDF:', err);
+      if (pdfUrl && (pdfUrl.startsWith('data:') || pdfUrl.startsWith('blob:') || pdfUrl.startsWith('http'))) {
+        const a = document.createElement('a');
+        a.href = pdfUrl;
+        a.download = downloadName;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        flashStatus(`Documento "${downloadName}" descargado a tu PC local`);
+      } else {
+        flashStatus('Error al compilar el PDF para descarga.');
+      }
     }
   };
 
@@ -971,192 +1324,167 @@ export default function PdfViewerApp({ initialFile, user }: PdfViewerAppProps) {
         <div className="flex items-center gap-2">
           {/* Autoguardado Toggle Button */}
           <button
-            onClick={() => {
-              setIsAutoSaveEnabled(prev => {
-                const next = !prev;
-                flashStatus(`Autoguardado ${next ? 'activado' : 'desactivado'}`);
-                return next;
-              });
-            }}
-            className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-semibold transition-all border cursor-pointer ${
-              isAutoSaveEnabled
-                ? 'bg-emerald-600/30 text-emerald-200 border-emerald-500/40 hover:bg-emerald-600/40'
-                : 'bg-gray-700/60 text-gray-400 border-gray-600/40 hover:bg-gray-700'
-            }`}
+            onClick={() => { setIsAutoSaveEnabled(!isAutoSaveEnabled); flashStatus(isAutoSaveEnabled ? 'Autoguardado desactivado' : 'Autoguardado activado'); }}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg font-bold border transition-colors cursor-pointer ${isAutoSaveEnabled ? 'bg-emerald-600/30 border-emerald-500/40 text-emerald-100' : 'bg-slate-800 border-slate-600 text-slate-400'}`}
           >
-            <RefreshCcw className={`w-3 h-3 ${isAutoSaveEnabled ? 'text-emerald-400' : 'text-gray-400'}`} />
-            <span className="hidden sm:inline">Autoguardado</span>
-            <span className={`text-[9px] px-1 py-0.2 rounded font-mono font-bold ${isAutoSaveEnabled ? 'bg-emerald-500 text-black' : 'bg-gray-600 text-gray-300'}`}>
-              {isAutoSaveEnabled ? 'ON' : 'OFF'}
-            </span>
+            <RefreshCw className={`w-4 h-4 ${isAutoSaveEnabled ? 'text-emerald-400 animate-spin-slow' : ''}`} />
+            <span>Auto-Save</span>
           </button>
-
-          {/* AI Copilot Toggle */}
+          
           <button
-            onClick={() => setShowAiCopilot(!showAiCopilot)}
-            className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-bold transition-all border cursor-pointer ${
-              showAiCopilot ? 'bg-purple-600 text-white border-purple-400 shadow-md' : 'bg-purple-900/40 text-purple-200 border-purple-500/40 hover:bg-purple-800/50'
-            }`}
+            onClick={() => setReaderTheme(prev => prev === 'normal' ? 'dark' : prev === 'dark' ? 'sepia' : prev === 'sepia' ? 'eyecare' : 'normal')}
+            className="p-2 bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-600 rounded-lg transition-colors"
+            title="Cambiar Tema de Lectura"
           >
-            <Bot className="w-3.5 h-3.5 text-purple-300" />
-            <span className="hidden sm:inline">Copiloto IA</span>
+            {readerTheme === 'normal' ? <Moon className="w-4 h-4" /> : 
+             readerTheme === 'dark' ? <Coffee className="w-4 h-4" /> : 
+             readerTheme === 'sepia' ? <Sun className="w-4 h-4" /> : 
+             <Moon className="w-4 h-4" />}
           </button>
-
-          <div className="h-4 w-px bg-gray-600" />
-
-          <button
-            onClick={() => handleSaveDocumentInternal()}
-            className="flex items-center gap-1 px-3 py-1 bg-red-600 hover:bg-red-500 text-white rounded-md text-xs font-bold transition-colors shadow cursor-pointer"
-            title="Guardar en SaviaOS VFS"
-          >
-            <Save className="w-3.5 h-3.5" />
-            <span className="hidden sm:inline">Guardar</span>
-          </button>
-
-          {/* Exportar a Local PC Button */}
-          <button
-            onClick={handleExportLocalPdf}
-            className="flex items-center gap-1 px-3 py-1 bg-sky-600 hover:bg-sky-500 text-white rounded-md text-xs font-bold transition-colors shadow cursor-pointer"
-            title="Exportar y descargar a tu equipo local"
-          >
-            <Download className="w-3.5 h-3.5" />
-            <span className="hidden sm:inline">Exportar a PC</span>
-          </button>
-
-          <button
-            onClick={() => window.print()}
-            className="p-1.5 hover:bg-white/10 text-gray-300 hover:text-white rounded transition-colors cursor-pointer"
-            title="Imprimir (Ctrl+P)"
-          >
-            <Printer className="w-4 h-4" />
+          
+          <button onClick={() => window.dispatchEvent(new CustomEvent('savia_switch_to_desktop'))} className="p-2 bg-red-600 hover:bg-red-500 text-white rounded-lg transition-colors ml-2 shadow-lg" title="Cerrar y Volver al Escritorio">
+            <X className="w-5 h-5" />
           </button>
         </div>
       </div>
 
-      {/* OFFICE RIBBON TABS (PDFgear Toolbar Layout) */}
-      <div className="bg-[#24272a] border-b border-black/50 shrink-0">
-        <div className="flex items-center gap-1 px-3 pt-1 border-b border-black/40 text-xs font-semibold text-gray-300 overflow-x-auto">
+{/* TABS MENU STRIP */}
+      <div className="bg-[#141618] border-b border-black/40 flex items-center px-4 overflow-x-auto select-none no-scrollbar">
+        {(['archivo', 'inicio', 'editar', 'anotar', 'insertar', 'organizar', 'convertir', 'ver', 'copiloto', 'ayuda'] as const).map(tab => (
           <button
-            onClick={() => setIsOpenVFSModal(true)}
-            className="px-3 py-1.5 rounded-t-md font-bold text-amber-300 hover:bg-white/10 transition-colors flex items-center gap-1 cursor-pointer"
+            key={tab}
+            onClick={() => setActiveTab(tab)}
+            className={`px-4 py-1.5 text-[11px] font-bold uppercase tracking-wider transition-colors cursor-pointer ${
+              activeTab === tab
+                ? 'bg-[#1e2329] text-white border-t-2 border-red-500 rounded-t-sm'
+                : 'text-gray-400 hover:text-gray-200 hover:bg-white/5'
+            }`}
           >
-            <Folder className="w-3.5 h-3.5 text-amber-400" />
-            <span>Archivo</span>
+            {tab}
           </button>
+        ))}
+      </div>
 
-          {[
-            { id: 'inicio', label: 'Inicio' },
-            { id: 'editar', label: 'Editar PDF' },
-            { id: 'anotar', label: 'Anotar' },
-            { id: 'insertar', label: 'Insertar y Firmar' },
-            { id: 'organizar', label: 'Organizar Páginas' },
-            { id: 'convertir', label: 'Convertir / Exportar' },
-            { id: 'ver', label: 'Ver y Lectura' },
-            { id: 'ayuda', label: 'Ayuda' }
-          ].map(tab => (
-            <button
-              key={tab.id}
-              onClick={() => setActiveTab(tab.id as any)}
-              className={`px-3 py-1.5 rounded-t-md transition-colors cursor-pointer whitespace-nowrap ${
-                activeTab === tab.id ? 'bg-[#2d3135] text-white border-t-2 border-red-500 font-bold' : 'hover:bg-white/5 text-gray-400'
-              }`}
-            >
-              {tab.label}
-            </button>
-          ))}
-        </div>
-
-        {/* RIBBON TOOLBAR ACTION CONTROLS */}
-        <div className="bg-[#2d3135] px-3 py-2 text-xs flex items-center justify-between gap-4 overflow-x-auto select-none border-b border-black/40">
-          {/* TAB: INICIO */}
-          {activeTab === 'inicio' && (
-            <div className="flex items-center gap-3">
-              {/* Engine View Switcher */}
-              <div className="flex items-center bg-black/40 rounded-lg p-0.5 border border-white/10">
-                <button
-                  onClick={() => setActiveViewMode('editor')}
-                  className={`px-2.5 py-1 rounded-md font-bold text-xs flex items-center gap-1.5 cursor-pointer ${
-                    activeViewMode === 'editor' ? 'bg-red-600 text-white shadow' : 'text-gray-400 hover:text-white'
-                  }`}
-                >
-                  <Edit3 className="w-3.5 h-3.5" />
-                  <span>Editor Visual</span>
-                </button>
-                <button
-                  onClick={() => setActiveViewMode('viewer')}
-                  className={`px-2.5 py-1 rounded-md font-bold text-xs flex items-center gap-1.5 cursor-pointer ${
-                    activeViewMode === 'viewer' ? 'bg-red-600 text-white shadow' : 'text-gray-400 hover:text-white'
-                  }`}
-                >
-                  <Eye className="w-3.5 h-3.5" />
-                  <span>Visor PDF.js</span>
-                </button>
-              </div>
-
-              <div className="h-5 w-px bg-white/20" />
-
-              {/* Main Quick Action Buttons */}
+      {/* Toolbar / Ribbon */}
+      {activeViewMode === 'editor' && (
+        <div className="bg-[#1e2329] border-b border-slate-700/50 p-2 overflow-x-auto">
+          {/* TAB: ARCHIVO */}
+          {activeTab === 'archivo' && (
+            <div className="flex items-center gap-2">
               <button
-                onClick={handleAddText}
-                className="flex items-center gap-1 px-2.5 py-1.5 bg-red-600/30 hover:bg-red-600/50 text-white border border-red-500/40 rounded-md font-semibold cursor-pointer"
+                onClick={() => {
+                  setPages([
+                    {
+                      id: `page-${Date.now()}`,
+                      pageNumber: 1,
+                      rotation: 0,
+                      title: 'Nueva Página',
+                      watermarkText: '',
+                      elements: []
+                    }
+                  ]);
+                  setPdfUrl('');
+                  setFileName('Nuevo Documento.pdf');
+                  setIsSaved(false);
+                  flashStatus('Nuevo documento creado');
+                }}
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600/30 hover:bg-emerald-600/50 border border-emerald-500/40 text-emerald-200 rounded-lg font-semibold cursor-pointer text-xs"
               >
-                <Type className="w-3.5 h-3.5 text-red-400" />
-                <span>Añadir Texto</span>
+                <FilePlus className="w-4 h-4 text-emerald-400" />
+                <span>Nuevo</span>
               </button>
 
               <button
-                onClick={handleAddHighlight}
-                className="flex items-center gap-1 px-2.5 py-1.5 bg-amber-500/20 hover:bg-amber-500/30 text-amber-200 border border-amber-500/40 rounded-md font-semibold cursor-pointer"
+                onClick={() => setIsOpenVFSModal(true)}
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600/30 hover:bg-blue-600/50 border border-blue-500/40 text-blue-200 rounded-lg font-semibold cursor-pointer text-xs"
               >
-                <Highlighter className="w-3.5 h-3.5 text-amber-300" />
-                <span>Resaltar</span>
+                <Folder className="w-4 h-4 text-blue-400" />
+                <span>Abrir VFS</span>
               </button>
 
               <button
-                onClick={handleAddNote}
-                className="flex items-center gap-1 px-2.5 py-1.5 bg-yellow-500/20 hover:bg-yellow-500/30 text-yellow-200 border border-yellow-500/40 rounded-md font-semibold cursor-pointer"
+                onClick={() => fileInputRef.current?.click()}
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-purple-600/30 hover:bg-purple-600/50 border border-purple-500/40 text-purple-200 rounded-lg font-semibold cursor-pointer text-xs"
               >
-                <FileText className="w-3.5 h-3.5 text-yellow-300" />
-                <span>Nota Adhesiva</span>
+                <Upload className="w-4 h-4 text-purple-400" />
+                <span>Subir de PC</span>
+              </button>
+
+              <div className="w-px h-6 bg-slate-700/50 mx-1"></div>
+
+              <button
+                onClick={() => handleSaveDocumentInternal()}
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-green-600/30 hover:bg-green-600/50 border border-green-500/40 text-green-200 rounded-lg font-semibold cursor-pointer text-xs"
+              >
+                <Save className="w-4 h-4 text-green-400" />
+                <span>Guardar (Ctrl+S)</span>
               </button>
 
               <button
-                onClick={handleAddRedaction}
-                className="flex items-center gap-1 px-2.5 py-1.5 bg-slate-900 hover:bg-black text-rose-300 border border-rose-500/40 rounded-md font-bold cursor-pointer"
+                onClick={() => setIsSaveModalOpen(true)}
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-teal-600/30 hover:bg-teal-600/50 border border-teal-500/40 text-teal-200 rounded-lg font-semibold cursor-pointer text-xs"
               >
-                <ShieldAlert className="w-3.5 h-3.5 text-rose-400" />
-                <span>Censurar (Redactar)</span>
+                <Save className="w-4 h-4 text-teal-400" />
+                <span>Guardar Como...</span>
               </button>
 
-              <div className="h-5 w-px bg-white/20" />
+              <div className="w-px h-6 bg-slate-700/50 mx-1"></div>
 
-              {/* Reader Theme Presets */}
-              <span className="text-[11px] text-gray-400 font-semibold">Tema Lectura:</span>
               <button
-                onClick={() => setReaderTheme('normal')}
-                className={`p-1.5 rounded cursor-pointer ${readerTheme === 'normal' ? 'bg-white text-black font-bold' : 'hover:bg-white/10 text-gray-300'}`}
-                title="Blanco Normal"
+                onClick={handleExportLocalPdf}
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-amber-600/30 hover:bg-amber-600/50 border border-amber-500/40 text-amber-200 rounded-lg font-semibold cursor-pointer text-xs"
               >
-                <Sun className="w-3.5 h-3.5" />
+                <Download className="w-4 h-4 text-amber-400" />
+                <span>Descargar a PC (.pdf)</span>
               </button>
+
               <button
-                onClick={() => setReaderTheme('dark')}
-                className={`p-1.5 rounded cursor-pointer ${readerTheme === 'dark' ? 'bg-gray-800 text-white border border-gray-600' : 'hover:bg-white/10 text-gray-300'}`}
-                title="Modo Noche (Oscuro)"
+                onClick={handleExportTxt}
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-600 rounded-lg text-xs"
               >
-                <Moon className="w-3.5 h-3.5" />
+                <FileText className="w-4 h-4 text-slate-400" />
+                <span>Exportar Texto (.txt)</span>
               </button>
+
               <button
-                onClick={() => setReaderTheme('sepia')}
-                className={`p-1.5 rounded cursor-pointer ${readerTheme === 'sepia' ? 'bg-amber-100 text-amber-900 font-bold' : 'hover:bg-white/10 text-gray-300'}`}
-                title="Sepia Cálido"
+                onClick={() => setIsPropModalOpen(true)}
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-600 rounded-lg text-xs"
               >
-                <Coffee className="w-3.5 h-3.5" />
+                <Info className="w-4 h-4 text-slate-400" />
+                <span>Propiedades</span>
               </button>
             </div>
           )}
 
-          {/* TAB: EDITAR PDF */}
+          {/* TAB: INICIO */}
+          {activeTab === 'inicio' && (
+            <div className="flex items-center gap-3">
+              <button
+                onClick={() => setIsOpenVFSModal(true)}
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600/30 hover:bg-blue-600/50 border border-blue-500/40 rounded-lg font-semibold cursor-pointer"
+              >
+                <Folder className="w-4 h-4 text-blue-400" />
+                <span>Abrir PDF</span>
+              </button>
+              <div className="w-px h-6 bg-slate-700/50 mx-1"></div>
+              <button
+                onClick={() => setZoomLevel(prev => Math.min(300, prev + 25))}
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-600 rounded-lg transition-colors"
+              >
+                <ZoomIn className="w-4 h-4" />
+                <span>Acercar</span>
+              </button>
+              <button
+                onClick={() => setZoomLevel(prev => Math.max(50, prev - 25))}
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-600 rounded-lg transition-colors"
+              >
+                <ZoomOut className="w-4 h-4" />
+                <span>Alejar</span>
+              </button>
+              <span className="text-white text-xs font-bold w-12 text-center">{zoomLevel}%</span>
+            </div>
+          )}
+          {/* TAB: EDITAR */}
           {activeTab === 'editar' && (
             <div className="flex items-center gap-3">
               <button
@@ -1164,7 +1492,15 @@ export default function PdfViewerApp({ initialFile, user }: PdfViewerAppProps) {
                 className="flex items-center gap-1.5 px-3 py-1.5 bg-red-600/30 hover:bg-red-600/50 border border-red-500/40 rounded-lg font-semibold cursor-pointer"
               >
                 <Type className="w-4 h-4 text-red-400" />
-                <span>Editar / Insertar Texto</span>
+                <span>Insertar Texto</span>
+              </button>
+
+              <button
+                onClick={() => { setSelectedTool('edit_text'); flashStatus('Modo Edición: Selecciona el texto del PDF para editarlo'); }}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg font-bold border transition-colors cursor-pointer ${selectedTool === 'edit_text' ? 'bg-amber-600/40 border-amber-500/60 text-amber-100' : 'bg-sky-600/30 hover:bg-sky-600/50 border-sky-500/40'}`}
+              >
+                <Edit3 className="w-4 h-4 text-amber-400" />
+                <span>Modificar Texto Existente</span>
               </button>
 
               <button
@@ -1404,7 +1740,7 @@ export default function PdfViewerApp({ initialFile, user }: PdfViewerAppProps) {
             </div>
           )}
         </div>
-      </div>
+      )}
 
       {/* MAIN CONTENT AREA */}
       <div className="flex-1 flex overflow-hidden relative">
@@ -1420,7 +1756,7 @@ export default function PdfViewerApp({ initialFile, user }: PdfViewerAppProps) {
 
             {pages.map((pg, idx) => (
               <div
-                key={pg.id}
+                key={`${pg.id}-${idx}`}
                 onClick={() => setActivePageIdx(idx)}
                 className={`p-2 rounded-lg border text-left cursor-pointer transition-all flex flex-col gap-1.5 ${
                   activePageIdx === idx
@@ -1452,18 +1788,26 @@ export default function PdfViewerApp({ initialFile, user }: PdfViewerAppProps) {
         }`}>
           {activeViewMode === 'viewer' ? (
             pdfUrl ? (
-              <object
-                data={pdfUrl}
-                type="application/pdf"
-                className="w-full h-full rounded-xl shadow-2xl bg-white"
-              >
-                <iframe
-                  src={viewerUrl || pdfUrl}
-                  className="w-full h-full border-none rounded-xl shadow-2xl bg-white"
-                  title="Savia Pdf Engine"
-                  {...(!isLocalPdf ? { sandbox: "allow-same-origin allow-scripts allow-forms" } : {})}
-                />
-              </object>
+              <div className="w-full flex justify-center overflow-auto h-full pb-12">
+                <Document
+                  file={pdfUrl}
+                  onLoadSuccess={onDocumentLoadSuccess}
+                  loading={<div className="text-white animate-pulse mt-10">Cargando documento PDF...</div>}
+                  error={<div className="text-red-500 font-bold bg-white p-4 rounded shadow mt-10">Error al cargar el PDF. Puede estar dañado o corrupto.</div>}
+                  className="flex flex-col items-center gap-8"
+                >
+                  {Array.from(new Array(numPages || 1), (el, index) => (
+                    <Page
+                      key={`page_${index + 1}`}
+                      pageNumber={index + 1}
+                      scale={zoomLevel / 100}
+                      className="shadow-2xl rounded-lg overflow-hidden bg-white"
+                      renderAnnotationLayer={true}
+                      renderTextLayer={true}
+                    />
+                  ))}
+                </Document>
+              </div>
             ) : (
               <div className="w-full h-full flex flex-col items-center justify-center text-gray-400 gap-4 text-center">
                 <FileImage className="w-16 h-16 text-red-500 animate-pulse" />
@@ -1483,17 +1827,97 @@ export default function PdfViewerApp({ initialFile, user }: PdfViewerAppProps) {
                 width: `${(794 * zoomLevel) / 100}px`,
                 minHeight: `${(1123 * zoomLevel) / 100}px`,
                 transform: `rotate(${activePage.rotation || 0}deg)`,
-                backgroundColor: readerTheme === 'dark' ? '#181a1b' : readerTheme === 'sepia' ? '#fbf0d9' : '#ffffff',
+                backgroundColor: readerTheme === 'dark' ? '#181a1b' : readerTheme === 'sepia' ? '#fbf0d9' : (pdfUrl ? 'transparent' : '#ffffff'),
                 color: readerTheme === 'dark' ? '#e8e6e3' : readerTheme === 'sepia' ? '#433422' : '#0f172a'
               }}
               onMouseDown={handlePageMouseDown}
               onMouseMove={handlePageMouseMove}
               onMouseUp={handlePageMouseUp}
-              className="rounded shadow-2xl relative p-12 border border-slate-300 transition-all relative overflow-hidden"
+              className="rounded shadow-2xl relative p-0 border border-slate-300 transition-all overflow-hidden"
             >
+              {/* REAL PDF BACKGROUND IF LOADED */}
+              {pdfUrl && (
+                <div 
+                className={`absolute inset-0 z-0 overflow-hidden ${selectedTool === 'edit_text' ? 'pointer-events-auto cursor-text' : 'pointer-events-none'}`} 
+                style={{ width: '100%', height: '100%' }}
+                onClick={(e) => {
+                  if (selectedTool !== 'edit_text') return;
+                  let target = e.target as HTMLElement;
+                  const spanTarget = target.closest('span');
+                  if (spanTarget) target = spanTarget;
+                  // Look for spans within the react-pdf text layer
+                  if (target.tagName.toLowerCase() === 'span' && target.closest('.react-pdf__Page__textContent')) {
+                    if (target.style.opacity === '0') return;
+                    e.stopPropagation();
+                    const rect = target.getBoundingClientRect();
+                    const pageEl = target.closest('.react-pdf__Page');
+                    if (!pageEl) return;
+                    
+                    const pageRect = pageEl.getBoundingClientRect();
+                    
+                    // Coordinates relative to the page element
+                    const x = rect.left - pageRect.left;
+                    const y = rect.top - pageRect.top;
+                    const width = rect.width;
+                    const height = rect.height;
+                    
+                    const textContent = target.textContent || '';
+                    const computedStyle = window.getComputedStyle(target);
+                    const fontSizeRaw = computedStyle.fontSize;
+                    const fontSize = parseFloat(fontSizeRaw);
+                    const color = computedStyle.color;
+                    const fontFamily = computedStyle.fontFamily;
+                    
+                    const newWhiteout = {
+                      id: `whiteout-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+                      type: 'whiteout' as 'whiteout',
+                      x,
+                      y,
+                      width,
+                      height,
+                      text: '' 
+                    };
+                    
+                    const newText = { 
+                      id: `edit-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`, 
+                      type: 'text' as 'text',
+                      x,
+                      y: y - 2, 
+                      text: textContent,
+                      color: color && color !== 'rgba(0, 0, 0, 0)' ? color : '#000000',
+                      fontSize: fontSize || 14,
+                      fontFamily: fontFamily || 'Calibri'
+                    };
+                    
+                    target.style.opacity = '0'; 
+                    
+                    setPages(prev => {
+                      const copy = [...prev];
+                      copy[activePageIdx].elements.push(newWhiteout as PdfElement, newText as PdfElement);
+                      return copy;
+                    });
+                    
+                    setSelectedElementId(newText.id);
+                    setSelectedTool('select');
+                    flashStatus('Texto extraído para edición. Modifícalo libremente.');
+                  }
+                }}
+              >
+                  <Document file={pdfUrl}>
+                    <Page 
+                      pageNumber={Math.min(activePageIdx + 1, numPages || 1)} 
+                      scale={zoomLevel / 100}
+                      renderAnnotationLayer={false}
+                      renderTextLayer={true}
+                      className="origin-top-left"
+                    />
+                  </Document>
+                </div>
+              )}
+
               {/* Page Watermark Overlay */}
               {activePage.watermarkText && (
-                <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-0">
+                <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-10">
                   <span className="text-6xl font-black text-slate-400/20 transform -rotate-45 tracking-widest uppercase select-none">
                     {activePage.watermarkText}
                   </span>
@@ -1501,7 +1925,7 @@ export default function PdfViewerApp({ initialFile, user }: PdfViewerAppProps) {
               )}
 
               {/* Top Watermark / Header */}
-              <div className="absolute top-4 left-8 right-8 flex justify-between items-center border-b border-slate-300/30 pb-2 text-[10px] opacity-60 font-sans tracking-wide">
+              <div className="absolute top-4 left-8 right-8 flex justify-between items-center border-b border-slate-300/30 pb-2 text-[10px] opacity-60 font-sans tracking-wide z-10">
                 <span>SAVIA OS • PDFGEAR STUDIO</span>
                 <span>PÁGINA {activePageIdx + 1} DE {pages.length}</span>
               </div>
@@ -1521,14 +1945,15 @@ export default function PdfViewerApp({ initialFile, user }: PdfViewerAppProps) {
               )}
 
               {/* Render Elements */}
-              {activePage?.elements.map(el => {
+              {activePage?.elements.map((el, idx) => {
                 const isSelected = selectedElementId === el.id;
 
                 if (el.type === 'text') {
                   return (
                     <div
-                      key={el.id}
+                      key={`${el.id}-${idx}`}
                       onClick={e => { e.stopPropagation(); setSelectedElementId(el.id); }}
+                      onMouseDown={e => handleElementMouseDown(e, el.id)}
                       style={{
                         position: 'absolute',
                         left: `${el.x}px`,
@@ -1540,11 +1965,21 @@ export default function PdfViewerApp({ initialFile, user }: PdfViewerAppProps) {
                         fontStyle: el.fontStyle || 'normal',
                         cursor: 'move'
                       }}
-                      className={`p-1 rounded transition-all z-10 ${isSelected ? 'ring-2 ring-red-500 bg-red-50/50' : 'hover:ring-1 hover:ring-slate-300'}`}
+                      className={`p-1 rounded transition-all z-20 ${isSelected ? 'ring-2 ring-red-500 bg-red-50/80 shadow-md' : 'hover:ring-1 hover:ring-slate-300 bg-white/40'}`}
                     >
                       <span
                         contentEditable
                         suppressContentEditableWarning
+                        onInput={e => {
+                          const updatedText = e.currentTarget.innerText;
+                          setPages(prev => {
+                            const copy = [...prev];
+                            const curEl = copy[activePageIdx].elements.find(item => item.id === el.id);
+                            if (curEl) curEl.text = updatedText;
+                            return copy;
+                          });
+                          markUnsaved();
+                        }}
                         onBlur={e => {
                           const updatedText = e.currentTarget.innerText;
                           setPages(prev => {
@@ -1555,6 +1990,7 @@ export default function PdfViewerApp({ initialFile, user }: PdfViewerAppProps) {
                           });
                           markUnsaved();
                         }}
+                        className="outline-none min-w-[20px] inline-block font-sans whitespace-pre-wrap cursor-text"
                       >
                         {el.text}
                       </span>
@@ -1562,18 +1998,40 @@ export default function PdfViewerApp({ initialFile, user }: PdfViewerAppProps) {
                   );
                 }
 
+                if (el.type === 'image' && el.imageSrc) {
+                  return (
+                    <div
+                      key={`${el.id}-${idx}`}
+                      onClick={e => { e.stopPropagation(); setSelectedElementId(el.id); }}
+                      onMouseDown={e => handleElementMouseDown(e, el.id)}
+                      style={{
+                        position: 'absolute',
+                        left: `${el.x}px`,
+                        top: `${el.y}px`,
+                        width: `${el.width || 220}px`,
+                        height: `${el.height || 160}px`,
+                        cursor: 'move'
+                      }}
+                      className={`p-1 z-20 group relative rounded border transition-all ${isSelected ? 'ring-2 ring-red-500 bg-blue-50/30' : 'hover:border-slate-400'}`}
+                    >
+                      <img src={el.imageSrc} alt="Imagen PDF" className="w-full h-full object-contain pointer-events-none rounded" />
+                    </div>
+                  );
+                }
+
                 if (el.type === 'stamp') {
                   return (
                     <div
-                      key={el.id}
+                      key={`${el.id}-${idx}`}
                       onClick={e => { e.stopPropagation(); setSelectedElementId(el.id); }}
+                      onMouseDown={e => handleElementMouseDown(e, el.id)}
                       style={{
                         position: 'absolute',
                         left: `${el.x}px`,
                         top: `${el.y}px`,
                         cursor: 'move'
                       }}
-                      className={`px-4 py-2 border-4 rounded-xl font-black text-sm uppercase tracking-wider transform -rotate-12 shadow-lg z-10 ${
+                      className={`px-4 py-2 border-4 rounded-xl font-black text-sm uppercase tracking-wider transform -rotate-12 shadow-lg z-20 ${
                         el.stampType === 'APROBADO' ? 'border-emerald-600 text-emerald-700 bg-emerald-500/10' :
                         el.stampType === 'FIRMADO' ? 'border-blue-600 text-blue-700 bg-blue-500/10' :
                         el.stampType === 'CONFIDENCIAL' ? 'border-rose-600 text-rose-700 bg-rose-500/10' :
@@ -1588,8 +2046,9 @@ export default function PdfViewerApp({ initialFile, user }: PdfViewerAppProps) {
                 if (el.type === 'note') {
                   return (
                     <div
-                      key={el.id}
+                      key={`${el.id}-${idx}`}
                       onClick={e => { e.stopPropagation(); setSelectedElementId(el.id); }}
+                      onMouseDown={e => handleElementMouseDown(e, el.id)}
                       style={{
                         position: 'absolute',
                         left: `${el.x}px`,
@@ -1610,8 +2069,9 @@ export default function PdfViewerApp({ initialFile, user }: PdfViewerAppProps) {
                 if (el.type === 'highlight') {
                   return (
                     <div
-                      key={el.id}
+                      key={`${el.id}-${idx}`}
                       onClick={e => { e.stopPropagation(); setSelectedElementId(el.id); }}
+                      onMouseDown={e => handleElementMouseDown(e, el.id)}
                       style={{
                         position: 'absolute',
                         left: `${el.x}px`,
@@ -1627,11 +2087,32 @@ export default function PdfViewerApp({ initialFile, user }: PdfViewerAppProps) {
                   );
                 }
 
+                if (el.type === 'whiteout') {
+                  return (
+                    <div
+                      key={`${el.id}-${idx}`}
+                      onClick={e => { e.stopPropagation(); setSelectedElementId(el.id); }}
+                      onMouseDown={e => handleElementMouseDown(e, el.id)}
+                      style={{
+                        position: 'absolute',
+                        left: `${el.x}px`,
+                        top: `${el.y}px`,
+                        width: `${el.width || 100}px`,
+                        height: `${el.height || 20}px`,
+                        backgroundColor: '#ffffff',
+                        cursor: 'move'
+                      }}
+                      className={`z-10 ${isSelected ? 'ring-2 ring-red-500' : ''}`}
+                    />
+                  );
+                }
+
                 if (el.type === 'redaction') {
                   return (
                     <div
-                      key={el.id}
+                      key={`${el.id}-${idx}`}
                       onClick={e => { e.stopPropagation(); setSelectedElementId(el.id); }}
+                      onMouseDown={e => handleElementMouseDown(e, el.id)}
                       style={{
                         position: 'absolute',
                         left: `${el.x}px`,
@@ -1650,8 +2131,9 @@ export default function PdfViewerApp({ initialFile, user }: PdfViewerAppProps) {
                 if (el.type === 'shape') {
                   return (
                     <div
-                      key={el.id}
+                      key={`${el.id}-${idx}`}
                       onClick={e => { e.stopPropagation(); setSelectedElementId(el.id); }}
+                      onMouseDown={e => handleElementMouseDown(e, el.id)}
                       style={{
                         position: 'absolute',
                         left: `${el.x}px`,
@@ -1660,7 +2142,7 @@ export default function PdfViewerApp({ initialFile, user }: PdfViewerAppProps) {
                         height: `${el.height || 80}px`,
                         cursor: 'move'
                       }}
-                      className={`border-2 rounded ${isSelected ? 'ring-2 ring-red-500' : ''}`}
+                      className={`border-2 rounded z-20 ${isSelected ? 'ring-2 ring-red-500' : ''}`}
                     >
                       <svg className="w-full h-full">
                         <rect x="0" y="0" width="100%" height="100%" fill="none" stroke={el.strokeColor || '#ef4444'} strokeWidth={el.strokeWidth || 2} />
@@ -1672,15 +2154,16 @@ export default function PdfViewerApp({ initialFile, user }: PdfViewerAppProps) {
                 if (el.type === 'signature' && el.signatureDataUrl) {
                   return (
                     <div
-                      key={el.id}
+                      key={`${el.id}-${idx}`}
                       onClick={e => { e.stopPropagation(); setSelectedElementId(el.id); }}
+                      onMouseDown={e => handleElementMouseDown(e, el.id)}
                       style={{
                         position: 'absolute',
                         left: `${el.x}px`,
                         top: `${el.y}px`,
                         cursor: 'move'
                       }}
-                      className={`p-1 z-10 ${isSelected ? 'ring-2 ring-red-500 bg-blue-50/30' : ''}`}
+                      className={`p-1 z-20 ${isSelected ? 'ring-2 ring-red-500 bg-blue-50/30' : ''}`}
                     >
                       <img src={el.signatureDataUrl} alt="Firma" className="max-w-[200px] h-auto pointer-events-none" />
                     </div>
@@ -1689,7 +2172,7 @@ export default function PdfViewerApp({ initialFile, user }: PdfViewerAppProps) {
 
                 if (el.type === 'drawing' && el.points && el.points.length > 1) {
                   return (
-                    <svg key={el.id} className="absolute inset-0 w-full h-full pointer-events-none z-10">
+                    <svg key={`${el.id}-${idx}`} className="absolute inset-0 w-full h-full pointer-events-none z-10">
                       <path
                         d={el.points.reduce((acc, p, i) => `${acc} ${i === 0 ? 'M' : 'L'} ${p.x} ${p.y}`, '')}
                         stroke={el.strokeColor || '#ef4444'}
@@ -1878,6 +2361,24 @@ export default function PdfViewerApp({ initialFile, user }: PdfViewerAppProps) {
           }}
           username={username}
           filterExtension=".pdf"
+        />
+      )}
+
+      {/* VFS FILE SAVE AS MODAL */}
+      {isSaveModalOpen && (
+        <SaveFileDialogModal
+          isOpen={isSaveModalOpen}
+          onClose={() => setIsSaveModalOpen(false)}
+          onSave={(saveFileName, folderPath) => {
+            setFileName(saveFileName);
+            setCurrentFolderPath(folderPath);
+            handleSaveDocumentInternal(saveFileName, folderPath);
+            setIsSaveModalOpen(false);
+          }}
+          defaultFileName={fileName.endsWith('.pdf') ? fileName : `${fileName}.pdf`}
+          defaultFolder={currentFolderPath}
+          username={username}
+          title="Guardar PDF Como..."
         />
       )}
     </div>
